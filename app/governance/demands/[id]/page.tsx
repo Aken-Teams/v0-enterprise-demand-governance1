@@ -424,6 +424,7 @@ export default function DemandDetailPage() {
                         totalSp={demand.estimatedSp}
                         demandId={demand.id}
                         token={token}
+                        staffUsers={staffUsers}
                         onSaved={fetchDemand}
                       />
                     </CardContent>
@@ -476,9 +477,9 @@ export default function DemandDetailPage() {
                           subTasks={demand.subTasks}
                           demandId={demand.id}
                           token={token}
-                          staffUsers={staffUsers}
                           devStart={devPlan?.plannedStart ?? null}
                           devEnd={devPlan?.plannedEnd ?? null}
+                          devEngineer={devPlan?.engineer ?? null}
                           onRefresh={fetchDemand}
                           onViewGantt={() => setActiveTab("gantt")}
                         />

@@ -5,15 +5,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import {
-  Plus, Trash2, AlertTriangle, Calendar, Save, Loader2,
+  Plus, Trash2, AlertTriangle, Calendar, Loader2,
 } from "lucide-react"
 import { DEFAULT_SUBTASK_TEMPLATES } from "@/lib/constants/demand"
 
@@ -33,10 +33,11 @@ interface SubTaskEditorProps {
   subTasks: SubTask[]
   demandId: string
   token: string | null
-  staffUsers: { id: string; name: string }[]
   /** DEVELOPING phase planned date range */
   devStart: string | null
   devEnd: string | null
+  /** Pre-filled engineer from SP plan's DEVELOPING phase */
+  devEngineer: { id: string; name: string } | null
   onRefresh: () => void
   onViewGantt: () => void
 }
@@ -62,9 +63,9 @@ export function SubTaskEditor({
   subTasks,
   demandId,
   token,
-  staffUsers,
   devStart,
   devEnd,
+  devEngineer,
   onRefresh,
   onViewGantt,
 }: SubTaskEditorProps) {
@@ -72,7 +73,6 @@ export function SubTaskEditor({
   const [newTaskName, setNewTaskName] = useState("")
   const [newTaskStart, setNewTaskStart] = useState("")
   const [newTaskEnd, setNewTaskEnd] = useState("")
-  const [newTaskAssignee, setNewTaskAssignee] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 
@@ -97,7 +97,7 @@ export function SubTaskEditor({
           name: newTaskName.trim(),
           plannedStart: newTaskStart || null,
           plannedEnd: newTaskEnd || null,
-          assigneeId: newTaskAssignee || null,
+          assigneeId: devEngineer?.id || null,
           order: subTasks.length,
         }),
       })
@@ -106,7 +106,6 @@ export function SubTaskEditor({
         setNewTaskName("")
         setNewTaskStart("")
         setNewTaskEnd("")
-        setNewTaskAssignee("")
         onRefresh()
       }
     } catch { /* ignore */ } finally {
@@ -171,98 +170,85 @@ export function SubTaskEditor({
         </div>
       )}
 
-      {/* Table header */}
-      {subTasks.length > 0 && (
-        <div className="grid grid-cols-[auto_1fr_100px_100px_120px_auto] gap-2 text-xs font-medium text-muted-foreground px-1 items-center">
-          <span className="w-5" />
-          <span>任務名稱</span>
-          <span>開始日期</span>
-          <span>結束日期</span>
-          <span>負責人</span>
-          <span className="w-8" />
-        </div>
-      )}
+      {subTasks.length > 0 ? (
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-[32px]" />
+              <TableHead className="text-center">任務名稱</TableHead>
+              <TableHead className="text-center w-[130px]">開始日期</TableHead>
+              <TableHead className="text-center w-[130px]">結束日期</TableHead>
+              <TableHead className="w-[32px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {subTasks.map((task) => {
+              const taskStart = toDateInput(task.plannedStart)
+              const taskEnd = toDateInput(task.plannedEnd)
+              const outOfRange = isOutOfRange(taskStart, taskEnd)
 
-      {/* Task rows */}
-      {subTasks.map((task) => {
-        const taskStart = toDateInput(task.plannedStart)
-        const taskEnd = toDateInput(task.plannedEnd)
-        const outOfRange = isOutOfRange(taskStart, taskEnd)
-
-        return (
-          <div key={task.id} className={cn(
-            "grid grid-cols-[auto_1fr_100px_100px_120px_auto] gap-2 items-center rounded-md px-1 py-1",
-            outOfRange && "bg-red-50/50",
-          )}>
-            {/* Status dot */}
-            <button
-              onClick={() => {
-                const next = task.status === "pending" ? "in_progress" : task.status === "in_progress" ? "completed" : "pending"
-                handleUpdate(task.id, "status", next)
-              }}
-              className={cn("h-4 w-4 rounded-full shrink-0 transition-colors cursor-pointer", STATUS_COLORS[task.status])}
-              title={`${STATUS_LABELS[task.status]}（點擊切換）`}
-            />
-
-            {/* Name */}
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className={cn("text-sm truncate", task.status === "completed" && "line-through text-muted-foreground")}>
-                {task.name}
-              </span>
-              {savingId === task.id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />}
-              {outOfRange && (
-                <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" title="日期超出開發階段範圍" />
-              )}
-            </div>
-
-            {/* Planned Start */}
-            <Input
-              type="date"
-              className={cn("h-7 text-xs", outOfRange && taskStart && taskStart < devStartDate && "border-red-300")}
-              value={taskStart}
-              min={devStartDate || undefined}
-              max={devEndDate || undefined}
-              onChange={(e) => handleUpdate(task.id, "plannedStart", e.target.value || null)}
-            />
-
-            {/* Planned End */}
-            <Input
-              type="date"
-              className={cn("h-7 text-xs", outOfRange && taskEnd && taskEnd > devEndDate && "border-red-300")}
-              value={taskEnd}
-              min={devStartDate || undefined}
-              max={devEndDate || undefined}
-              onChange={(e) => handleUpdate(task.id, "plannedEnd", e.target.value || null)}
-            />
-
-            {/* Assignee */}
-            <Select
-              value={task.assignee?.id || "none"}
-              onValueChange={(v) => handleUpdate(task.id, "assigneeId", v === "none" ? null : v)}
-            >
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">未指派</SelectItem>
-                {staffUsers.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Delete */}
-            <button
-              onClick={() => handleDelete(task.id)}
-              className="text-muted-foreground/40 hover:text-destructive transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )
-      })}
-
-      {subTasks.length === 0 && (
+              return (
+                <TableRow key={task.id} className={cn(outOfRange && "bg-red-50/50 hover:bg-red-50/70")}>
+                  <TableCell className="pr-0">
+                    <button
+                      onClick={() => {
+                        const next = task.status === "pending" ? "in_progress" : task.status === "in_progress" ? "completed" : "pending"
+                        handleUpdate(task.id, "status", next)
+                      }}
+                      className={cn("h-4 w-4 rounded-full shrink-0 transition-colors cursor-pointer", STATUS_COLORS[task.status])}
+                      title={`${STATUS_LABELS[task.status]}（點擊切換）`}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={cn("text-sm truncate", task.status === "completed" && "line-through text-muted-foreground")}>
+                        {task.name}
+                      </span>
+                      {devEngineer && (
+                        <Badge variant="outline" className="text-[10px] shrink-0 px-1.5 py-0">
+                          {devEngineer.name}
+                        </Badge>
+                      )}
+                      {savingId === task.id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />}
+                      {outOfRange && (
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" title="日期超出開發階段範圍" />
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="date"
+                      className={cn("h-7 text-xs", outOfRange && taskStart && taskStart < devStartDate && "border-red-300")}
+                      value={taskStart}
+                      min={devStartDate || undefined}
+                      max={devEndDate || undefined}
+                      onChange={(e) => handleUpdate(task.id, "plannedStart", e.target.value || null)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="date"
+                      className={cn("h-7 text-xs", outOfRange && taskEnd && taskEnd > devEndDate && "border-red-300")}
+                      value={taskEnd}
+                      min={devStartDate || undefined}
+                      max={devEndDate || undefined}
+                      onChange={(e) => handleUpdate(task.id, "plannedEnd", e.target.value || null)}
+                    />
+                  </TableCell>
+                  <TableCell className="pl-0">
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      className="text-muted-foreground/40 hover:text-destructive transition-colors p-1"
+                    >
+                      <Trash2 className="h-4.5 w-4.5" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      ) : (
         <p className="text-sm text-muted-foreground text-center py-4">尚未建立子任務</p>
       )}
 
@@ -314,20 +300,6 @@ export function SubTaskEditor({
                   onChange={(e) => setNewTaskEnd(e.target.value)}
                 />
               </div>
-            </div>
-            <div>
-              <Label className="text-sm">負責人</Label>
-              <Select value={newTaskAssignee || "none"} onValueChange={(v) => setNewTaskAssignee(v === "none" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">未指派</SelectItem>
-                  {staffUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             {devStartDate && devEndDate && (
               <p className="text-xs text-muted-foreground">

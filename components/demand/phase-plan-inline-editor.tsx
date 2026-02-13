@@ -3,6 +3,12 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
 import { STATUS_MAP, PIPELINE_STEPS, PHASE_COLORS } from "@/lib/constants/demand"
 import { Save, Loader2 } from "lucide-react"
 
@@ -11,6 +17,8 @@ interface PhasePlan {
   plannedSp: number | null
   plannedStart: string | null
   plannedEnd: string | null
+  engineer: { id: string; name: string } | null
+  pm: { id: string; name: string } | null
 }
 
 interface PhasePlanInlineEditorProps {
@@ -18,6 +26,7 @@ interface PhasePlanInlineEditorProps {
   totalSp: number
   demandId: string
   token: string | null
+  staffUsers: { id: string; name: string }[]
   onSaved: () => void
 }
 
@@ -31,10 +40,11 @@ export function PhasePlanInlineEditor({
   totalSp,
   demandId,
   token,
+  staffUsers,
   onSaved,
 }: PhasePlanInlineEditorProps) {
   const [rows, setRows] = useState<
-    { phase: string; plannedSp: string; plannedStart: string; plannedEnd: string }[]
+    { phase: string; plannedSp: string; plannedStart: string; plannedEnd: string; engineerId: string }[]
   >([])
   const [saving, setSaving] = useState(false)
 
@@ -47,6 +57,7 @@ export function PhasePlanInlineEditor({
           plannedSp: plan?.plannedSp != null ? String(plan.plannedSp) : "",
           plannedStart: toDateInput(plan?.plannedStart ?? null),
           plannedEnd: toDateInput(plan?.plannedEnd ?? null),
+          engineerId: plan?.engineer?.id || "",
         }
       })
     )
@@ -68,6 +79,7 @@ export function PhasePlanInlineEditor({
         plannedSp: r.plannedSp ? parseFloat(r.plannedSp) : null,
         plannedStart: r.plannedStart || null,
         plannedEnd: r.plannedEnd || null,
+        engineerId: r.engineerId || null,
       }))
       const res = await fetch(`/api/demands/${demandId}/phase-plans`, {
         method: "PUT",
@@ -84,46 +96,74 @@ export function PhasePlanInlineEditor({
 
   return (
     <div className="space-y-3">
-      {/* Header */}
-      <div className="grid grid-cols-[1fr_80px_120px_120px] gap-2 text-xs font-medium text-muted-foreground px-1">
-        <span>階段</span>
-        <span>SP</span>
-        <span>計畫開始</span>
-        <span>計畫結束</span>
-      </div>
-
-      {/* Rows */}
-      {rows.map((row, idx) => (
-        <div key={row.phase} className="grid grid-cols-[1fr_80px_120px_120px] gap-2 items-center">
-          <div className="flex items-center gap-2">
-            <div
-              className="h-3 w-3 rounded-sm shrink-0"
-              style={{ backgroundColor: PHASE_COLORS[row.phase] }}
-            />
-            <span className="text-sm truncate">{STATUS_MAP[row.phase]?.label}</span>
-          </div>
-          <Input
-            type="number"
-            min={0}
-            className="h-8 text-xs"
-            placeholder="0"
-            value={row.plannedSp}
-            onChange={(e) => updateRow(idx, "plannedSp", e.target.value)}
-          />
-          <Input
-            type="date"
-            className="h-8 text-xs"
-            value={row.plannedStart}
-            onChange={(e) => updateRow(idx, "plannedStart", e.target.value)}
-          />
-          <Input
-            type="date"
-            className="h-8 text-xs"
-            value={row.plannedEnd}
-            onChange={(e) => updateRow(idx, "plannedEnd", e.target.value)}
-          />
-        </div>
-      ))}
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="text-center">階段</TableHead>
+            <TableHead className="text-center w-[80px]">SP</TableHead>
+            <TableHead className="text-center w-[130px]">計畫開始</TableHead>
+            <TableHead className="text-center w-[130px]">計畫結束</TableHead>
+            <TableHead className="text-center w-[140px]">負責人</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row, idx) => (
+            <TableRow key={row.phase} className="hover:bg-muted/30">
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="h-3 w-3 rounded-sm shrink-0"
+                    style={{ backgroundColor: PHASE_COLORS[row.phase] }}
+                  />
+                  <span className="text-sm">{STATUS_MAP[row.phase]?.label}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-center">
+                <Input
+                  type="number"
+                  min={0}
+                  className="h-8 text-xs text-center"
+                  placeholder="0"
+                  value={row.plannedSp}
+                  onChange={(e) => updateRow(idx, "plannedSp", e.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  type="date"
+                  className="h-8 text-xs"
+                  value={row.plannedStart}
+                  onChange={(e) => updateRow(idx, "plannedStart", e.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  type="date"
+                  className="h-8 text-xs"
+                  value={row.plannedEnd}
+                  onChange={(e) => updateRow(idx, "plannedEnd", e.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <Select
+                  value={row.engineerId || "none"}
+                  onValueChange={(v) => updateRow(idx, "engineerId", v === "none" ? "" : v)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">未指派</SelectItem>
+                    {staffUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-border/50">
