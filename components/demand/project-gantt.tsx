@@ -341,7 +341,7 @@ export function ProjectGantt({
   const hasSubTasks = subTasks.length > 0
   const showDevSection = currentIdx >= PIPELINE_STEPS.indexOf("SP_REVIEW") || hasSubTasks
 
-  const LEFT_COL = "180px"
+  const LEFT_COL = "220px"
 
   return (
     <>
@@ -713,26 +713,27 @@ export function ProjectGantt({
             <div className="h-6" />
           </div>
 
-          {/* Legend */}
-          <div className="flex items-center gap-4 mt-2 pt-3 border-t border-border/30 px-3">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <div className="h-2.5 w-6 rounded-sm bg-primary/30" />
-              <span>計畫時程</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <div className="h-3 w-px bg-rose-400/60" />
-              <span>今天</span>
-            </div>
-            {showDayLabels && (
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <div className="h-2.5 w-4 rounded-sm bg-muted/40" />
-                <span>週末</span>
-              </div>
-            )}
-            <div className="ml-auto text-[11px] text-muted-foreground/60">
-              拖曳時間軸可放大區間
-            </div>
+        </div>
+      </div>
+
+      {/* Legend – sticky at bottom, outside scroll container */}
+      <div className="sticky bottom-0 bg-background z-10 flex items-center gap-4 pt-3 pb-1 border-t border-border/30 px-3">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div className="h-2.5 w-6 rounded-sm bg-primary/30" />
+          <span>計畫時程</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div className="h-3 w-px bg-rose-400/60" />
+          <span>今天</span>
+        </div>
+        {showDayLabels && (
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <div className="h-2.5 w-4 rounded-sm bg-muted/40" />
+            <span>週末</span>
           </div>
+        )}
+        <div className="ml-auto text-[11px] text-muted-foreground/60">
+          拖曳時間軸可放大區間
         </div>
       </div>
 
