@@ -78,9 +78,9 @@ export default function InboxPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  const fetchDemands = useCallback(async () => {
+  const fetchDemands = useCallback(async (showLoading = false) => {
     if (!token) return
-    setLoading(true)
+    if (showLoading) setLoading(true)
     try {
       const params = new URLSearchParams()
       const status = TAB_STATUS_MAP[activeTab]
@@ -104,7 +104,7 @@ export default function InboxPage() {
   }, [token, activeTab, debouncedSearch])
 
   useEffect(() => {
-    fetchDemands()
+    fetchDemands(true)
   }, [fetchDemands])
 
   const handleStatusChange = async (demandId: string, newStatus: string) => {
