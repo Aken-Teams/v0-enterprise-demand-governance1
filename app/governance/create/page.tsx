@@ -18,6 +18,7 @@ import {
 import {
   CalendarIcon, Upload, Building2, ChevronRight, ChevronLeft,
   Check, FileText, Settings2, ClipboardCheck, X, FileIcon, Loader2,
+  FileSpreadsheet, Presentation, Image as ImageIcon, FileCode,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef } from "react"
@@ -42,6 +43,34 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function getFileIcon(fileName: string) {
+  const ext = fileName.split(".").pop()?.toLowerCase() || ""
+  switch (ext) {
+    case "pdf":
+      return { icon: FileText, color: "text-red-500" }
+    case "doc":
+    case "docx":
+      return { icon: FileText, color: "text-blue-500" }
+    case "xls":
+    case "xlsx":
+      return { icon: FileSpreadsheet, color: "text-green-600" }
+    case "ppt":
+    case "pptx":
+      return { icon: Presentation, color: "text-orange-500" }
+    case "md":
+    case "txt":
+      return { icon: FileCode, color: "text-gray-500" }
+    case "jpg":
+    case "jpeg":
+    case "png":
+    case "gif":
+    case "webp":
+      return { icon: ImageIcon, color: "text-purple-500" }
+    default:
+      return { icon: FileIcon, color: "text-muted-foreground" }
+  }
 }
 
 export default function CreateDemandPage() {
@@ -318,9 +347,11 @@ export default function CreateDemandPage() {
 
                   {files.length > 0 && (
                     <div className="space-y-2 mt-3">
-                      {files.map((file, index) => (
+                      {files.map((file, index) => {
+                        const { icon: Icon, color } = getFileIcon(file.name)
+                        return (
                         <div key={`${file.name}-${index}`} className="flex items-center gap-3 rounded-lg border p-3">
-                          <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <Icon className={cn("h-5 w-5 shrink-0", color)} />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm truncate">{file.name}</p>
                             <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
@@ -333,7 +364,8 @@ export default function CreateDemandPage() {
                             <X className="h-4 w-4" />
                           </button>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -354,71 +386,104 @@ export default function CreateDemandPage() {
             {/* Step 4: 確認內容 */}
             {currentStep === 4 && (
               <div className="space-y-6">
-                <p className="text-muted-foreground">請確認以下資訊無誤後建立需求</p>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                  <p className="text-sm text-blue-700">請確認以下資訊無誤後建立需求</p>
+                </div>
 
-                <div className="space-y-4">
+                {/* 基本資訊 */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground tracking-wide uppercase flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    基本資訊
+                  </h3>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">子公司</p>
-                      <p className="text-base font-medium">{selectedOrg?.name || "—"}</p>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">子公司</p>
+                      <p className="text-sm font-medium">{selectedOrg?.name || "—"}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">SP 估點</p>
-                      <p className="text-base font-medium">{estimatedSp} SP</p>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">SP 估點</p>
+                      <p className="text-sm font-medium">{estimatedSp} SP</p>
                     </div>
                   </div>
-
-                  <div>
-                    <p className="text-sm text-muted-foreground">需求標題</p>
-                    <p className="text-base font-medium">{title}</p>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground mb-1">需求標題</p>
+                    <p className="text-sm font-medium">{title}</p>
                   </div>
+                </div>
 
-                  <div>
-                    <p className="text-sm text-muted-foreground">需求說明</p>
-                    <p className="text-sm whitespace-pre-wrap">{description}</p>
+                <hr className="border-border" />
+
+                {/* 需求內容 */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-muted-foreground tracking-wide uppercase flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    需求內容
+                  </h3>
+                  <div className="rounded-lg border border-border/60 p-4 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">需求說明</p>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{description}</p>
                   </div>
-
-                  <div>
-                    <p className="text-sm text-muted-foreground">痛點說明</p>
-                    <p className="text-sm whitespace-pre-wrap">{painPoint}</p>
+                  <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-4 space-y-1">
+                    <p className="text-xs font-semibold text-orange-600">痛點說明</p>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{painPoint}</p>
                   </div>
-
                   {expectedBenefit && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">預期效益</p>
-                      <p className="text-sm whitespace-pre-wrap">{expectedBenefit}</p>
-                    </div>
-                  )}
-
-                  {date && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">希望完成時間</p>
-                      <p className="text-base font-medium">{date.toLocaleDateString("zh-TW")}</p>
-                    </div>
-                  )}
-
-                  {files.length > 0 && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">附件（{files.length} 個檔案）</p>
-                      <div className="mt-1 space-y-1">
-                        {files.map((file, index) => (
-                          <p key={`confirm-${file.name}-${index}`} className="text-sm flex items-center gap-2">
-                            <FileIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                            {file.name}
-                            <span className="text-muted-foreground">({formatFileSize(file.size)})</span>
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {notes && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">備註</p>
-                      <p className="text-sm whitespace-pre-wrap">{notes}</p>
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 space-y-1">
+                      <p className="text-xs font-semibold text-emerald-600">預期效益</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{expectedBenefit}</p>
                     </div>
                   )}
                 </div>
+
+                {(date || files.length > 0 || notes) && (
+                  <>
+                    <hr className="border-border" />
+
+                    {/* 補充資訊 */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground tracking-wide uppercase flex items-center gap-2">
+                        <Settings2 className="h-4 w-4" />
+                        補充資訊
+                      </h3>
+
+                      {date && (
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <p className="text-xs text-muted-foreground mb-1">希望完成時間</p>
+                          <p className="text-sm font-medium flex items-center gap-2">
+                            <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            {date.toLocaleDateString("zh-TW")}
+                          </p>
+                        </div>
+                      )}
+
+                      {files.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2">附件（{files.length} 個檔案）</p>
+                          <div className="space-y-1.5">
+                            {files.map((file, index) => {
+                              const { icon: Icon, color } = getFileIcon(file.name)
+                              return (
+                                <div key={`confirm-${file.name}-${index}`} className="flex items-center gap-2.5 rounded-md bg-muted/50 px-3 py-2">
+                                  <Icon className={cn("h-4 w-4 shrink-0", color)} />
+                                  <span className="text-sm truncate">{file.name}</span>
+                                  <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(file.size)})</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {notes && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-1.5">備註</p>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {submitError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
