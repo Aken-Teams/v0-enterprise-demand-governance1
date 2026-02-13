@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +13,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import {
-  Plus, Trash2, AlertTriangle, Calendar, Loader2,
+  Plus, Trash2, AlertTriangle, Calendar, Loader2, Save, Check,
 } from "lucide-react"
 import { DEFAULT_SUBTASK_TEMPLATES } from "@/lib/constants/demand"
 
@@ -48,7 +48,7 @@ function toDateInput(val: string | null) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-gray-400",
+  pending: "bg-amber-400",
   in_progress: "bg-blue-500",
   completed: "bg-emerald-500",
 }
@@ -75,6 +75,28 @@ export function SubTaskEditor({
   const [newTaskEnd, setNewTaskEnd] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [savingDates, setSavingDates] = useState(false)
+  const [dateSaved, setDateSaved] = useState(false)
+
+  // Local date state to avoid flicker from server re-fetch
+  const [localDates, setLocalDates] = useState<Record<string, { start: string; end: string }>>({})
+  const [dirtyDates, setDirtyDates] = useState<Set<string>>(new Set())
+
+  // Sync local dates from props (only for non-dirty tasks)
+  useEffect(() => {
+    setLocalDates((prev) => {
+      const dates: Record<string, { start: string; end: string }> = {}
+      for (const t of subTasks) {
+        if (dirtyDates.has(t.id)) {
+          dates[t.id] = prev[t.id] ?? { start: toDateInput(t.plannedStart), end: toDateInput(t.plannedEnd) }
+        } else {
+          dates[t.id] = { start: toDateInput(t.plannedStart), end: toDateInput(t.plannedEnd) }
+        }
+      }
+      return dates
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTasks])
 
   const devStartDate = devStart ? toDateInput(devStart) : ""
   const devEndDate = devEnd ? toDateInput(devEnd) : ""
@@ -127,6 +149,43 @@ export function SubTaskEditor({
       onRefresh()
     } catch { /* ignore */ } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleDateChange = (taskId: string, field: "plannedStart" | "plannedEnd", value: string) => {
+    setLocalDates((prev) => ({
+      ...prev,
+      [taskId]: {
+        ...prev[taskId],
+        [field === "plannedStart" ? "start" : "end"]: value,
+      },
+    }))
+    setDirtyDates((prev) => new Set(prev).add(taskId))
+    setDateSaved(false)
+  }
+
+  const handleSaveDates = async () => {
+    if (!token || dirtyDates.size === 0) return
+    setSavingDates(true)
+    try {
+      const promises = Array.from(dirtyDates).map((taskId) => {
+        const dates = localDates[taskId]
+        if (!dates) return Promise.resolve()
+        return fetch(`/api/demands/${demandId}/sub-tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plannedStart: dates.start || null,
+            plannedEnd: dates.end || null,
+          }),
+        })
+      })
+      await Promise.all(promises)
+      setDirtyDates(new Set())
+      setDateSaved(true)
+      onRefresh()
+    } catch { /* ignore */ } finally {
+      setSavingDates(false)
     }
   }
 
@@ -183,8 +242,8 @@ export function SubTaskEditor({
           </TableHeader>
           <TableBody>
             {subTasks.map((task) => {
-              const taskStart = toDateInput(task.plannedStart)
-              const taskEnd = toDateInput(task.plannedEnd)
+              const taskStart = localDates[task.id]?.start ?? toDateInput(task.plannedStart)
+              const taskEnd = localDates[task.id]?.end ?? toDateInput(task.plannedEnd)
               const outOfRange = isOutOfRange(taskStart, taskEnd)
 
               return (
@@ -222,7 +281,7 @@ export function SubTaskEditor({
                       value={taskStart}
                       min={devStartDate || undefined}
                       max={devEndDate || undefined}
-                      onChange={(e) => handleUpdate(task.id, "plannedStart", e.target.value || null)}
+                      onChange={(e) => handleDateChange(task.id, "plannedStart", e.target.value)}
                     />
                   </TableCell>
                   <TableCell>
@@ -232,7 +291,7 @@ export function SubTaskEditor({
                       value={taskEnd}
                       min={devStartDate || undefined}
                       max={devEndDate || undefined}
-                      onChange={(e) => handleUpdate(task.id, "plannedEnd", e.target.value || null)}
+                      onChange={(e) => handleDateChange(task.id, "plannedEnd", e.target.value)}
                     />
                   </TableCell>
                   <TableCell className="pl-0">
@@ -263,9 +322,21 @@ export function SubTaskEditor({
             使用預設模板
           </Button>
         )}
-        <Button variant="outline" size="sm" className="text-xs ml-auto" onClick={onViewGantt}>
-          查看甘特圖
-        </Button>
+        <div className="flex items-center gap-2 ml-auto">
+          {dateSaved && dirtyDates.size === 0 && (
+            <span className="flex items-center gap-1 text-xs text-emerald-600">
+              <Check className="h-3.5 w-3.5" />
+              已儲存
+            </span>
+          )}
+          <Button size="sm" className="text-xs" onClick={handleSaveDates} disabled={dirtyDates.size === 0 || savingDates}>
+            {savingDates ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+            儲存時程
+          </Button>
+          <Button variant="outline" size="sm" className="text-xs" onClick={onViewGantt}>
+            查看甘特圖
+          </Button>
+        </div>
       </div>
 
       {/* Add Dialog */}
