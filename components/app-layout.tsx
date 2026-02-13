@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/hooks/use-auth"
+
+const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed"
 
 type UserRole = "subsidiary" | "admin" | "delivery"
 
@@ -96,6 +99,19 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
 
+  React.useEffect(() => {
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
+    if (saved === "true") setSidebarCollapsed(true)
+  }, [])
+
+  const toggleCollapsed = React.useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next))
+      return next
+    })
+  }, [])
+
   const detectedRole = React.useMemo((): UserRole => {
     if (pathname.startsWith("/admin")) return "admin"
     if (pathname.startsWith("/governance")) return "admin"
@@ -121,14 +137,14 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
         className={cn(
           "fixed inset-y-0 left-0 z-50 border-r border-sidebar-border bg-sidebar transition-all duration-300 lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
-          sidebarCollapsed ? "w-20" : "w-64", // increased from w-16 to w-20 for better icon spacing
+          sidebarCollapsed ? "w-16" : "w-56",
         )}
       >
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+          <div className={cn("flex h-16 items-center justify-between border-b border-sidebar-border", sidebarCollapsed ? "px-3" : "px-4")}>
+            <Link href="/" className={cn("flex items-center gap-2", sidebarCollapsed && "justify-center w-full")}>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
                 <Building2 className="h-5 w-5 text-primary-foreground" />
               </div>
               {!sidebarCollapsed && <span className="text-sm font-semibold text-sidebar-foreground">GOVORA</span>}
@@ -139,78 +155,93 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-6 overflow-y-auto p-4">
-            {visibleSections.map((section) => {
-              const visibleItems = React.useMemo(
-                () => section.items.filter((item) => item.roles.includes(detectedRole)),
-                [section.items, detectedRole]
-              )
+          <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+            <TooltipProvider delayDuration={0}>
+              {visibleSections.map((section) => {
+                const visibleItems = section.items.filter((item) => item.roles.includes(detectedRole))
+                if (visibleItems.length === 0) return null
 
-              if (visibleItems.length === 0) return null
+                return (
+                  <div key={section.title}>
+                    {!sidebarCollapsed && (
+                      <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {section.title}
+                      </h3>
+                    )}
+                    {sidebarCollapsed && <div className="my-2 mx-2 border-t border-sidebar-border/50" />}
+                    <div className="space-y-0.5">
+                      {visibleItems.map((item) => {
+                        const Icon = item.icon
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                        const linkEl = (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                              isActive
+                                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+                              sidebarCollapsed && "justify-center px-2",
+                            )}
+                            onClick={() => setSidebarOpen(false)}
+                          >
+                            <Icon className={cn(sidebarCollapsed ? "h-5 w-5" : "h-4 w-4")} />
+                            {!sidebarCollapsed && item.title}
+                          </Link>
+                        )
 
-              return (
-                <div key={section.title}>
-                  {!sidebarCollapsed && (
-                    <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {section.title}
-                    </h3>
-                  )}
-                  <div className="space-y-1">
-                    {visibleItems.map((item) => {
-                      const Icon = item.icon
-                      const isActive = React.useMemo(
-                        () => pathname === item.href || pathname.startsWith(item.href + "/"),
-                        [pathname, item.href]
-                      )
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "text-sidebar-foreground hover:bg-sidebar-accent/50",
-                            sidebarCollapsed && "justify-center px-2", // reduced horizontal padding when collapsed for better fit
-                          )}
-                          onClick={() => setSidebarOpen(false)}
-                          title={sidebarCollapsed ? item.title : undefined}
-                        >
-                          <Icon className={cn(sidebarCollapsed ? "h-5 w-5" : "h-4 w-4")} />{" "}
-                          {/* increased icon size from h-4 w-4 to h-5 w-5 when collapsed */}
-                          {!sidebarCollapsed && item.title}
-                        </Link>
-                      )
-                    })}
+                        if (sidebarCollapsed) {
+                          return (
+                            <Tooltip key={item.href}>
+                              <TooltipTrigger asChild>{linkEl}</TooltipTrigger>
+                              <TooltipContent side="right" sideOffset={8}>
+                                {item.title}
+                              </TooltipContent>
+                            </Tooltip>
+                          )
+                        }
+                        return linkEl
+                      })}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </TooltipProvider>
           </nav>
 
-          <div className="border-t border-sidebar-border p-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-center"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            >
-              {sidebarCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <>
-                  <ChevronLeft className="h-4 w-4" />
-                  <span className="ml-2">收合</span>
-                </>
-              )}
-            </Button>
+          <div className="border-t border-sidebar-border p-3">
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={toggleCollapsed}
+                  >
+                    {sidebarCollapsed ? (
+                      <ChevronRight className="h-4 w-4" />
+                    ) : (
+                      <>
+                        <ChevronLeft className="h-4 w-4" />
+                        <span className="ml-2">收合</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                {sidebarCollapsed && (
+                  <TooltipContent side="right" sideOffset={8}>展開選單</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </aside>
 
       {/* Main content */}
       <div
-        className={cn("flex flex-1 flex-col transition-all duration-300", sidebarCollapsed ? "lg:pl-20" : "lg:pl-64")} // updated from lg:pl-16 to lg:pl-20 to match new sidebar width
+        className={cn("flex flex-1 flex-col transition-all duration-300", sidebarCollapsed ? "lg:pl-16" : "lg:pl-56")}
       >
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-6">
