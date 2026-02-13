@@ -49,6 +49,7 @@ enum DocumentType {
   TDD                 // 測試驅動開發文件
   MODULE_ARCHITECTURE // 模組架構文件
   SP_PLAN             // SP 規劃文件
+  APP_RESULT          // APP 交付成果
   AUDIO               // 音訊
   VIDEO               // 影片
 }

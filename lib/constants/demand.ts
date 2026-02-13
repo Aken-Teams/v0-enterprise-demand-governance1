@@ -32,18 +32,24 @@ export const PHASE_DOCUMENT_MAP: Record<
 > = {
   SUBMITTED: {
     required: ["MEETING_NOTES"],
-    optional: ["PRD", "AUDIO", "VIDEO", "ATTACHMENT"],
+    optional: ["AUDIO", "VIDEO", "ATTACHMENT"],
   },
   PRD_REVIEW: {
-    required: ["SP_PLAN", "MODULE_ARCHITECTURE"],
-    optional: ["PRD", "ATTACHMENT"],
+    required: ["PRD", "MODULE_ARCHITECTURE"],
+    optional: ["ATTACHMENT"],
   },
-  SP_REVIEW: { required: [], optional: ["ATTACHMENT"] },
+  SP_REVIEW: {
+    required: ["SP_PLAN"],
+    optional: ["ATTACHMENT"],
+  },
   DEVELOPING: {
     required: ["SDD"],
-    optional: ["BDD", "TDD", "TEST_REPORT", "ATTACHMENT"],
+    optional: ["APP_RESULT", "ATTACHMENT"],
   },
-  ACCEPTANCE: { required: ["TEST_REPORT"], optional: ["ATTACHMENT"] },
+  ACCEPTANCE: {
+    required: ["BDD", "TDD", "TEST_REPORT"],
+    optional: ["ATTACHMENT"],
+  },
   CLOSED: { required: [], optional: ["ATTACHMENT"] },
 }
 
@@ -57,8 +63,29 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   TDD: "測試驅動開發文件",
   MODULE_ARCHITECTURE: "模組架構文件",
   SP_PLAN: "SP 規劃文件",
+  APP_RESULT: "APP 交付成果",
   AUDIO: "音訊",
   VIDEO: "影片",
+}
+
+/** 各階段簡要說明，讓管理者了解該階段的工作重點 */
+export const PHASE_DESCRIPTIONS: Record<string, string> = {
+  SUBMITTED: "與需求者面談了解需求，記錄會議內容",
+  PRD_REVIEW: "PM 撰寫 PRD，指派工程師進行 MVP 架構設計",
+  SP_REVIEW: "填寫 SP 規劃文件，分配各階段 SP 點數與時程",
+  DEVELOPING: "依甘特圖進行開發，產出 SDD 與 APP 成果",
+  ACCEPTANCE: "工程師提供 BDD/TDD 文件，使用者進行驗收測試",
+  CLOSED: "需求已完成結案",
+}
+
+/** 各階段需要完成的關鍵動作 */
+export const PHASE_ACTIONS: Record<string, string[]> = {
+  SUBMITTED: ["上傳會議記錄"],
+  PRD_REVIEW: ["指派 PM 與工程師", "上傳 PRD", "上傳模組架構文件"],
+  SP_REVIEW: ["填寫各階段 SP 點數", "填寫各階段甘特圖時程", "上傳 SP 規劃文件"],
+  DEVELOPING: ["管理開發子任務", "上傳 SDD 文件"],
+  ACCEPTANCE: ["上傳 BDD 文件", "上傳 TDD 文件", "上傳測試報告"],
+  CLOSED: [],
 }
 
 export const DEFAULT_SUBTASK_TEMPLATES = [

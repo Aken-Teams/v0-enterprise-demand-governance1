@@ -89,11 +89,6 @@ export function StepNavigation({
         >
           <ChevronLeft className="h-4 w-4 mr-1" />
           上一步
-          {prevPhase && (
-            <span className="text-muted-foreground ml-1">
-              ({STATUS_MAP[prevPhase]?.label})
-            </span>
-          )}
         </Button>
         <Button
           size="sm"

@@ -62,7 +62,7 @@ export async function GET(
   }
 }
 
-// PATCH: Update demand status
+// PATCH: Update demand status or assignments
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -70,15 +70,42 @@ export async function PATCH(
   try {
     const auth = verifyRole(request, ["admin"])
     const { id } = await params
-    const { status } = await request.json()
-
-    if (!status || !VALID_STATUSES.has(status)) {
-      return NextResponse.json({ error: "無效的狀態" }, { status: 400 })
-    }
+    const body = await request.json()
 
     const demand = await prisma.demand.findUnique({ where: { id } })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+    }
+
+    // Handle assignment update (managerId / developerId)
+    if (body.managerId !== undefined || body.developerId !== undefined) {
+      const data: Record<string, string | null> = {}
+      if (body.managerId !== undefined) data.managerId = body.managerId || null
+      if (body.developerId !== undefined) data.developerId = body.developerId || null
+
+      const updated = await prisma.demand.update({
+        where: { id },
+        data,
+        include: {
+          manager: { select: { id: true, name: true } },
+          developer: { select: { id: true, name: true } },
+        },
+      })
+      return NextResponse.json({
+        demand: {
+          id: updated.id,
+          managerId: updated.managerId,
+          developerId: updated.developerId,
+          manager: updated.manager,
+          developer: updated.developer,
+        },
+      })
+    }
+
+    // Handle status update
+    const { status } = body
+    if (!status || !VALID_STATUSES.has(status)) {
+      return NextResponse.json({ error: "無效的狀態" }, { status: 400 })
     }
 
     if (demand.status === status) {
@@ -128,7 +155,7 @@ export async function PATCH(
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })
     }
-    console.error("Update demand status error:", error)
+    console.error("Update demand error:", error)
     return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
   }
 }

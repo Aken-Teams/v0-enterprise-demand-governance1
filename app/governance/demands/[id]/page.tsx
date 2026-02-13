@@ -9,18 +9,24 @@ import {
   ArrowLeft, Building2, User, Calendar, FileText,
   Loader2, Pencil, Trash2, Check,
   BarChart3, GanttChart, FolderOpen,
+  AlertCircle, CircleDot, Info, UserPlus,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
 import { Upload } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
+import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 
 interface DemandDetail {
   id: string
@@ -108,7 +114,8 @@ export default function DemandDetailPage() {
 
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
-
+  const [staffUsers, setStaffUsers] = useState<{ id: string; name: string }[]>([])
+  const [activeTab, setActiveTab] = useState("overview")
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
 
@@ -128,6 +135,31 @@ export default function DemandDetailPage() {
   useEffect(() => {
     fetchDemand()
   }, [fetchDemand])
+
+  // Fetch staff users for PM/Engineer assignment
+  useEffect(() => {
+    if (!token || !canManage) return
+    fetch("/api/demands?_usersOnly=1", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.filters?.developers) setStaffUsers(data.filters.developers)
+      })
+      .catch(() => {})
+  }, [token, canManage])
+
+  const handleAssign = async (field: "managerId" | "developerId", userId: string) => {
+    if (!token || !demand) return
+    try {
+      const res = await fetch(`/api/demands/${demand.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: userId || null }),
+      })
+      if (res.ok) fetchDemand()
+    } catch { /* ignore */ }
+  }
 
   const handleDelete = async () => {
     if (!token) return
@@ -200,42 +232,134 @@ export default function DemandDetailPage() {
         {/* Status Pipeline */}
         <Card>
           <CardContent className="py-4">
-            <div className="flex items-center">
-              {PIPELINE_STEPS.map((step, i) => {
-                const info = STATUS_MAP[step]
-                const isPast = !isRejected && currentStepIndex >= 0 && i < currentStepIndex
-                const isCurrent = !isRejected && i === currentStepIndex
-                const isFuture = isRejected || currentStepIndex < 0 || i > currentStepIndex
-                return (
-                  <div key={step} className="flex items-center flex-1 last:flex-none">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div className={cn(
-                        "h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors",
-                        isCurrent && "border-primary bg-primary text-primary-foreground",
-                        isPast && "border-primary bg-primary/10 text-primary",
-                        isFuture && "border-muted-foreground/30 bg-background text-muted-foreground/50",
-                      )}>
-                        {isPast ? <Check className="h-3.5 w-3.5" /> : i + 1}
-                      </div>
-                      <span className={cn(
-                        "text-xs whitespace-nowrap",
-                        isCurrent && "font-semibold text-foreground",
-                        isPast && "text-primary",
-                        isFuture && "text-muted-foreground/50",
-                      )}>
-                        {info.label}
-                      </span>
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center">
+                {PIPELINE_STEPS.map((step, i) => {
+                  const info = STATUS_MAP[step]
+                  const isPast = !isRejected && currentStepIndex >= 0 && i < currentStepIndex
+                  const isCurrent = !isRejected && i === currentStepIndex
+                  const isFuture = isRejected || currentStepIndex < 0 || i > currentStepIndex
+
+                  // Phase completion info
+                  const phaseConfig = PHASE_DOCUMENT_MAP[step]
+                  const requiredDocs = phaseConfig?.required || []
+                  const missingDocs = requiredDocs.filter(
+                    (type) => !demand.documents.some((d) => d.phase === step && d.type === type)
+                  )
+                  const hasAssignment = step === "PRD_REVIEW" || step === "SP_REVIEW" || step === "DEVELOPING" || step === "ACCEPTANCE"
+                  const needsAssignment = hasAssignment && !demand.manager && !demand.developer
+                  const showWarning = (isPast || isCurrent) && (missingDocs.length > 0 || (isCurrent && needsAssignment))
+                  const isComplete = (isPast || isCurrent) && missingDocs.length === 0 && requiredDocs.length > 0
+
+                  return (
+                    <div key={step} className="flex items-center flex-1 last:flex-none">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex flex-col items-center gap-1.5 cursor-default">
+                            <div className="relative">
+                              <div className={cn(
+                                "h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors",
+                                isCurrent && "border-primary bg-primary text-primary-foreground",
+                                isPast && "border-primary bg-primary/10 text-primary",
+                                isFuture && "border-muted-foreground/30 bg-background text-muted-foreground/50",
+                              )}>
+                                {isPast ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                              </div>
+                              {showWarning && (
+                                <div className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-amber-500 flex items-center justify-center">
+                                  <AlertCircle className="h-2.5 w-2.5 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <span className={cn(
+                              "text-xs whitespace-nowrap",
+                              isCurrent && "font-semibold text-foreground",
+                              isPast && "text-primary",
+                              isFuture && "text-muted-foreground/50",
+                            )}>
+                              {info.label}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs p-3">
+                          <p className="font-medium text-xs mb-1">{info.label}</p>
+                          <p className="text-xs text-muted-foreground mb-2">{PHASE_DESCRIPTIONS[step]}</p>
+                          {requiredDocs.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium">必要文件：</p>
+                              {requiredDocs.map((type) => {
+                                const uploaded = demand.documents.some((d) => d.phase === step && d.type === type)
+                                return (
+                                  <div key={type} className="flex items-center gap-1.5 text-xs">
+                                    {uploaded
+                                      ? <Check className="h-3 w-3 text-emerald-500" />
+                                      : <CircleDot className="h-3 w-3 text-amber-500" />
+                                    }
+                                    <span className={uploaded ? "text-emerald-600" : "text-amber-600"}>
+                                      {DOCUMENT_TYPE_LABELS[type] || type}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                      {i < PIPELINE_STEPS.length - 1 && (
+                        <div className={cn(
+                          "flex-1 h-px mx-2 mt-[-1.25rem]",
+                          isPast ? "bg-primary" : "bg-muted-foreground/20",
+                        )} />
+                      )}
                     </div>
-                    {i < PIPELINE_STEPS.length - 1 && (
-                      <div className={cn(
-                        "flex-1 h-px mx-2 mt-[-1.25rem]",
-                        isPast ? "bg-primary" : "bg-muted-foreground/20",
-                      )} />
-                    )}
+                  )
+                })}
+              </div>
+            </TooltipProvider>
+
+            {/* Current phase status banner */}
+            {!isRejected && (() => {
+              const currentPhase = demand.status
+              const phaseConfig = PHASE_DOCUMENT_MAP[currentPhase]
+              const requiredDocs = phaseConfig?.required || []
+              const missingDocs = requiredDocs.filter(
+                (type) => !demand.documents.some((d) => d.phase === currentPhase && d.type === type)
+              )
+              const actions = PHASE_ACTIONS[currentPhase] || []
+              const needsAssignment = (currentPhase === "PRD_REVIEW" || currentPhase === "SP_REVIEW" || currentPhase === "DEVELOPING") && !demand.manager && !demand.developer
+
+              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0) return null
+
+              return (
+                <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                      <p className="text-xs font-medium text-blue-700">
+                        {PHASE_DESCRIPTIONS[currentPhase]}
+                      </p>
+                      {(missingDocs.length > 0 || needsAssignment) && (
+                        <div className="flex flex-wrap gap-2">
+                          {needsAssignment && (
+                            <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 cursor-pointer hover:bg-amber-100" onClick={() => setActiveTab("overview")}>
+                              <UserPlus className="h-3 w-3 mr-1" />
+                              待指派 PM / 工程師
+                            </Badge>
+                          )}
+                          {missingDocs.map((type) => (
+                            <Badge key={type} variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 cursor-pointer hover:bg-amber-100" onClick={() => setActiveTab("documents")}>
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              缺 {DOCUMENT_TYPE_LABELS[type] || type}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )
-              })}
-            </div>
+                </div>
+              )
+            })()}
+
             {isRejected && (
               <div className="mt-3 text-center">
                 <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">已駁回</Badge>
@@ -260,7 +384,7 @@ export default function DemandDetailPage() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Content - Left 2 cols */}
           <div className="lg:col-span-2 space-y-6">
-            <Tabs defaultValue="overview">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="h-10 p-1 bg-muted/60">
                 <TabsTrigger value="overview" className="gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <BarChart3 className="h-3.5 w-3.5" />
@@ -283,6 +407,140 @@ export default function DemandDetailPage() {
 
               {/* 概覽 Tab */}
               <TabsContent value="overview" className="space-y-6 mt-4">
+                {/* Phase-specific action cards */}
+                {canManage && demand.status === "SP_REVIEW" && (
+                  <Card className="border-orange-200">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-orange-600" />
+                        SP 與時程規劃
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">填寫各階段 SP 點數與計畫開始/結束時間</p>
+                    </CardHeader>
+                    <CardContent>
+                      <PhasePlanInlineEditor
+                        phasePlans={demand.phasePlans}
+                        totalSp={demand.estimatedSp}
+                        demandId={demand.id}
+                        token={token}
+                        onSaved={fetchDemand}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {canManage && demand.status === "PRD_REVIEW" && (!demand.manager || !demand.developer) && (
+                  <Card className="border-amber-200">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <UserPlus className="h-4 w-4 text-amber-600" />
+                        指派團隊成員
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">請在右側基本資訊區塊指派 PM 與工程師</p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className={cn("h-2 w-2 rounded-full", demand.manager ? "bg-emerald-500" : "bg-amber-400")} />
+                          <span>PM：</span>
+                          <span className={demand.manager ? "font-medium" : "text-muted-foreground"}>
+                            {demand.manager?.name || "尚未指派"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className={cn("h-2 w-2 rounded-full", demand.developer ? "bg-emerald-500" : "bg-amber-400")} />
+                          <span>工程師：</span>
+                          <span className={demand.developer ? "font-medium" : "text-muted-foreground"}>
+                            {demand.developer?.name || "尚未指派"}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {canManage && demand.status === "DEVELOPING" && (
+                  <Card className="border-violet-200">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <GanttChart className="h-4 w-4 text-violet-600" />
+                            開發進度
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground mt-1">管理子任務，追蹤開發進度</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab("gantt")}>
+                          <GanttChart className="h-3.5 w-3.5 mr-1" />
+                          查看甘特圖
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1.5">
+                        {demand.subTasks.length > 0 ? demand.subTasks.slice(0, 5).map((task) => (
+                          <div key={task.id} className="flex items-center gap-2 text-sm">
+                            <div className={cn(
+                              "h-2 w-2 rounded-full",
+                              task.status === "completed" ? "bg-emerald-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-gray-400",
+                            )} />
+                            <span className={task.status === "completed" ? "line-through text-muted-foreground" : ""}>
+                              {task.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              {task.status === "completed" ? "已完成" : task.status === "in_progress" ? "進行中" : "待開始"}
+                            </span>
+                          </div>
+                        )) : (
+                          <p className="text-sm text-muted-foreground">尚未建立子任務，請至甘特圖新增</p>
+                        )}
+                        {demand.subTasks.length > 5 && (
+                          <p className="text-xs text-muted-foreground">⋯ 還有 {demand.subTasks.length - 5} 個任務</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {canManage && demand.status === "ACCEPTANCE" && (
+                  <Card className="border-purple-200">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Check className="h-4 w-4 text-purple-600" />
+                            驗收階段
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground mt-1">工程師提供 BDD/TDD，使用者進行測試回饋</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab("documents")}>
+                          <FolderOpen className="h-3.5 w-3.5 mr-1" />
+                          查看文件
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1.5">
+                        {["BDD", "TDD", "TEST_REPORT"].map((type) => {
+                          const uploaded = demand.documents.some((d) => d.phase === "ACCEPTANCE" && d.type === type)
+                          return (
+                            <div key={type} className="flex items-center gap-2 text-sm">
+                              {uploaded
+                                ? <Check className="h-4 w-4 text-emerald-500" />
+                                : <CircleDot className="h-4 w-4 text-amber-500" />
+                              }
+                              <span className={uploaded ? "" : "text-muted-foreground"}>
+                                {DOCUMENT_TYPE_LABELS[type]}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* 需求說明 (always shown) */}
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
@@ -391,8 +649,51 @@ export default function DemandDetailPage() {
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground w-16 shrink-0">開發者</span>
-                  <span className="font-medium">{demand.developer?.name || "尚未指派"}</span>
+                  <span className="text-muted-foreground w-16 shrink-0">PM</span>
+                  {canManage && staffUsers.length > 0 ? (
+                    <Select
+                      value={demand.manager?.id || "none"}
+                      onValueChange={(v) => handleAssign("managerId", v === "none" ? "" : v)}
+                    >
+                      <SelectTrigger className="h-7 text-xs flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">尚未指派</SelectItem>
+                        {staffUsers.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className={cn("font-medium", !demand.manager && "text-muted-foreground")}>
+                      {demand.manager?.name || "尚未指派"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground w-16 shrink-0">工程師</span>
+                  {canManage && staffUsers.length > 0 ? (
+                    <Select
+                      value={demand.developer?.id || "none"}
+                      onValueChange={(v) => handleAssign("developerId", v === "none" ? "" : v)}
+                    >
+                      <SelectTrigger className="h-7 text-xs flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">尚未指派</SelectItem>
+                        {staffUsers.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className={cn("font-medium", !demand.developer && "text-muted-foreground")}>
+                      {demand.developer?.name || "尚未指派"}
+                    </span>
+                  )}
                 </div>
                 <hr className="border-border/60" />
                 <div className="flex items-center gap-2 text-sm">
