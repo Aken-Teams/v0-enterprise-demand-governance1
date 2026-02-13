@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   ArrowLeft, Building2, User, Calendar, FileText,
-  Loader2, Pencil, Trash2, Check,
+  Loader2, Pencil, Trash2, Check, ChevronDown,
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
 } from "lucide-react"
@@ -28,6 +28,7 @@ import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 interface DemandDetail {
   id: string
@@ -117,8 +118,18 @@ export default function DemandDetailPage() {
   const [loading, setLoading] = useState(true)
   const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string }[]>([])
   const [activeTab, setActiveTab] = useState("overview")
+  const [spPlanOpen, setSpPlanOpen] = useState<boolean | null>(null)
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
+
+  // Auto-collapse SP plan if already has content
+  useEffect(() => {
+    if (spPlanOpen !== null || !demand) return
+    const hasContent = demand.phasePlans.some(
+      (p) => p.plannedSp || p.plannedStart || p.plannedEnd || p.engineer
+    )
+    setSpPlanOpen(!hasContent)
+  }, [demand, spPlanOpen])
 
   const fetchDemand = useCallback(async () => {
     if (!token || !demandId) return
@@ -410,25 +421,36 @@ export default function DemandDetailPage() {
               <TabsContent value="overview" className="space-y-6 mt-4">
                 {/* Phase-specific action cards */}
                 {canManage && demand.status === "SP_REVIEW" && (
-                  <Card className="border-orange-200">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4 text-orange-600" />
-                        SP 與時程規劃
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground">填寫各階段 SP 點數與計畫開始/結束時間</p>
-                    </CardHeader>
-                    <CardContent>
-                      <PhasePlanInlineEditor
-                        phasePlans={demand.phasePlans}
-                        totalSp={demand.estimatedSp}
-                        demandId={demand.id}
-                        token={token}
-                        staffUsers={staffUsers}
-                        onSaved={fetchDemand}
-                      />
-                    </CardContent>
-                  </Card>
+                  <Collapsible open={spPlanOpen ?? false} onOpenChange={setSpPlanOpen}>
+                    <Card className="border-orange-200">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <BarChart3 className="h-4 w-4 text-orange-600" />
+                            SP 與時程規劃
+                          </CardTitle>
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <ChevronDown className={cn("h-4 w-4 transition-transform", spPlanOpen && "rotate-180")} />
+                            </Button>
+                          </CollapsibleTrigger>
+                        </div>
+                        <p className="text-xs text-muted-foreground">填寫各階段 SP 點數與計畫開始/結束時間</p>
+                      </CardHeader>
+                      <CollapsibleContent>
+                        <CardContent>
+                          <PhasePlanInlineEditor
+                            phasePlans={demand.phasePlans}
+                            totalSp={demand.estimatedSp}
+                            demandId={demand.id}
+                            token={token}
+                            staffUsers={staffUsers}
+                            onSaved={() => { setSpPlanOpen(false); fetchDemand() }}
+                          />
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
                 )}
 
                 {canManage && demand.status === "PRD_REVIEW" && (!demand.manager || !demand.developer) && (

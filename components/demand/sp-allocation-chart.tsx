@@ -50,53 +50,66 @@ export function SpAllocationChart({ phasePlans, totalSp }: SpAllocationChartProp
   )
 
   return (
-    <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[250px]">
-      <PieChart>
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              nameKey="phase"
-              formatter={(value, name) => {
-                const item = data.find((d) => d.phase === name)
-                return (
-                  <span>
-                    {item?.label}: {value} SP ({totalSp > 0 ? Math.round(((value as number) / totalSp) * 100) : 0}%)
-                  </span>
-                )
+    <div className="space-y-3">
+      <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[220px]">
+        <PieChart>
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                nameKey="phase"
+                formatter={(value, name) => {
+                  const item = data.find((d) => d.phase === name)
+                  return (
+                    <span>
+                      {item?.label}: {value} SP ({totalSp > 0 ? Math.round(((value as number) / totalSp) * 100) : 0}%)
+                    </span>
+                  )
+                }}
+              />
+            }
+          />
+          <Pie
+            data={data}
+            dataKey="sp"
+            nameKey="phase"
+            innerRadius={55}
+            outerRadius={85}
+            strokeWidth={2}
+            stroke="var(--background)"
+          >
+            {data.map((d) => (
+              <Cell key={d.phase} fill={d.fill} />
+            ))}
+            <Label
+              content={({ viewBox }) => {
+                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                  return (
+                    <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                      <tspan x={viewBox.cx} y={(viewBox.cy || 0) - 8} className="fill-foreground text-2xl font-bold">
+                        {allocatedSp}
+                      </tspan>
+                      <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 12} className="fill-muted-foreground text-xs">
+                        / {totalSp} SP
+                      </tspan>
+                    </text>
+                  )
+                }
               }}
             />
-          }
-        />
-        <Pie
-          data={data}
-          dataKey="sp"
-          nameKey="phase"
-          innerRadius={60}
-          outerRadius={90}
-          strokeWidth={2}
-          stroke="var(--background)"
-        >
-          {data.map((d) => (
-            <Cell key={d.phase} fill={d.fill} />
-          ))}
-          <Label
-            content={({ viewBox }) => {
-              if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                return (
-                  <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                    <tspan x={viewBox.cx} y={(viewBox.cy || 0) - 8} className="fill-foreground text-2xl font-bold">
-                      {allocatedSp}
-                    </tspan>
-                    <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 12} className="fill-muted-foreground text-xs">
-                      / {totalSp} SP
-                    </tspan>
-                  </text>
-                )
-              }
-            }}
-          />
-        </Pie>
-      </PieChart>
-    </ChartContainer>
+          </Pie>
+        </PieChart>
+      </ChartContainer>
+
+      {/* Legend */}
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 px-2">
+        {data.map((d) => (
+          <div key={d.phase} className="flex items-center gap-1.5 text-sm">
+            <div className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.fill }} />
+            <span className="text-muted-foreground">{d.label}</span>
+            <span className="font-medium">{d.sp}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
