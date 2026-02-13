@@ -13,6 +13,11 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Search, Inbox, Plus, Loader2, Building2,
   Paperclip, User, MoreHorizontal, Eye, Trash2,
 } from "lucide-react"
@@ -69,6 +74,7 @@ export default function InboxPage() {
   const [filterDeveloper, setFilterDeveloper] = useState("all")
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
+  const [deleteTarget, setDeleteTarget] = useState<Demand | null>(null)
 
   // Debounce search
   useEffect(() => {
@@ -329,7 +335,7 @@ export default function InboxPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
-                            onClick={() => handleDelete(demand.id)}
+                            onClick={() => setDeleteTarget(demand)}
                           >
                             <Trash2 className="h-3.5 w-3.5 mr-2" />
                             刪除需求
@@ -344,6 +350,27 @@ export default function InboxPage() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要刪除此需求？</AlertDialogTitle>
+            <AlertDialogDescription>
+              將永久刪除需求「{deleteTarget?.title}」（{deleteTarget?.demandNumber}）及其所有相關資料，包含文件、子任務、狀態紀錄等。此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteTarget) handleDelete(deleteTarget.id); setDeleteTarget(null) }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              確定刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   )
 }

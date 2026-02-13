@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { PIPELINE_STEPS } from "@/lib/constants/demand"
+import { updateDemandSchema } from "@/lib/validations/demand"
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
 
@@ -100,6 +101,33 @@ export async function PATCH(
           developer: updated.developer,
         },
       })
+    }
+
+    // Handle field editing (title, description, etc.)
+    if (body.title !== undefined) {
+      const parseResult = updateDemandSchema.safeParse(body)
+      if (!parseResult.success) {
+        return NextResponse.json(
+          { error: "驗證失敗", details: parseResult.error.flatten().fieldErrors },
+          { status: 400 }
+        )
+      }
+      const data = parseResult.data
+      const updateData: Record<string, unknown> = {
+        title: data.title,
+        description: data.description,
+        painPoint: data.painPoint || null,
+        expectedBenefit: data.expectedBenefit || null,
+        estimatedSp: data.estimatedSp,
+        desiredDate: data.desiredDate,
+        adminNotes: data.adminNotes || null,
+      }
+      if (data.submitterId) updateData.submitterId = data.submitterId
+      const updated = await prisma.demand.update({
+        where: { id },
+        data: updateData,
+      })
+      return NextResponse.json({ demand: { id: updated.id } })
     }
 
     // Handle status update

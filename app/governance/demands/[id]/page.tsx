@@ -20,7 +20,7 @@ import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHA
 import { Upload } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
 import { ProjectGantt } from "@/components/demand/project-gantt"
@@ -29,6 +29,11 @@ import { StepNavigation } from "@/components/demand/step-navigation"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface DemandDetail {
   id: string
@@ -100,6 +105,25 @@ interface DemandDetail {
     assignee: { id: string; name: string } | null
     order: number
   }[]
+}
+
+const ROLE_META: Record<string, { label: string; color: string }> = {
+  delivery: { label: "交付團隊", color: "text-emerald-600" },
+  admin: { label: "管理員", color: "text-amber-600" },
+  subsidiary: { label: "需求單位", color: "text-blue-600" },
+}
+const ROLE_ORDER = ["delivery", "admin", "subsidiary"]
+
+function groupUsersByRole(users: { id: string; name: string; role?: string }[]) {
+  const groups: Record<string, { id: string; name: string }[]> = {}
+  for (const u of users) {
+    const role = u.role || "subsidiary"
+    if (!groups[role]) groups[role] = []
+    groups[role].push(u)
+  }
+  return ROLE_ORDER
+    .filter((r) => groups[r]?.length)
+    .map((r) => ({ role: r, label: ROLE_META[r]?.label || r, color: ROLE_META[r]?.color || "", users: groups[r] }))
 }
 
 function formatDate(dateStr: string) {
@@ -244,10 +268,28 @@ export default function DemandDetailPage() {
                 編輯
               </Link>
             </Button>
-            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={handleDelete}>
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              刪除
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                  刪除
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>確定要刪除此需求？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    將永久刪除需求「{demand.title}」（{demand.demandNumber}）及其所有相關資料，包含文件、子任務、狀態紀錄等。此操作無法復原。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    確定刪除
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
 
@@ -653,8 +695,13 @@ export default function DemandDetailPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">尚未指派</SelectItem>
-                        {staffUsers.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        {groupUsersByRole(staffUsers).map((g) => (
+                          <SelectGroup key={g.role}>
+                            <SelectLabel className={cn("text-xs font-semibold", g.color)}>{g.label}</SelectLabel>
+                            {g.users.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
                         ))}
                       </SelectContent>
                     </Select>
@@ -677,8 +724,13 @@ export default function DemandDetailPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">尚未指派</SelectItem>
-                        {staffUsers.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        {groupUsersByRole(staffUsers).map((g) => (
+                          <SelectGroup key={g.role}>
+                            <SelectLabel className={cn("text-xs font-semibold", g.color)}>{g.label}</SelectLabel>
+                            {g.users.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
                         ))}
                       </SelectContent>
                     </Select>

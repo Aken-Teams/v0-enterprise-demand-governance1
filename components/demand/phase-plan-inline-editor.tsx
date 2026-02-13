@@ -161,9 +161,9 @@ export function PhasePlanInlineEditor({
                         ;(groups[g] ??= []).push(u)
                       }
                       const roleMeta: Record<string, { label: string; color: string }> = {
-                        delivery: { label: "交付團隊", color: "text-blue-600" },
+                        delivery: { label: "交付團隊", color: "text-emerald-600" },
                         admin: { label: "管理員", color: "text-amber-600" },
-                        subsidiary: { label: "需求單位", color: "text-emerald-600" },
+                        subsidiary: { label: "需求單位", color: "text-blue-600" },
                       }
                       const order = ["delivery", "admin", "subsidiary"]
                       return order
