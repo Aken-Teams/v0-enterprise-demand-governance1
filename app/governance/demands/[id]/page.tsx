@@ -6,9 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
-} from "@/components/ui/accordion"
-import {
   ArrowLeft, Building2, User, Calendar, FileText,
   Loader2, Pencil, Trash2, Check,
   BarChart3, GanttChart, FolderOpen,
@@ -21,7 +18,6 @@ import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
 import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
 import { ProjectGantt } from "@/components/demand/project-gantt"
-import { DevGantt } from "@/components/demand/dev-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
 
@@ -169,9 +165,6 @@ export default function DemandDetailPage() {
   const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
-  const showDevGantt =
-    currentStepIndex >= PIPELINE_STEPS.indexOf("SP_REVIEW") || demand.subTasks.length > 0
-
   return (
     <AppLayout userRole="admin">
       <div className="space-y-6">
@@ -326,42 +319,22 @@ export default function DemandDetailPage() {
               {/* 甘特圖 Tab */}
               <TabsContent value="gantt" className="mt-4">
                 <Card>
-                  <CardHeader className="pb-0">
+                  <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
                       <GanttChart className="h-4 w-4" />
                       甘特圖
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="pt-2">
-                    <Accordion type="multiple" defaultValue={["project", ...(showDevGantt ? ["dev"] : [])]}>
-                      <AccordionItem value="project">
-                        <AccordionTrigger className="hover:no-underline py-3 text-sm">
-                          專案流程甘特圖
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <ProjectGantt
-                            phasePlans={demand.phasePlans}
-                            currentStatus={demand.status}
-                          />
-                        </AccordionContent>
-                      </AccordionItem>
-                      {showDevGantt && (
-                        <AccordionItem value="dev">
-                          <AccordionTrigger className="hover:no-underline py-3 text-sm">
-                            開發甘特圖
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <DevGantt
-                              subTasks={demand.subTasks}
-                              demandId={demand.id}
-                              canEdit={canManage}
-                              token={token}
-                              onRefresh={fetchDemand}
-                            />
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-                    </Accordion>
+                  <CardContent>
+                    <ProjectGantt
+                      phasePlans={demand.phasePlans}
+                      currentStatus={demand.status}
+                      subTasks={demand.subTasks}
+                      demandId={demand.id}
+                      canEdit={canManage}
+                      token={token}
+                      onRefresh={fetchDemand}
+                    />
                   </CardContent>
                 </Card>
               </TabsContent>
