@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
+import { Upload } from "lucide-react"
 import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
@@ -343,7 +344,15 @@ export default function DemandDetailPage() {
               <TabsContent value="documents" className="mt-4">
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">階段文件</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">階段文件</CardTitle>
+                      {canManage && (
+                        <Button variant="outline" size="sm" id="doc-upload-trigger">
+                          <Upload className="h-4 w-4 mr-1.5" />
+                          上傳文件
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <PhaseDocuments
@@ -353,6 +362,7 @@ export default function DemandDetailPage() {
                       canUpload={canManage}
                       token={token}
                       onRefresh={fetchDemand}
+                      uploadTriggerSelector="#doc-upload-trigger"
                     />
                   </CardContent>
                 </Card>

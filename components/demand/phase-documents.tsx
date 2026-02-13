@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,14 +11,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
-  FileText, Download, Upload, Loader2, Check, Circle,
+  FileText, FileSpreadsheet, FileImage, FileVideo2, FileAudio, File, Presentation,
+  Download, Upload, Loader2, Check, Circle,
 } from "lucide-react"
 import {
   STATUS_MAP,
   PIPELINE_STEPS,
+  PHASE_COLORS,
   PHASE_DOCUMENT_MAP,
   DOCUMENT_TYPE_LABELS,
 } from "@/lib/constants/demand"
+import { cn } from "@/lib/utils"
 
 interface Document {
   id: string
@@ -38,6 +41,27 @@ interface PhaseDocumentsProps {
   canUpload: boolean
   token: string | null
   onRefresh: () => void
+  uploadTriggerSelector?: string
+}
+
+function getFileIconAndColor(fileName: string): { icon: typeof File; color: string } {
+  const ext = fileName.split(".").pop()?.toLowerCase() || ""
+  switch (ext) {
+    case "xls": case "xlsx": case "csv":
+      return { icon: FileSpreadsheet, color: "text-emerald-600" }
+    case "ppt": case "pptx":
+      return { icon: Presentation, color: "text-orange-500" }
+    case "jpg": case "jpeg": case "png": case "gif": case "webp": case "svg":
+      return { icon: FileImage, color: "text-violet-500" }
+    case "mp4": case "webm": case "mov": case "avi":
+      return { icon: FileVideo2, color: "text-rose-500" }
+    case "mp3": case "wav": case "ogg": case "m4a":
+      return { icon: FileAudio, color: "text-sky-500" }
+    case "pdf": case "doc": case "docx": case "txt": case "md":
+      return { icon: FileText, color: "text-blue-500" }
+    default:
+      return { icon: File, color: "text-muted-foreground" }
+  }
 }
 
 function formatFileSize(bytes: number) {
@@ -59,6 +83,7 @@ export function PhaseDocuments({
   canUpload,
   token,
   onRefresh,
+  uploadTriggerSelector,
 }: PhaseDocumentsProps) {
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [uploadPhase, setUploadPhase] = useState(currentPhase)
@@ -66,6 +91,16 @@ export function PhaseDocuments({
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+
+  // Bind external upload trigger button
+  useEffect(() => {
+    if (!uploadTriggerSelector) return
+    const el = document.querySelector(uploadTriggerSelector)
+    if (!el) return
+    const handler = () => setShowUploadDialog(true)
+    el.addEventListener("click", handler)
+    return () => el.removeEventListener("click", handler)
+  }, [uploadTriggerSelector])
 
   // Default tab to current phase
   const defaultTab = PIPELINE_STEPS.includes(currentPhase as typeof PIPELINE_STEPS[number])
@@ -125,53 +160,66 @@ export function PhaseDocuments({
   return (
     <div className="space-y-3">
       <Tabs defaultValue={defaultTab}>
-        <div className="flex items-center justify-between">
-          <TabsList className="h-8">
-            {PIPELINE_STEPS.map((phase) => {
-              const count = getPhaseDocuments(phase).length
-              return (
-                <TabsTrigger key={phase} value={phase} className="text-xs px-2 py-1 gap-1">
-                  {STATUS_MAP[phase]?.label}
-                  {count > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-0.5">
-                      {count}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              )
-            })}
-            {getUnassignedDocuments().length > 0 && (
-              <TabsTrigger value="all" className="text-xs px-2 py-1">
-                其他
+        <TabsList className="w-full h-auto p-1 bg-muted/50 justify-start gap-0">
+          {PIPELINE_STEPS.map((phase, idx) => {
+            const count = getPhaseDocuments(phase).length
+            const required = getRequiredStatus(phase)
+            const reqDone = required.filter((r) => r.uploaded).length
+            const reqTotal = required.length
+            return (
+              <TabsTrigger
+                key={phase}
+                value={phase}
+                className={cn(
+                  "text-sm px-2.5 py-1.5 gap-1 rounded-md transition-all",
+                  "data-[state=active]:bg-background data-[state=active]:shadow-sm",
+                  idx > 0 && "border-l border-l-border/30",
+                )}
+              >
+                <div
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ backgroundColor: PHASE_COLORS[phase] }}
+                />
+                {STATUS_MAP[phase]?.label}
+                {(count > 0 || reqTotal > 0) && (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-[10px] h-4 px-1 ml-0.5 rounded-full",
+                      reqTotal > 0 && reqDone === reqTotal && "bg-emerald-100 text-emerald-700",
+                    )}
+                  >
+                    {count > 0 ? count : `${reqDone}/${reqTotal}`}
+                  </Badge>
+                )}
               </TabsTrigger>
-            )}
-          </TabsList>
-          {canUpload && (
-            <Button variant="outline" size="sm" onClick={() => setShowUploadDialog(true)}>
-              <Upload className="h-3.5 w-3.5 mr-1" />
-              上傳文件
-            </Button>
+            )
+          })}
+          {getUnassignedDocuments().length > 0 && (
+            <TabsTrigger value="all" className="text-sm px-2.5 py-1.5 rounded-md border-l border-l-border/30">
+              其他
+            </TabsTrigger>
           )}
-        </div>
+        </TabsList>
 
         {PIPELINE_STEPS.map((phase) => {
           const phaseDocs = getPhaseDocuments(phase)
           const requiredChecklist = getRequiredStatus(phase)
 
           return (
-            <TabsContent key={phase} value={phase} className="space-y-3 mt-3">
+            <TabsContent key={phase} value={phase} className="space-y-4 mt-4">
               {/* Required checklist */}
               {requiredChecklist.length > 0 && (
-                <div className="rounded-lg border border-border/60 p-3 space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">必要文件</p>
+                <div className="rounded-lg border border-border/60 p-4 space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">必要文件</p>
                   {requiredChecklist.map((item) => (
-                    <div key={item.type} className="flex items-center gap-2 text-sm">
+                    <div key={item.type} className="flex items-center gap-2.5">
                       {item.uploaded ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        <Check className="h-4 w-4 text-emerald-500" />
                       ) : (
-                        <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+                        <Circle className="h-4 w-4 text-muted-foreground/40" />
                       )}
-                      <span className={item.uploaded ? "text-foreground" : "text-muted-foreground"}>
+                      <span className={cn("text-sm", item.uploaded ? "text-foreground" : "text-muted-foreground")}>
                         {item.label}
                       </span>
                     </div>
@@ -182,13 +230,15 @@ export function PhaseDocuments({
               {/* Documents */}
               {phaseDocs.length > 0 ? (
                 <div className="space-y-2">
-                  {phaseDocs.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between rounded-lg border p-3">
+                  {phaseDocs.map((doc) => {
+                    const { icon: Icon, color: iconColor } = getFileIconAndColor(doc.fileName)
+                    return (
+                    <div key={doc.id} className="flex items-center justify-between rounded-lg border p-3.5">
                       <div className="flex items-center gap-3 min-w-0">
-                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
                         <div className="min-w-0">
-                          <p className="text-sm truncate">{doc.fileName}</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-sm font-medium truncate">{doc.fileName}</p>
+                          <p className="text-sm text-muted-foreground">
                             {DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
                             {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
                             {" · "}{formatDate(doc.createdAt)}
@@ -196,42 +246,46 @@ export function PhaseDocuments({
                         </div>
                       </div>
                       {doc.fileUrl && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                          <a href={doc.fileUrl} download><Download className="h-4 w-4" /></a>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" asChild>
+                          <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>
                         </Button>
                       )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">此階段尚無文件</p>
+                <p className="text-sm text-muted-foreground text-center py-6">此階段尚無文件</p>
               )}
             </TabsContent>
           )
         })}
 
         {getUnassignedDocuments().length > 0 && (
-          <TabsContent value="all" className="mt-3">
+          <TabsContent value="all" className="mt-4">
             <div className="space-y-2">
-              {getUnassignedDocuments().map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between rounded-lg border p-3">
+              {getUnassignedDocuments().map((doc) => {
+                const { icon: Icon, color: iconColor } = getFileIconAndColor(doc.fileName)
+                return (
+                <div key={doc.id} className="flex items-center justify-between rounded-lg border p-3.5">
                   <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
                     <div className="min-w-0">
-                      <p className="text-sm truncate">{doc.fileName}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-medium truncate">{doc.fileName}</p>
+                      <p className="text-sm text-muted-foreground">
                         {DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
                         {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
                       </p>
                     </div>
                   </div>
                   {doc.fileUrl && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                      <a href={doc.fileUrl} download><Download className="h-4 w-4" /></a>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" asChild>
+                      <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>
                     </Button>
                   )}
                 </div>
-              ))}
+                )
+              })}
             </div>
           </TabsContent>
         )}
