@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CalendarIcon, Upload, Building2, HelpCircle, ChevronRight, ChevronLeft, Check } from "lucide-react"
+import { CalendarIcon, Upload, Building2, HelpCircle, ChevronRight, ChevronLeft, Check, FileText, Settings2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
@@ -31,9 +31,9 @@ const subsidiaries = [
 ]
 
 const steps = [
-  { id: 1, title: "基本資訊" },
-  { id: 2, title: "需求內容" },
-  { id: 3, title: "補充資訊" },
+  { id: 1, title: "基本資訊", icon: Building2 },
+  { id: 2, title: "需求內容", icon: FileText },
+  { id: 3, title: "補充資訊", icon: Settings2 },
 ]
 
 export default function CreateDemandPage() {
@@ -52,7 +52,7 @@ export default function CreateDemandPage() {
 
   return (
     <AppLayout userRole="admin">
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-4xl space-y-6">
         {/* Header */}
         <div className="flex items-center gap-2">
           <div>
@@ -76,16 +76,16 @@ export default function CreateDemandPage() {
         </div>
 
         {/* Step Indicator */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center gap-3">
           {steps.map((step, i) => (
-            <div key={step.id} className="flex items-center gap-2">
+            <div key={step.id} className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => {
                   if (step.id < currentStep) setCurrentStep(step.id)
                 }}
                 className={cn(
-                  "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                  "flex items-center gap-2 rounded-full px-5 py-2 text-base font-medium transition-colors",
                   currentStep === step.id
                     ? "bg-primary text-primary-foreground"
                     : step.id < currentStep
@@ -94,14 +94,14 @@ export default function CreateDemandPage() {
                 )}
               >
                 {step.id < currentStep ? (
-                  <Check className="h-3.5 w-3.5" />
+                  <Check className="h-4 w-4" />
                 ) : (
-                  <span className="flex h-4 w-4 items-center justify-center text-xs">{step.id}</span>
+                  <step.icon className="h-4 w-4" />
                 )}
                 {step.title}
               </button>
               {i < steps.length - 1 && (
-                <div className={cn("h-px w-8", step.id < currentStep ? "bg-emerald-300" : "bg-border")} />
+                <div className={cn("h-px w-10", step.id < currentStep ? "bg-emerald-300" : "bg-border")} />
               )}
             </div>
           ))}
