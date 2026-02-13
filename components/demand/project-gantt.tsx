@@ -544,11 +544,9 @@ export function ProjectGantt({
                           {subTasks.length}
                         </Badge>
                       )}
-                      {row.sp != null && row.sp > 0 && (
-                        <Badge variant="secondary" className={cn("text-[10px] h-[18px] px-1.5 rounded-md font-medium", !(hasSubTasks && isDev) && "ml-auto")}>
-                          {row.sp} SP
-                        </Badge>
-                      )}
+                      <Badge variant="secondary" className={cn("text-[10px] h-[18px] px-1.5 rounded-md font-medium", !(hasSubTasks && isDev) && "ml-auto")}>
+                        {row.sp ?? 0} SP
+                      </Badge>
                     </div>
 
                     {/* Bar area */}
@@ -569,7 +567,7 @@ export function ProjectGantt({
                               <div className="font-semibold text-sm mb-1.5 flex items-center gap-1.5">
                                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
                                 {info?.label}
-                                {row.sp != null && row.sp > 0 && <span className="text-muted-foreground font-normal">({row.sp} SP)</span>}
+                                <span className="text-muted-foreground font-normal">({row.sp ?? 0} SP)</span>
                               </div>
                               <div className="flex items-center gap-1.5 text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
