@@ -7,10 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import {
-  Search, Inbox, Plus, Loader2, Building2, Calendar,
-  FileText, Paperclip, MessageSquare,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Search, Inbox, Plus, Loader2, Building2,
+  Paperclip, User, MoreHorizontal, Eye, Trash2, ArrowRight,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
@@ -28,6 +33,7 @@ interface Demand {
   organization: string
   submitter: string
   creator: string
+  developer: string | null
   documentCount: number
   commentCount: number
 }
@@ -42,11 +48,15 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
 }
 
-const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
-  low: { label: "低", color: "bg-slate-100 text-slate-600" },
-  medium: { label: "中", color: "bg-blue-50 text-blue-600" },
-  high: { label: "高", color: "bg-orange-100 text-orange-600" },
-  critical: { label: "緊急", color: "bg-red-100 text-red-600" },
+
+// Valid next statuses for each current status
+const NEXT_STATUSES: Record<string, string[]> = {
+  SUBMITTED: ["PRD_REVIEW", "REJECTED"],
+  PRD_REVIEW: ["SP_REVIEW", "SUBMITTED", "REJECTED"],
+  SP_REVIEW: ["DEVELOPING", "PRD_REVIEW", "REJECTED"],
+  DEVELOPING: ["ACCEPTANCE"],
+  ACCEPTANCE: ["CLOSED", "DEVELOPING"],
+  REJECTED: ["SUBMITTED"],
 }
 
 const TAB_STATUS_MAP: Record<string, string | null> = {
@@ -62,6 +72,7 @@ const TAB_STATUS_MAP: Record<string, string | null> = {
 
 export default function InboxPage() {
   const { token } = useAuth()
+  const router = useRouter()
   const [demands, setDemands] = useState<Demand[]>([])
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
@@ -104,6 +115,29 @@ export default function InboxPage() {
   useEffect(() => {
     fetchDemands()
   }, [fetchDemands])
+
+  const handleStatusChange = async (demandId: string, newStatus: string) => {
+    if (!token) return
+    try {
+      const res = await fetch(`/api/demands/${demandId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (res.ok) fetchDemands()
+    } catch { /* ignore */ }
+  }
+
+  const handleDelete = async (demandId: string) => {
+    if (!token) return
+    try {
+      const res = await fetch(`/api/demands/${demandId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) fetchDemands()
+    } catch { /* ignore */ }
+  }
 
   const getCount = (status: string) => statusCounts[status] || 0
   const confirmStage = getCount("SUBMITTED") + getCount("PRD_REVIEW") + getCount("SP_REVIEW")
@@ -214,67 +248,92 @@ export default function InboxPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-2">
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {demands.map((demand) => {
                     const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
-                    const priorityInfo = PRIORITY_MAP[demand.priority] || { label: demand.priority, color: "bg-gray-100 text-gray-600" }
+                    const nextStatuses = NEXT_STATUSES[demand.status] || []
                     return (
-                      <Link key={demand.id} href={`/governance/demands/${demand.id}`}>
-                        <Card className="hover:bg-muted/40 transition-colors cursor-pointer">
-                          <CardContent className="py-3">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0 flex-1 space-y-1.5">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
-                                  <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", statusInfo.color)}>
-                                    {statusInfo.label}
-                                  </Badge>
-                                  <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", priorityInfo.color)}>
-                                    {priorityInfo.label}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm font-medium truncate">{demand.title}</p>
-                                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                      <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
+                        <CardContent className="px-4 py-3 space-y-2">
+                          {/* Row 1: number + status */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
+                            <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
+                              {statusInfo.label}
+                            </Badge>
+                          </div>
+
+                          {/* Title */}
+                          <p className="font-semibold leading-snug line-clamp-2">{demand.title}</p>
+
+                          <hr className="border-border/60" />
+
+                          {/* Meta row + actions */}
+                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center gap-1">
+                                <Building2 className="h-3.5 w-3.5" />
+                                {demand.organization}
+                              </span>
+                              <span>·</span>
+                              <span>{demand.estimatedSp} SP</span>
+                              {demand.documentCount > 0 && (
+                                <>
+                                  <span>·</span>
                                   <span className="flex items-center gap-1">
-                                    <Building2 className="h-3 w-3" />
-                                    {demand.organization}
+                                    <Paperclip className="h-3.5 w-3.5" />
+                                    {demand.documentCount}
                                   </span>
-                                  <span className="flex items-center gap-1">
-                                    <FileText className="h-3 w-3" />
-                                    {demand.estimatedSp} SP
-                                  </span>
-                                  {demand.desiredDate && (
-                                    <span className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      {new Date(demand.desiredDate).toLocaleDateString("zh-TW")}
-                                    </span>
-                                  )}
-                                  {demand.documentCount > 0 && (
-                                    <span className="flex items-center gap-1">
-                                      <Paperclip className="h-3 w-3" />
-                                      {demand.documentCount}
-                                    </span>
-                                  )}
-                                  {demand.commentCount > 0 && (
-                                    <span className="flex items-center gap-1">
-                                      <MessageSquare className="h-3 w-3" />
-                                      {demand.commentCount}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(demand.createdAt).toLocaleDateString("zh-TW")}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {demand.creator}
-                                </p>
-                              </div>
+                                </>
+                              )}
+                              <span>·</span>
+                              <span className="flex items-center gap-1">
+                                <User className="h-3.5 w-3.5" />
+                                {demand.developer || "尚未指派"}
+                              </span>
                             </div>
-                          </CardContent>
-                        </Card>
-                      </Link>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
+                                  <Eye className="h-3.5 w-3.5 mr-2" />
+                                  查看詳情
+                                </DropdownMenuItem>
+                                {nextStatuses.length > 0 && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    {nextStatuses.map((s) => {
+                                      const info = STATUS_MAP[s] || { label: s, color: "" }
+                                      return (
+                                        <DropdownMenuItem key={s} onClick={() => handleStatusChange(demand.id, s)}>
+                                          <ArrowRight className="h-3.5 w-3.5 mr-2" />
+                                          轉為
+                                          <Badge variant="secondary" className={cn("text-xs px-1.5 py-0 ml-1", info.color)}>
+                                            {info.label}
+                                          </Badge>
+                                        </DropdownMenuItem>
+                                      )
+                                    })}
+                                  </>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDelete(demand.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  刪除需求
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </CardContent>
+                      </Card>
                     )
                   })}
                 </div>
