@@ -40,11 +40,23 @@ enum DemandPriority {
 }
 
 enum DocumentType {
-  MEETING_NOTES // 會議記錄
-  PRD           // 需求規格書
-  SDD           // 系統設計文件
-  TEST_REPORT   // 測試報告
-  ATTACHMENT    // 一般附件
+  MEETING_NOTES       // 會議記錄
+  PRD                 // 需求規格書
+  SDD                 // 系統設計文件
+  TEST_REPORT         // 測試報告
+  ATTACHMENT          // 一般附件
+  BDD                 // 行為驅動開發文件
+  TDD                 // 測試驅動開發文件
+  MODULE_ARCHITECTURE // 模組架構文件
+  SP_PLAN             // SP 規劃文件
+  AUDIO               // 音訊
+  VIDEO               // 影片
+}
+
+enum SubTaskStatus {
+  pending
+  in_progress
+  completed
 }
 
 enum SpTransactionType {
@@ -109,6 +121,9 @@ model User {
   notifications     Notification[]
   demandComments    DemandComment[]
   acceptanceRecords AcceptanceRecord[]
+  phasePlanEngineer DemandPhasePlan[] @relation("PhasePlanEngineer")
+  phasePlanPM       DemandPhasePlan[] @relation("PhasePlanPM")
+  subTaskAssignee   DemandSubTask[]   @relation("SubTaskAssignee")
 
   @@map("users")
 }
@@ -183,6 +198,8 @@ model Demand {
   comments          DemandComment[]
   spTransactions    SpTransaction[]
   acceptanceRecords AcceptanceRecord[]
+  phasePlans        DemandPhasePlan[]
+  subTasks          DemandSubTask[]
 
   @@index([organizationId])
   @@index([status])
@@ -207,17 +224,19 @@ model DemandStatusHistory {
 
 /// 需求文件 (會議記錄, PRD, SDD, 測試報告等)
 model DemandDocument {
-  id         String       @id @default(cuid())
+  id         String        @id @default(cuid())
   demandId   String
-  demand     Demand       @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  demand     Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   type       DocumentType
+  phase      DemandStatus? /// 文件所屬階段
   fileName   String
-  fileUrl    String?      @db.Text
+  fileUrl    String?       @db.Text
   fileSize   Int? /// bytes
   uploadedBy String /// user ID or name
-  createdAt  DateTime     @default(now())
+  createdAt  DateTime      @default(now())
 
   @@index([demandId])
+  @@index([demandId, phase])
   @@map("demand_documents")
 }
 
@@ -270,4 +289,48 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+/// 需求階段規劃
+model DemandPhasePlan {
+  id           String        @id @default(cuid())
+  demandId     String
+  demand       Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  phase        DemandStatus
+  plannedSp    Float? /// 該階段規劃 SP
+  plannedStart DateTime? /// 計畫開始
+  plannedEnd   DateTime? /// 計畫結束
+  actualStart  DateTime? /// 實際開始
+  actualEnd    DateTime? /// 實際結束
+  engineerId   String? /// 工程師 (MVP 階段後)
+  engineer     User?         @relation("PhasePlanEngineer", fields: [engineerId], references: [id])
+  pmId         String? /// PM (MVP 階段後)
+  pm           User?         @relation("PhasePlanPM", fields: [pmId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([demandId, phase])
+  @@index([demandId])
+  @@map("demand_phase_plans")
+}
+
+/// 需求子任務 (開發甘特圖)
+model DemandSubTask {
+  id           String        @id @default(cuid())
+  demandId     String
+  demand       Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  name         String /// e.g. "前端開發", "後端開發"
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  actualStart  DateTime?
+  actualEnd    DateTime?
+  status       SubTaskStatus @default(pending)
+  assigneeId   String?
+  assignee     User?         @relation("SubTaskAssignee", fields: [assigneeId], references: [id])
+  order        Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([demandId])
+  @@map("demand_sub_tasks")
 }

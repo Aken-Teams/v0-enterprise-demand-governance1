@@ -15,6 +15,8 @@ async function main() {
   await prisma.demandComment.deleteMany()
   await prisma.demandDocument.deleteMany()
   await prisma.demandStatusHistory.deleteMany()
+  await prisma.demandSubTask.deleteMany()
+  await prisma.demandPhasePlan.deleteMany()
   await prisma.spTransaction.deleteMany()
   await prisma.demand.deleteMany()
   await prisma.spWallet.deleteMany()

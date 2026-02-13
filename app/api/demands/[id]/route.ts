@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
+import { PIPELINE_STEPS } from "@/lib/constants/demand"
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
 
@@ -31,6 +32,18 @@ export async function GET(
         },
         statusHistory: {
           orderBy: { createdAt: "desc" },
+        },
+        phasePlans: {
+          include: {
+            engineer: { select: { id: true, name: true } },
+            pm: { select: { id: true, name: true } },
+          },
+        },
+        subTasks: {
+          include: {
+            assignee: { select: { id: true, name: true } },
+          },
+          orderBy: { order: "asc" },
         },
       },
     })
@@ -86,6 +99,27 @@ export async function PATCH(
           changedBy: auth.userId,
         },
       })
+
+      // Auto-set actual dates on phase plans
+      const now = new Date()
+      const fromIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
+      const toIdx = PIPELINE_STEPS.indexOf(status as typeof PIPELINE_STEPS[number])
+
+      if (fromIdx >= 0) {
+        await tx.demandPhasePlan.upsert({
+          where: { demandId_phase: { demandId: id, phase: demand.status } },
+          create: { demandId: id, phase: demand.status, actualEnd: now },
+          update: { actualEnd: now },
+        })
+      }
+      if (toIdx >= 0) {
+        await tx.demandPhasePlan.upsert({
+          where: { demandId_phase: { demandId: id, phase: status as DemandStatus } },
+          create: { demandId: id, phase: status as DemandStatus, actualStart: now },
+          update: { actualStart: now },
+        })
+      }
+
       return d
     })
 
