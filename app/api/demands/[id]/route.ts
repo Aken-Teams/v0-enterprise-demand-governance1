@@ -175,6 +175,47 @@ export async function PATCH(
         })
       }
 
+      // SP wallet: commit on entering DEVELOPING, finalize on CLOSED
+      const sp = demand.confirmedSp ?? demand.estimatedSp
+      const year = now.getFullYear()
+      const spIdx = PIPELINE_STEPS.indexOf("SP_REVIEW")
+      const devIdx = PIPELINE_STEPS.indexOf("DEVELOPING")
+      const closedIdx = PIPELINE_STEPS.indexOf("CLOSED")
+
+      // Forward: SP_REVIEW → DEVELOPING — lock committed SP
+      if (fromIdx <= spIdx && toIdx >= devIdx && toIdx < closedIdx) {
+        await tx.spWallet.upsert({
+          where: { organizationId_year: { organizationId: demand.organizationId, year } },
+          create: { organizationId: demand.organizationId, year, totalQuota: 0, committedSp: sp },
+          update: { committedSp: { increment: sp } },
+        })
+      }
+
+      // Forward: → CLOSED — move committed to used
+      if (toIdx === closedIdx && fromIdx < closedIdx) {
+        await tx.spWallet.upsert({
+          where: { organizationId_year: { organizationId: demand.organizationId, year } },
+          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: sp },
+          update: { committedSp: { decrement: sp }, usedSp: { increment: sp } },
+        })
+      }
+
+      // Backward: from DEVELOPING+ back to SP_REVIEW or earlier — release committed SP
+      if (fromIdx >= devIdx && fromIdx < closedIdx && toIdx <= spIdx) {
+        await tx.spWallet.update({
+          where: { organizationId_year: { organizationId: demand.organizationId, year } },
+          data: { committedSp: { decrement: sp } },
+        }).catch(() => {}) // wallet may not exist
+      }
+
+      // Backward: from CLOSED back — move used back to committed
+      if (fromIdx === closedIdx && toIdx < closedIdx && toIdx >= devIdx) {
+        await tx.spWallet.update({
+          where: { organizationId_year: { organizationId: demand.organizationId, year } },
+          data: { usedSp: { decrement: sp }, committedSp: { increment: sp } },
+        }).catch(() => {})
+      }
+
       return d
     })
 

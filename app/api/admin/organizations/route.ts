@@ -8,23 +8,38 @@ export async function GET(request: NextRequest) {
 
     const currentYear = new Date().getFullYear()
 
-    const organizations = await prisma.organization.findMany({
-      include: {
-        _count: { select: { users: true, demands: true } },
-        spWallets: {
-          where: { year: currentYear },
-          select: {
-            totalQuota: true,
-            usedSp: true,
-            committedSp: true,
+    const [organizations, demands] = await Promise.all([
+      prisma.organization.findMany({
+        include: {
+          _count: { select: { users: true, demands: true } },
+          spWallets: {
+            where: { year: currentYear },
+            select: { totalQuota: true },
           },
         },
-      },
-      orderBy: { name: "asc" },
-    })
+        orderBy: { name: "asc" },
+      }),
+      prisma.demand.findMany({
+        where: { status: { in: ["DEVELOPING", "ACCEPTANCE", "CLOSED"] } },
+        select: { organizationId: true, status: true, confirmedSp: true, estimatedSp: true },
+      }),
+    ])
+
+    // Compute committed / used SP from actual demand statuses
+    const spByOrg: Record<string, { committed: number; used: number }> = {}
+    for (const d of demands) {
+      const sp = d.confirmedSp ?? d.estimatedSp
+      if (!spByOrg[d.organizationId]) spByOrg[d.organizationId] = { committed: 0, used: 0 }
+      if (d.status === "CLOSED") {
+        spByOrg[d.organizationId].used += sp
+      } else {
+        spByOrg[d.organizationId].committed += sp
+      }
+    }
 
     const result = organizations.map((org) => {
       const wallet = org.spWallets[0]
+      const sp = spByOrg[org.id] ?? { committed: 0, used: 0 }
       return {
         id: org.id,
         code: org.code,
@@ -34,8 +49,8 @@ export async function GET(request: NextRequest) {
         userCount: org._count.users,
         demandCount: org._count.demands,
         spQuota: wallet?.totalQuota ?? 0,
-        spUsed: wallet?.usedSp ?? 0,
-        spCommitted: wallet?.committedSp ?? 0,
+        spUsed: sp.used,
+        spCommitted: sp.committed,
       }
     })
 
