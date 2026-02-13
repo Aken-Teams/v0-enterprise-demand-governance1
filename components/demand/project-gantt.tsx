@@ -1,17 +1,16 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { differenceInDays, format, addDays, startOfMonth, endOfMonth, eachMonthOfInterval } from "date-fns"
+import { useMemo, useState, useRef, useCallback } from "react"
+import { differenceInDays, format, addDays, startOfMonth, endOfMonth, startOfWeek, eachMonthOfInterval, eachWeekOfInterval, eachDayOfInterval } from "date-fns"
 import { zhTW } from "date-fns/locale"
 import { STATUS_MAP, PIPELINE_STEPS, PHASE_COLORS } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ChevronRight, Plus, Trash2 } from "lucide-react"
+import { ChevronRight, Plus, Trash2, Calendar, User, ZoomIn, ZoomOut } from "lucide-react"
 import { DEFAULT_SUBTASK_TEMPLATES } from "@/lib/constants/demand"
 
 interface PhasePlan {
@@ -46,15 +45,31 @@ interface ProjectGanttProps {
 }
 
 const SUB_STATUS_COLORS: Record<string, string> = {
-  pending: "bg-gray-400",
+  pending: "bg-amber-400",
   in_progress: "bg-blue-500",
   completed: "bg-emerald-500",
+}
+
+const SUB_BAR_COLORS: Record<string, string> = {
+  pending: "bg-amber-400/25",
+  in_progress: "bg-blue-500/25",
+  completed: "bg-emerald-500/25",
 }
 
 const SUB_STATUS_LABELS: Record<string, string> = {
   pending: "待開始",
   in_progress: "進行中",
   completed: "已完成",
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return "未設定"
+  return format(new Date(d), "yyyy/MM/dd")
+}
+
+function daysBetween(start: string | null, end: string | null) {
+  if (!start || !end) return null
+  return differenceInDays(new Date(end), new Date(start)) + 1
 }
 
 export function ProjectGantt({
@@ -66,14 +81,21 @@ export function ProjectGantt({
   token,
   onRefresh,
 }: ProjectGanttProps) {
-  const [devExpanded, setDevExpanded] = useState(false)
+  const [devExpanded, setDevExpanded] = useState(true)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [newTaskName, setNewTaskName] = useState("")
   const [newTaskStart, setNewTaskStart] = useState("")
   const [newTaskEnd, setNewTaskEnd] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(0) // 0=auto, 1..4=zoom levels
 
-  const { timelineStart, totalDays, months, rows, subRows } = useMemo(() => {
+  // Hover state
+  const [hoverX, setHoverX] = useState<number | null>(null)
+  const [hoverDate, setHoverDate] = useState<string | null>(null)
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null)
+  const timelineRef = useRef<HTMLDivElement>(null)
+
+  const { timelineStart, totalDays, months, weeks, days, rows, subRows, dataSpanDays, showDayLabels } = useMemo(() => {
     const dates: Date[] = []
     for (const p of phasePlans) {
       if (p.plannedStart) dates.push(new Date(p.plannedStart))
@@ -89,38 +111,81 @@ export function ProjectGantt({
     }
 
     if (dates.length === 0) {
-      return { timelineStart: null, totalDays: 0, months: [], rows: [], subRows: [] }
+      return { timelineStart: null, totalDays: 0, months: [], weeks: [], days: [], rows: [], subRows: [], dataSpanDays: 0, showDayLabels: false }
     }
 
     dates.push(new Date())
     const minDate = new Date(Math.min(...dates.map((d) => d.getTime())))
     const maxDate = new Date(Math.max(...dates.map((d) => d.getTime())))
-    const tStart = startOfMonth(addDays(minDate, -7))
-    const tEnd = endOfMonth(addDays(maxDate, 14))
+    const dataSpan = differenceInDays(maxDate, minDate) || 1
+
+    // Compute padding based on zoom level
+    // zoom 0 = auto (tight fit), 1-4 = progressively more padding
+    let padBefore: number
+    let padAfter: number
+    if (zoomLevel === 0) {
+      // Auto: tight padding proportional to data span, min 3 days
+      padBefore = Math.max(3, Math.round(dataSpan * 0.15))
+      padAfter = Math.max(3, Math.round(dataSpan * 0.15))
+    } else {
+      // Manual zoom-out: more padding at higher levels
+      const multiplier = zoomLevel
+      padBefore = Math.max(7, Math.round(dataSpan * 0.3 * multiplier))
+      padAfter = Math.max(7, Math.round(dataSpan * 0.3 * multiplier))
+    }
+
+    const tStart = startOfWeek(addDays(minDate, -padBefore), { weekStartsOn: 1 })
+    const rawEnd = addDays(maxDate, padAfter)
+    // For short spans, don't extend to end of month
+    const tEnd = zoomLevel === 0 && dataSpan < 45 ? rawEnd : endOfMonth(rawEnd)
     const total = differenceInDays(tEnd, tStart) || 1
 
     const monthsList = eachMonthOfInterval({ start: tStart, end: tEnd }).map((m) => {
       const mEnd = endOfMonth(m)
+      const clampedStart = m < tStart ? tStart : m
       const clampedEnd = mEnd > tEnd ? tEnd : mEnd
-      return { date: m, left: (differenceInDays(m, tStart) / total) * 100, width: (differenceInDays(clampedEnd, m) / total) * 100, label: format(m, "M月", { locale: zhTW }) }
+      return {
+        date: m,
+        left: (differenceInDays(clampedStart, tStart) / total) * 100,
+        width: ((differenceInDays(clampedEnd, clampedStart) + 1) / total) * 100,
+        label: format(m, "M月", { locale: zhTW }),
+      }
     })
+
+    const weeksList = eachWeekOfInterval({ start: tStart, end: tEnd }, { weekStartsOn: 1 }).map((w) => ({
+      left: (differenceInDays(w, tStart) / total) * 100,
+    }))
+
+    // Day labels — always show for reasonable spans
+    const showDays = total <= 90
+    const daysList = showDays
+      ? eachDayOfInterval({ start: tStart, end: tEnd }).map((d) => ({
+          date: d,
+          left: (differenceInDays(d, tStart) / total) * 100,
+          width: (1 / total) * 100,
+          label: format(d, "d"),
+          isWeekend: d.getDay() === 0 || d.getDay() === 6,
+          isToday: differenceInDays(d, new Date()) === 0,
+          isMonday: d.getDay() === 1,
+        }))
+      : []
 
     const phasePlanMap = Object.fromEntries(phasePlans.map((p) => [p.phase, p]))
 
     const calcBar = (start: Date | null, end: Date | null) => {
       if (!start || !end) return null
-      return {
-        left: (differenceInDays(start, tStart) / total) * 100,
-        width: (differenceInDays(end, start) / total) * 100,
-      }
+      // +1 so same-day range (e.g. 2/11~2/11) fills the entire day cell
+      const days = differenceInDays(end, start) + 1
+      const w = (days / total) * 100
+      return { left: (differenceInDays(start, tStart) / total) * 100, width: Math.max(w, 0.5) }
     }
 
     const calcActualBar = (start: Date | null, end: Date | null) => {
       if (!start) return null
-      return {
-        left: (differenceInDays(start, tStart) / total) * 100,
-        width: (differenceInDays(end || new Date(), start) / total) * 100,
-      }
+      const e = end || new Date()
+      const days = differenceInDays(e, start) + 1
+      const w = (days / total) * 100
+      return { left: (differenceInDays(start, tStart) / total) * 100, width: Math.max(w, 0.5) }
     }
 
     const rowData = PIPELINE_STEPS.map((phase) => {
@@ -129,7 +194,7 @@ export function ProjectGantt({
       const pEnd = plan?.plannedEnd ? new Date(plan.plannedEnd) : null
       const aStart = plan?.actualStart ? new Date(plan.actualStart) : null
       const aEnd = plan?.actualEnd ? new Date(plan.actualEnd) : null
-      return { phase, plannedBar: calcBar(pStart, pEnd), actualBar: calcActualBar(aStart, aEnd), sp: plan?.plannedSp }
+      return { phase, plan, plannedBar: calcBar(pStart, pEnd), actualBar: calcActualBar(aStart, aEnd), sp: plan?.plannedSp }
     })
 
     const subRowData = subTasks.map((task) => {
@@ -140,8 +205,32 @@ export function ProjectGantt({
       return { ...task, plannedBar: calcBar(pStart, pEnd), actualBar: calcActualBar(aStart, aEnd) }
     })
 
-    return { timelineStart: tStart, totalDays: total, months: monthsList, rows: rowData, subRows: subRowData }
-  }, [phasePlans, subTasks])
+    return { timelineStart: tStart, totalDays: total, months: monthsList, weeks: weeksList, days: daysList, rows: rowData, subRows: subRowData, dataSpanDays: dataSpan, showDayLabels: showDays }
+  }, [phasePlans, subTasks, zoomLevel])
+
+  // Mouse tracking for crosshair
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!timelineRef.current || !timelineStart) return
+      const rect = timelineRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const pct = x / rect.width
+      if (pct < 0 || pct > 1) {
+        setHoverX(null)
+        setHoverDate(null)
+        return
+      }
+      setHoverX(pct * 100)
+      const day = Math.round(pct * totalDays)
+      setHoverDate(format(addDays(timelineStart, day), "yyyy/MM/dd (EEE)", { locale: zhTW }))
+    },
+    [timelineStart, totalDays],
+  )
+
+  const handleMouseLeave = useCallback(() => {
+    setHoverX(null)
+    setHoverDate(null)
+  }, [])
 
   // Sub-task actions
   const handleAddTask = async () => {
@@ -188,175 +277,371 @@ export function ProjectGantt({
 
   const todayLeft = (differenceInDays(new Date(), timelineStart) / totalDays) * 100
   const currentIdx = PIPELINE_STEPS.indexOf(currentStatus as typeof PIPELINE_STEPS[number])
-  const devIdx = PIPELINE_STEPS.indexOf("DEVELOPING")
   const hasSubTasks = subTasks.length > 0
   const showDevSection = currentIdx >= PIPELINE_STEPS.indexOf("SP_REVIEW") || hasSubTasks
 
-  // Count total rows for today marker height
-  const expandedSubCount = devExpanded ? subRows.length : 0
+  const LEFT_COL = "180px"
 
   return (
-    <TooltipProvider>
+    <>
+      {/* Zoom controls */}
+      <div className="flex items-center justify-end gap-1 mb-2">
+        <span className="text-[11px] text-muted-foreground mr-1">
+          {totalDays <= 45 ? `${totalDays} 天` : `${Math.round(totalDays / 7)} 週`}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => setZoomLevel((z) => Math.max(0, z - 1))}
+          disabled={zoomLevel === 0}
+          title="放大（縮短時間範圍）"
+        >
+          <ZoomIn className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => setZoomLevel((z) => Math.min(4, z + 1))}
+          disabled={zoomLevel === 4}
+          title="縮小（擴大時間範圍）"
+        >
+          <ZoomOut className="h-3 w-3" />
+        </Button>
+      </div>
+
       <div className="overflow-x-auto">
-        <div className="min-w-[600px]">
+        <div style={{ minWidth: showDayLabels ? `${Math.max(700, totalDays * 28)}px` : "700px" }}>
           {/* Timeline header */}
-          <div className="grid grid-cols-[160px_1fr] border-b border-border/50 pb-1 mb-1">
-            <div className="text-sm text-muted-foreground font-medium px-2">階段</div>
-            <div className="relative h-5">
-              {months.map((m, i) => (
-                <div key={i} className="absolute text-xs text-muted-foreground border-l border-border/30 pl-1" style={{ left: `${m.left}%` }}>
-                  {m.label}
+          <div className="grid" style={{ gridTemplateColumns: `${LEFT_COL} 1fr` }}>
+            <div className="border-b border-border/30" />
+            <div>
+              {/* Month row */}
+              <div className="relative h-6 border-b border-border/30">
+                {months.map((m, i) => (
+                  <div
+                    key={i}
+                    className="absolute top-0 h-full flex items-center text-xs font-medium text-muted-foreground border-l border-border/30 pl-2"
+                    style={{ left: `${m.left}%`, width: `${m.width}%` }}
+                  >
+                    {m.label}
+                  </div>
+                ))}
+              </div>
+              {/* Day row */}
+              {showDayLabels && (
+                <div className="relative h-7 border-b border-border/30">
+                  {days.map((d, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "absolute top-0 h-full flex items-center justify-center text-xs",
+                        d.isMonday ? "border-l border-border/30 font-medium" : "border-l border-border/10",
+                        d.isWeekend && "bg-muted/40 text-muted-foreground/50",
+                        d.isToday && "bg-rose-500/10 font-bold text-rose-600",
+                      )}
+                      style={{ left: `${d.left}%`, width: `${d.width}%` }}
+                    >
+                      {d.label}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
-          {/* Rows */}
-          {rows.map((row, i) => {
-            const info = STATUS_MAP[row.phase]
-            const color = PHASE_COLORS[row.phase]
-            const isCurrent = i === currentIdx
-            const isPast = currentIdx >= 0 && i < currentIdx
-            const isDev = row.phase === "DEVELOPING"
-            const isExpandable = isDev && showDevSection
+          {/* Main body with crosshair area */}
+          <div
+            className="relative"
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+          >
+            {/* Gridlines */}
+            <div className="absolute inset-0 pointer-events-none" style={{ left: LEFT_COL }}>
+              <div className="relative h-full w-full" ref={timelineRef}>
+                {/* Weekend shading when day-level visible */}
+                {showDayLabels && days.filter((d) => d.isWeekend).map((d, i) => (
+                  <div
+                    key={`we-${i}`}
+                    className="absolute top-0 h-full bg-muted/20"
+                    style={{ left: `${d.left}%`, width: `${d.width}%` }}
+                  />
+                ))}
+                {/* Week lines */}
+                {weeks.map((w, i) => (
+                  <div
+                    key={i}
+                    className={cn("absolute top-0 h-full border-l", showDayLabels ? "border-border/20" : "border-border/10")}
+                    style={{ left: `${w.left}%` }}
+                  />
+                ))}
+              </div>
+            </div>
 
-            return (
-              <div key={row.phase}>
-                {/* Phase row */}
-                <div
-                  className={cn(
-                    "grid grid-cols-[160px_1fr] items-center py-2 border-b border-border/20",
-                    isCurrent && "bg-primary/5",
-                    isExpandable && "cursor-pointer",
-                  )}
-                  onClick={isExpandable ? () => setDevExpanded((v) => !v) : undefined}
-                >
-                  <div className="px-2 flex items-center gap-1.5">
-                    {isExpandable && (
-                      <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", devExpanded && "rotate-90")} />
-                    )}
-                    <div className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-                    <span className={cn("text-sm truncate", isCurrent && "font-semibold", isPast && "text-muted-foreground")}>
-                      {info?.label}
-                    </span>
-                    {hasSubTasks && isDev && (
-                      <Badge variant="secondary" className="text-[10px] h-4 px-1.5 rounded-full ml-auto">
-                        {subTasks.length}
-                      </Badge>
-                    )}
-                    {!isDev && row.sp != null && row.sp > 0 && (
-                      <span className="text-xs text-muted-foreground ml-auto">{row.sp}SP</span>
-                    )}
-                  </div>
-                  <div className="relative h-6">
-                    {row.plannedBar && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="absolute top-0.5 h-2.5 rounded-sm opacity-30" style={{ left: `${row.plannedBar.left}%`, width: `${Math.max(row.plannedBar.width, 0.5)}%`, backgroundColor: color }} />
-                        </TooltipTrigger>
-                        <TooltipContent className="text-xs">計畫時程</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {row.actualBar && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="absolute top-3 h-2.5 rounded-sm" style={{ left: `${row.actualBar.left}%`, width: `${Math.max(row.actualBar.width, 0.5)}%`, backgroundColor: color }} />
-                        </TooltipTrigger>
-                        <TooltipContent className="text-xs">實際進度</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {todayLeft >= 0 && todayLeft <= 100 && i === 0 && (
-                      <div className="absolute top-0 w-px border-l border-dashed border-destructive/50 z-10" style={{ left: `${todayLeft}%`, height: `calc(100% + ${(rows.length - 1 + expandedSubCount) * 36 + 16}px)` }} />
-                    )}
-                  </div>
+            {/* Today marker */}
+            {todayLeft >= 0 && todayLeft <= 100 && (
+              <div
+                className="absolute top-0 bottom-0 z-20 pointer-events-none"
+                style={{ left: `calc(${LEFT_COL} + (100% - ${LEFT_COL}) * ${todayLeft / 100})` }}
+              >
+                <div className="w-px h-full bg-rose-400/60" />
+                <div className="absolute -top-0 -translate-x-1/2 bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-b font-medium">
+                  今天
                 </div>
+              </div>
+            )}
 
-                {/* Sub-task rows (expanded under DEVELOPING) */}
-                {isDev && devExpanded && (
-                  <div className="bg-muted/30">
-                    {subRows.length > 0 ? subRows.map((sub) => (
-                      <div key={sub.id} className="grid grid-cols-[160px_1fr] items-center py-1.5 border-b border-border/10">
-                        <div className="pl-8 pr-2 flex items-center gap-1.5 min-w-0">
-                          {canEdit ? (
-                            <button onClick={(e) => { e.stopPropagation(); handleStatusToggle(sub) }} className={cn("h-3 w-3 rounded-full shrink-0 transition-colors", SUB_STATUS_COLORS[sub.status])} title={SUB_STATUS_LABELS[sub.status]} />
-                          ) : (
-                            <div className={cn("h-3 w-3 rounded-full shrink-0", SUB_STATUS_COLORS[sub.status])} />
-                          )}
-                          <span className="text-xs truncate text-muted-foreground">{sub.name}</span>
-                          {canEdit && (
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(sub.id) }} className="ml-auto text-muted-foreground/40 hover:text-destructive shrink-0">
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                        <div className="relative h-5">
-                          {sub.plannedBar && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="absolute top-0.5 h-2 rounded-sm bg-violet-400/30" style={{ left: `${sub.plannedBar.left}%`, width: `${Math.max(sub.plannedBar.width, 0.5)}%` }} />
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs">計畫時程</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {sub.actualBar && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="absolute top-2.5 h-2 rounded-sm bg-violet-500" style={{ left: `${sub.actualBar.left}%`, width: `${Math.max(sub.actualBar.width, 0.5)}%` }} />
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs">實際進度</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </div>
-                      </div>
-                    )) : (
-                      <div className="py-2 text-center text-sm text-muted-foreground">尚未建立子任務</div>
-                    )}
-                    {canEdit && (
-                      <div className="flex items-center gap-2 px-8 py-1.5">
-                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={(e) => { e.stopPropagation(); setShowAddDialog(true) }}>
-                          <Plus className="h-3 w-3 mr-1" />
-                          新增子任務
-                        </Button>
-                        {subTasks.length === 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 text-xs px-2 text-muted-foreground"
-                            onClick={async (e) => {
-                              e.stopPropagation()
-                              if (!token || !demandId) return
-                              for (let i = 0; i < DEFAULT_SUBTASK_TEMPLATES.length; i++) {
-                                await fetch(`/api/demands/${demandId}/sub-tasks`, {
-                                  method: "POST",
-                                  headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                                  body: JSON.stringify({ name: DEFAULT_SUBTASK_TEMPLATES[i], order: i }),
-                                })
-                              }
-                              onRefresh?.()
-                            }}
-                          >
-                            使用預設模板
-                          </Button>
-                        )}
-                      </div>
-                    )}
+            {/* Hover crosshair */}
+            {hoverX !== null && (
+              <div
+                className="absolute top-0 bottom-0 z-30 pointer-events-none"
+                style={{ left: `calc(${LEFT_COL} + (100% - ${LEFT_COL}) * ${hoverX / 100})` }}
+              >
+                <div className="w-px h-full bg-foreground/15" />
+                {hoverDate && (
+                  <div className="absolute -bottom-6 -translate-x-1/2 bg-foreground text-background text-[10px] px-2 py-0.5 rounded whitespace-nowrap font-medium">
+                    {hoverDate}
                   </div>
                 )}
               </div>
-            )
-          })}
+            )}
 
-          {/* Today label */}
-          {todayLeft >= 0 && todayLeft <= 100 && (
-            <div className="grid grid-cols-[160px_1fr]">
-              <div />
-              <div className="relative h-4">
-                <span className="absolute text-[10px] text-destructive/70 -translate-x-1/2" style={{ left: `${todayLeft}%` }}>
-                  今天
-                </span>
-              </div>
+            {/* Phase rows */}
+            {rows.map((row, i) => {
+              const info = STATUS_MAP[row.phase]
+              const color = PHASE_COLORS[row.phase]
+              const isCurrent = i === currentIdx
+              const isPast = currentIdx >= 0 && i < currentIdx
+              const isFuture = currentIdx >= 0 && i > currentIdx
+              const isDev = row.phase === "DEVELOPING"
+              const isExpandable = isDev && showDevSection
+              const isHovered = hoveredRow === row.phase
+              const isEven = i % 2 === 0
+
+              return (
+                <div key={row.phase}>
+                  <div
+                    className={cn(
+                      "grid items-center transition-colors",
+                      isEven ? "bg-muted/[0.03]" : "bg-transparent",
+                      isCurrent && "bg-primary/[0.06]",
+                      isHovered && "bg-muted/60",
+                      isExpandable && "cursor-pointer",
+                    )}
+                    style={{ gridTemplateColumns: `${LEFT_COL} 1fr`, height: "44px" }}
+                    onClick={isExpandable ? () => setDevExpanded((v) => !v) : undefined}
+                    onMouseEnter={() => setHoveredRow(row.phase)}
+                    onMouseLeave={() => setHoveredRow(null)}
+                  >
+                    {/* Label */}
+                    <div className="px-3 flex items-center gap-2 h-full border-r border-border/30 border-b border-b-border/20">
+                      {isExpandable && (
+                        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-200", devExpanded && "rotate-90")} />
+                      )}
+                      {!isExpandable && <div className="w-3.5 shrink-0" />}
+                      <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span className={cn(
+                        "text-sm truncate",
+                        isCurrent && "font-semibold text-foreground",
+                        isPast && "text-muted-foreground",
+                        isFuture && "text-muted-foreground/60",
+                      )}>
+                        {info?.label}
+                      </span>
+                      {row.sp != null && row.sp > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-[18px] px-1.5 rounded-md ml-auto font-medium">
+                          {row.sp} SP
+                        </Badge>
+                      )}
+                      {hasSubTasks && isDev && (
+                        <Badge variant="outline" className="text-[10px] h-[18px] px-1.5 rounded-md ml-auto">
+                          {subTasks.length}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Bar area */}
+                    <div className="relative h-full flex items-center border-b border-border/20">
+                      {/* Planned bar */}
+                      {row.plannedBar && (
+                        <div className="group/bar absolute" style={{ left: `${row.plannedBar.left}%`, width: `${row.plannedBar.width}%` }}>
+                          <div
+                            className={cn(
+                              "h-7 rounded-md transition-all duration-150",
+                              isHovered ? "shadow-sm" : "",
+                            )}
+                            style={{ backgroundColor: color, opacity: isPast ? 0.3 : isFuture ? 0.2 : 0.4 }}
+                          />
+                          {/* Tooltip popup on hover */}
+                          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 opacity-0 group-hover/bar:opacity-100 transition-opacity duration-150 pointer-events-none z-40">
+                            <div className="bg-popover border border-border shadow-lg rounded-lg px-3 py-2.5 text-xs whitespace-nowrap">
+                              <div className="font-semibold text-sm mb-1.5 flex items-center gap-1.5">
+                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                                {info?.label}
+                                {row.sp != null && row.sp > 0 && <span className="text-muted-foreground font-normal">({row.sp} SP)</span>}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                <span className="text-foreground">{fmtDate(row.plan?.plannedStart ?? null)} ~ {fmtDate(row.plan?.plannedEnd ?? null)}</span>
+                                {daysBetween(row.plan?.plannedStart ?? null, row.plan?.plannedEnd ?? null) && (
+                                  <span className="text-muted-foreground/70">({daysBetween(row.plan?.plannedStart ?? null, row.plan?.plannedEnd ?? null)} 天)</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* No dates indicator */}
+                      {!row.plannedBar && isCurrent && (
+                        <div className="absolute inset-x-4 flex items-center justify-center">
+                          <span className="text-[10px] text-muted-foreground/50">尚未設定時程</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sub-task rows */}
+                  {isDev && devExpanded && (
+                    <div>
+                      {subRows.length > 0 ? subRows.map((sub, si) => {
+                        const subHovered = hoveredRow === `sub-${sub.id}`
+                        return (
+                          <div
+                            key={sub.id}
+                            className={cn(
+                              "grid items-center transition-colors",
+                              si % 2 === 0 ? "bg-muted/[0.04]" : "bg-transparent",
+                              subHovered && "bg-muted/40",
+                            )}
+                            style={{ gridTemplateColumns: `${LEFT_COL} 1fr`, height: "36px" }}
+                            onMouseEnter={() => setHoveredRow(`sub-${sub.id}`)}
+                            onMouseLeave={() => setHoveredRow(null)}
+                          >
+                            <div className="pl-10 pr-3 flex items-center gap-2 h-full border-r border-border/30 border-b border-b-border/10">
+                              {canEdit ? (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleStatusToggle(sub) }}
+                                  className={cn("h-2.5 w-2.5 rounded-full shrink-0 transition-colors ring-2 ring-offset-1 ring-offset-background",
+                                    sub.status === "completed" ? "bg-emerald-500 ring-emerald-500/30" :
+                                    sub.status === "in_progress" ? "bg-blue-500 ring-blue-500/30" :
+                                    "bg-amber-400 ring-amber-400/30"
+                                  )}
+                                  title={`${SUB_STATUS_LABELS[sub.status]}（點擊切換）`}
+                                />
+                              ) : (
+                                <div className={cn("h-2.5 w-2.5 rounded-full shrink-0", SUB_STATUS_COLORS[sub.status])} />
+                              )}
+                              <span className={cn(
+                                "text-xs truncate",
+                                sub.status === "completed" ? "text-muted-foreground line-through" : "text-foreground/80",
+                              )}>
+                                {sub.name}
+                              </span>
+                              {canEdit && (
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(sub.id) }} className="ml-auto text-muted-foreground/30 hover:text-destructive shrink-0 transition-colors">
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="relative h-full flex items-center border-b border-border/10">
+                              {sub.plannedBar && (
+                                <div className="group/sub absolute" style={{ left: `${sub.plannedBar.left}%`, width: `${sub.plannedBar.width}%` }}>
+                                  <div className={cn("h-5 rounded", SUB_BAR_COLORS[sub.status] || "bg-amber-400/25")} />
+                                  {/* Sub-task tooltip */}
+                                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-150 pointer-events-none z-40">
+                                    <div className="bg-popover border border-border shadow-lg rounded-lg px-3 py-2.5 text-xs whitespace-nowrap">
+                                      <div className="font-semibold text-sm mb-1.5 flex items-center gap-1.5">
+                                        <div className={cn("h-2 w-2 rounded-full",
+                                          sub.status === "completed" ? "bg-emerald-500" :
+                                          sub.status === "in_progress" ? "bg-blue-500" : "bg-amber-400"
+                                        )} />
+                                        {sub.name}
+                                        <Badge variant="secondary" className="text-[9px] h-[14px] px-1 rounded">
+                                          {SUB_STATUS_LABELS[sub.status]}
+                                        </Badge>
+                                      </div>
+                                      <div className="space-y-1 text-muted-foreground">
+                                        <div className="flex items-center gap-1.5">
+                                          <Calendar className="h-3 w-3" />
+                                          <span>{fmtDate(sub.plannedStart)} ~ {fmtDate(sub.plannedEnd)}</span>
+                                          {daysBetween(sub.plannedStart, sub.plannedEnd) && (
+                                            <span className="text-muted-foreground/70">({daysBetween(sub.plannedStart, sub.plannedEnd)} 天)</span>
+                                          )}
+                                        </div>
+                                        {sub.assignee && (
+                                          <div className="flex items-center gap-1.5">
+                                            <User className="h-3 w-3" />
+                                            <span>{sub.assignee.name}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      }) : (
+                        <div className="py-3 text-center text-xs text-muted-foreground/60">尚未建立子任務</div>
+                      )}
+                      {canEdit && (
+                        <div className="flex items-center gap-2 pl-10 py-2 border-b border-border/10">
+                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setShowAddDialog(true) }}>
+                            <Plus className="h-3 w-3 mr-1" />
+                            新增子任務
+                          </Button>
+                          {subTasks.length === 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs px-2 text-muted-foreground/60"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                if (!token || !demandId) return
+                                for (let i = 0; i < DEFAULT_SUBTASK_TEMPLATES.length; i++) {
+                                  await fetch(`/api/demands/${demandId}/sub-tasks`, {
+                                    method: "POST",
+                                    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ name: DEFAULT_SUBTASK_TEMPLATES[i], order: i }),
+                                  })
+                                }
+                                onRefresh?.()
+                              }}
+                            >
+                              使用預設模板
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Bottom padding for hover date label */}
+            <div className="h-6" />
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 mt-2 pt-3 border-t border-border/30 px-3">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <div className="h-2.5 w-6 rounded-sm bg-primary/30" />
+              <span>計畫時程</span>
             </div>
-          )}
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <div className="h-3 w-px bg-rose-400/60" />
+              <span>今天</span>
+            </div>
+            {showDayLabels && (
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <div className="h-2.5 w-4 rounded-sm bg-muted/40" />
+                <span>週末</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -388,6 +673,6 @@ export function ProjectGantt({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </TooltipProvider>
+    </>
   )
 }
