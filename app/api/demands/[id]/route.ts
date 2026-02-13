@@ -3,17 +3,6 @@ import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 
-// Valid status transitions
-const STATUS_TRANSITIONS: Record<string, string[]> = {
-  SUBMITTED: ["PRD_REVIEW", "REJECTED"],
-  PRD_REVIEW: ["SP_REVIEW", "SUBMITTED", "REJECTED"],
-  SP_REVIEW: ["DEVELOPING", "PRD_REVIEW", "REJECTED"],
-  DEVELOPING: ["ACCEPTANCE"],
-  ACCEPTANCE: ["CLOSED", "DEVELOPING"],
-  CLOSED: [],
-  REJECTED: ["SUBMITTED"],
-}
-
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
 
 // PATCH: Update demand status
@@ -35,12 +24,8 @@ export async function PATCH(
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
 
-    const allowed = STATUS_TRANSITIONS[demand.status] || []
-    if (!allowed.includes(status)) {
-      return NextResponse.json(
-        { error: `無法從「${demand.status}」轉換到「${status}」` },
-        { status: 400 }
-      )
+    if (demand.status === status) {
+      return NextResponse.json({ error: "狀態未變更" }, { status: 400 })
     }
 
     const updated = await prisma.$transaction(async (tx) => {
