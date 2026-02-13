@@ -18,7 +18,7 @@ import { useAuth } from "@/hooks/use-auth"
 
 type FormView = "login" | "forgot-password"
 type LoginType = "company" | "admin"
-type AdminRoleType = "admin" | "jv-team"
+type AdminRoleType = "admin" | "jv-team" | "zhaoi-team"
 
 interface Subsidiary {
   id: string
@@ -34,18 +34,19 @@ interface AdminRole {
 }
 
 const adminRoles: AdminRole[] = [
-  { id: "admin", name: "管理者", email: "admin@demo.com", route: "/governance/inbox" },
-  { id: "jv-team", name: "JV 團隊", email: "jv@demo.com", route: "/delivery" },
+  { id: "admin", name: "管理者", email: "admin@panjit.com", route: "/governance/inbox" },
+  { id: "jv-team", name: "JV 團隊", email: "jv@jvision.com", route: "/delivery" },
+  { id: "zhaoi-team", name: "智合團隊", email: "john@zhaoi.com", route: "/delivery" },
 ]
 
 const subsidiaries: Subsidiary[] = [
-  { id: "panjit", name: "強茂", email: "panjit@demo.com" },
-  { id: "panjit-tech", name: "璟茂科技", email: "panjit-tech@demo.com" },
-  { id: "ymoptics", name: "熒茂光學", email: "ymoptics@demo.com" },
-  { id: "panjit-wuxi", name: "強茂電子（無錫）", email: "panjit-wuxi@demo.com" },
-  { id: "panjit-xuzhou", name: "強茂半導體（徐州）", email: "panjit-xuzhou@demo.com" },
-  { id: "panjit-shandong", name: "山東強茂電子", email: "panjit-shandong@demo.com" },
-  { id: "hge", name: "虹冠電子工業", email: "hge@demo.com" },
+  { id: "panjit", name: "強茂", email: "panjit@panjit.com" },
+  { id: "panjit-tech", name: "璟茂科技", email: "panjit-tech@panjit.com" },
+  { id: "ymoptics", name: "熒茂光學", email: "ymoptics@panjit.com" },
+  { id: "panjit-wuxi", name: "強茂電子（無錫）", email: "panjit-wuxi@panjit.com" },
+  { id: "panjit-xuzhou", name: "強茂半導體（徐州）", email: "panjit-xuzhou@panjit.com" },
+  { id: "panjit-shandong", name: "山東強茂電子", email: "panjit-shandong@panjit.com" },
+  { id: "hge", name: "虹冠電子工業", email: "hge@panjit.com" },
 ]
 
 export default function HomePage() {

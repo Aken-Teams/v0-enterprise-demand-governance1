@@ -55,7 +55,7 @@ async function main() {
   console.log(`✅ 建立 ${orgs.length} 個組織`)
 
   // ============================================================
-  // 2. Users (7 subsidiary + 1 admin + 1 delivery)
+  // 2. Users (7 subsidiary + 1 admin + 1 jv delivery + 1 zhaoi delivery)
   // ============================================================
   const [panjit, panjitTech, ymoptics, panjitWuxi, panjitXuzhou, panjitShandong, hge] = orgs
 
@@ -70,13 +70,14 @@ async function main() {
     hge: await bcrypt.hash("hge123", 10),
     admin: await bcrypt.hash("admin123", 10),
     jv: await bcrypt.hash("jvteam123", 10),
+    zhaoi: await bcrypt.hash("zhaoi123", 10),
   }
 
   const users = await Promise.all([
     // Subsidiary users
     prisma.user.create({
       data: {
-        email: "panjit@demo.com",
+        email: "panjit@panjit.com",
         name: "強茂",
         password: passwords.panjit,
         role: "subsidiary",
@@ -85,7 +86,7 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "panjit-tech@demo.com",
+        email: "panjit-tech@panjit.com",
         name: "璟茂科技",
         password: passwords.panjitTech,
         role: "subsidiary",
@@ -94,7 +95,7 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "ymoptics@demo.com",
+        email: "ymoptics@panjit.com",
         name: "熒茂光學",
         password: passwords.ymoptics,
         role: "subsidiary",
@@ -103,7 +104,7 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "panjit-wuxi@demo.com",
+        email: "panjit-wuxi@panjit.com",
         name: "強茂電子（無錫）",
         password: passwords.panjitWuxi,
         role: "subsidiary",
@@ -112,7 +113,7 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "panjit-xuzhou@demo.com",
+        email: "panjit-xuzhou@panjit.com",
         name: "強茂半導體（徐州）",
         password: passwords.panjitXuzhou,
         role: "subsidiary",
@@ -121,7 +122,7 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "panjit-shandong@demo.com",
+        email: "panjit-shandong@panjit.com",
         name: "山東強茂電子",
         password: passwords.panjitShandong,
         role: "subsidiary",
@@ -130,7 +131,7 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "hge@demo.com",
+        email: "hge@panjit.com",
         name: "虹冠電子工業",
         password: passwords.hge,
         role: "subsidiary",
@@ -140,18 +141,27 @@ async function main() {
     // Admin user
     prisma.user.create({
       data: {
-        email: "admin@demo.com",
+        email: "admin@panjit.com",
         name: "系統管理員",
         password: passwords.admin,
         role: "admin",
       },
     }),
-    // Delivery (JV) user
+    // Delivery - JV 團隊
     prisma.user.create({
       data: {
-        email: "jv@demo.com",
+        email: "jv@jvision.com",
         name: "JV 團隊成員",
         password: passwords.jv,
+        role: "delivery",
+      },
+    }),
+    // Delivery - 智合團隊
+    prisma.user.create({
+      data: {
+        email: "john@zhaoi.com",
+        name: "智合團隊",
+        password: passwords.zhaoi,
         role: "delivery",
       },
     }),
