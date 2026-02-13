@@ -30,6 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useAuth } from "@/hooks/use-auth"
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed"
@@ -97,11 +98,31 @@ const navSections: NavSection[] = [
   },
 ]
 
+interface NotificationItem {
+  id: string
+  title: string
+  description: string
+  time: string
+  read: boolean
+}
+
+const MOCK_NOTIFICATIONS: NotificationItem[] = [
+  { id: "1", title: "需求狀態更新", description: "「CRM 系統優化」已進入開發中階段", time: "5 分鐘前", read: false },
+  { id: "2", title: "新需求已提交", description: "子公司 B 提交了「行動端報表功能」", time: "30 分鐘前", read: false },
+  { id: "3", title: "驗收提醒", description: "「ERP 資料整合」待驗收確認", time: "1 小時前", read: false },
+  { id: "4", title: "SP 額度提醒", description: "子公司 A 本年度 SP 使用率已達 80%", time: "2 小時前", read: true },
+  { id: "5", title: "需求已結案", description: "「供應鏈管理模組」已完成驗收結案", time: "昨天", read: true },
+]
+
 export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
+  const [notifications, setNotifications] = React.useState<NotificationItem[]>(MOCK_NOTIFICATIONS)
+
+  const unreadCount = notifications.filter((n) => !n.read).length
+  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
 
   React.useEffect(() => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
@@ -260,10 +281,50 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" />
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative overflow-visible">
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0">
+                <div className="flex items-center justify-between border-b px-4 py-3">
+                  <span className="text-sm font-semibold">通知</span>
+                  {unreadCount > 0 && (
+                    <Button variant="ghost" size="sm" className="h-auto px-2 py-1 text-xs text-muted-foreground" onClick={markAllRead}>
+                      全部已讀
+                    </Button>
+                  )}
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">沒有通知</p>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={cn(
+                          "flex gap-3 border-b px-4 py-3 last:border-b-0",
+                          !n.read && "bg-muted/50",
+                        )}
+                      >
+                        <div className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-primary")} />
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("text-sm", !n.read && "font-medium")}>{n.title}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">{n.description}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground/70">{n.time}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -282,8 +343,9 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>個人設定</DropdownMenuItem>
-                <DropdownMenuItem>偏好設定</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile">個人設定</Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
                   登出
