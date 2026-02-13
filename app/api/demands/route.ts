@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
-import { verifyRole, AuthError } from "@/lib/auth"
+import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { createDemandSchema } from "@/lib/validations/demand"
 import { generateDemandNumber } from "@/lib/demand-number"
+import { DemandStatus } from "@/lib/generated/prisma/client"
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -195,6 +196,89 @@ export async function POST(request: NextRequest) {
       )
     }
     console.error("Create demand error:", error)
+    return NextResponse.json(
+      { error: "伺服器錯誤，請稍後再試" },
+      { status: 500 }
+    )
+  }
+}
+
+const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
+
+export async function GET(request: NextRequest) {
+  try {
+    verifyAuth(request)
+
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get("status")
+    const search = searchParams.get("search")?.trim()
+
+    // Build where clause
+    const where: Record<string, unknown> = {}
+    if (status && VALID_STATUSES.has(status)) {
+      where.status = status
+    }
+    if (search) {
+      where.OR = [
+        { title: { contains: search } },
+        { demandNumber: { contains: search } },
+        { organization: { name: { contains: search } } },
+      ]
+    }
+
+    // Fetch demands + counts in parallel
+    const [demands, total, counts] = await Promise.all([
+      prisma.demand.findMany({
+        where,
+        include: {
+          organization: { select: { name: true } },
+          submitter: { select: { name: true } },
+          creator: { select: { name: true } },
+          _count: { select: { documents: true, comments: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.demand.count(),
+      prisma.demand.groupBy({
+        by: ["status"],
+        _count: { _all: true },
+      }),
+    ])
+
+    // Build status count map
+    const statusCounts: Record<string, number> = {}
+    for (const c of counts) {
+      statusCounts[c.status] = c._count._all
+    }
+
+    return NextResponse.json({
+      demands: demands.map((d) => ({
+        id: d.id,
+        demandNumber: d.demandNumber,
+        title: d.title,
+        status: d.status,
+        priority: d.priority,
+        estimatedSp: d.estimatedSp,
+        confirmedSp: d.confirmedSp,
+        desiredDate: d.desiredDate,
+        createdAt: d.createdAt,
+        organization: d.organization.name,
+        submitter: d.submitter.name,
+        creator: d.creator.name,
+        documentCount: d._count.documents,
+        commentCount: d._count.comments,
+      })),
+      total,
+      statusCounts,
+    })
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.statusCode }
+      )
+    }
+    console.error("List demands error:", error)
     return NextResponse.json(
       { error: "伺服器錯誤，請稍後再試" },
       { status: 500 }
