@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Building2, Users, Coins, Edit, Loader2, BarChart3 } from "lucide-react"
+import { Building2, Users, Coins, Wallet, Edit, Loader2 } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { Progress } from "@/components/ui/progress"
@@ -108,51 +108,23 @@ export default function SpManagementPage() {
         {/* Summary */}
         {summary && (
           <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">子公司數</CardTitle>
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{summary.orgCount}</div>
-                <p className="text-xs text-muted-foreground">活躍組織</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">使用者總數</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{summary.totalUsers}</div>
-                <p className="text-xs text-muted-foreground">跨所有組織</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">總 SP 配額</CardTitle>
-                <Coins className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{summary.totalSpQuota}</div>
-                <p className="text-xs text-muted-foreground">{summary.year} 年度</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">可用 SP</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{totalAvailable}</div>
-                <p className="text-xs text-muted-foreground">
-                  已使用 {summary.totalSpUsed} / 進行中 {summary.totalSpCommitted}
-                </p>
-              </CardContent>
-            </Card>
+            {[
+              { label: "子公司數", sub: "活躍組織", value: summary.orgCount, color: "border-blue-500", icon: Building2 },
+              { label: "使用者總數", sub: "跨所有組織", value: summary.totalUsers, color: "border-amber-500", icon: Users },
+              { label: "SP 配額", sub: `${summary.year} 年度`, value: summary.totalSpQuota, color: "border-violet-500", icon: Coins },
+              { label: "可用 SP", sub: `已用 ${summary.totalSpUsed} / 進行中 ${summary.totalSpCommitted}`, value: totalAvailable, color: "border-emerald-500", icon: Wallet },
+            ].map((item) => (
+              <div key={item.label} className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}>
+                <span className="text-3xl font-bold">{item.value}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <p className="font-medium text-sm">{item.label}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{item.sub}</p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

@@ -13,6 +13,7 @@ import {
   Bell,
   BookOpen,
   User,
+  UserCog,
   Menu,
   X,
   ChevronLeft,
@@ -70,6 +71,7 @@ const navSections: NavSection[] = [
       { title: "需求管理", href: "/governance/inbox", icon: Inbox, roles: ["admin"] },
       { title: "SP 管理", href: "/admin/organizations", icon: Building2, roles: ["admin"] },
       { title: "報表", href: "/governance/analytics", icon: BarChart3, roles: ["admin"] },
+      { title: "帳號管理", href: "/admin/users", icon: UserCog, roles: ["admin"] },
     ],
   },
   {

@@ -20,6 +20,7 @@ import {
 import {
   Search, Inbox, Plus, Loader2, Building2,
   Paperclip, User, MoreHorizontal, Eye, Trash2,
+  ClipboardList, Code2, CircleCheckBig,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -150,42 +151,23 @@ export default function InboxPage() {
 
         {/* Summary Cards */}
         <div className="grid gap-3 md:grid-cols-4">
-          <Card className="border-l-4 border-l-blue-500">
-            <CardContent className="flex items-center gap-4 py-2.5">
-              <div className="text-3xl font-bold text-foreground">{total}</div>
-              <div>
-                <div className="text-sm font-medium text-foreground leading-tight">全部需求</div>
-                <div className="text-xs text-muted-foreground mt-0.5">累計建立</div>
+          {[
+            { label: "全部需求", sub: "累計建立", value: total, color: "border-l-blue-500", icon: Inbox },
+            { label: "確認階段", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
+            { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
+            { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
+          ].map((item) => (
+            <div key={item.label} className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}>
+              <span className="text-3xl font-bold">{item.value}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <p className="font-medium text-sm">{item.label}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">{item.sub}</p>
               </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-amber-500">
-            <CardContent className="flex items-center gap-4 py-2.5">
-              <div className="text-3xl font-bold text-foreground">{confirmStage}</div>
-              <div>
-                <div className="text-sm font-medium text-foreground leading-tight">確認階段</div>
-                <div className="text-xs text-muted-foreground mt-0.5">需求 / MVP / 開案</div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-violet-500">
-            <CardContent className="flex items-center gap-4 py-2.5">
-              <div className="text-3xl font-bold text-foreground">{devStage}</div>
-              <div>
-                <div className="text-sm font-medium text-foreground leading-tight">開發中</div>
-                <div className="text-xs text-muted-foreground mt-0.5">開發 + 驗收</div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-emerald-500">
-            <CardContent className="flex items-center gap-4 py-2.5">
-              <div className="text-3xl font-bold text-foreground">{getCount("CLOSED")}</div>
-              <div>
-                <div className="text-sm font-medium text-foreground leading-tight">已結案</div>
-                <div className="text-xs text-muted-foreground mt-0.5">驗收完成</div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          ))}
         </div>
 
         {/* Filter Bar: search left, filters right */}
