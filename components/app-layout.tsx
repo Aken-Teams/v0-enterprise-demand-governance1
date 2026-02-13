@@ -28,6 +28,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  FilePlus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -41,7 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/hooks/use-auth"
 
-type UserRole = "subsidiary" | "admin" | "board" | "delivery" | "governance"
+type UserRole = "subsidiary" | "admin" | "delivery"
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -73,27 +74,16 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    title: "共用模組",
-    roles: ["subsidiary", "admin"],
+    title: "需求治理",
+    roles: ["admin"],
     items: [
-      {
-        title: "通知中心",
-        href: "/notifications",
-        icon: Bell,
-        roles: ["subsidiary", "admin"],
-      },
-      {
-        title: "文件與規範",
-        href: "/documents",
-        icon: BookOpen,
-        roles: ["subsidiary", "admin"],
-      },
-      {
-        title: "個人設定",
-        href: "/profile",
-        icon: User,
-        roles: ["subsidiary", "admin"],
-      },
+      { title: "需求收件匣", href: "/governance/inbox", icon: Inbox, roles: ["admin"] },
+      { title: "建立需求", href: "/governance/create", icon: FilePlus, roles: ["admin"] },
+      { title: "需求評估", href: "/governance/evaluation", icon: ClipboardCheck, roles: ["admin"] },
+      { title: "Backlog 管理", href: "/governance/backlog", icon: FolderKanban, roles: ["admin"] },
+      { title: "Sprint 規劃", href: "/governance/sprints", icon: Calendar, roles: ["admin"] },
+      { title: "SP 資產管理", href: "/governance/sp-management", icon: TrendingUp, roles: ["admin"] },
+      { title: "分析報表", href: "/governance/analytics", icon: BarChart3, roles: ["admin"] },
     ],
   },
   {
@@ -106,6 +96,40 @@ const navSections: NavSection[] = [
       { title: "系統參數", href: "/admin/settings", icon: Settings, roles: ["admin"] },
     ],
   },
+  {
+    title: "交付管理",
+    roles: ["delivery"],
+    items: [
+      { title: "交付總覽", href: "/delivery", icon: LayoutDashboard, roles: ["delivery"] },
+      { title: "我的 Sprint", href: "/delivery/sprints", icon: Calendar, roles: ["delivery"] },
+      { title: "Story 執行", href: "/delivery/stories", icon: FileText, roles: ["delivery"] },
+      { title: "交付歷史", href: "/delivery/history", icon: FileLineChart, roles: ["delivery"] },
+    ],
+  },
+  {
+    title: "共用模組",
+    roles: ["subsidiary", "admin", "delivery"],
+    items: [
+      {
+        title: "通知中心",
+        href: "/notifications",
+        icon: Bell,
+        roles: ["subsidiary", "admin", "delivery"],
+      },
+      {
+        title: "文件與規範",
+        href: "/documents",
+        icon: BookOpen,
+        roles: ["subsidiary", "admin", "delivery"],
+      },
+      {
+        title: "個人設定",
+        href: "/profile",
+        icon: User,
+        roles: ["subsidiary", "admin", "delivery"],
+      },
+    ],
+  },
 ]
 
 export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps) {
@@ -116,6 +140,8 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
 
   const detectedRole = React.useMemo((): UserRole => {
     if (pathname.startsWith("/admin")) return "admin"
+    if (pathname.startsWith("/governance")) return "admin"
+    if (pathname.startsWith("/delivery")) return "delivery"
     if (pathname.startsWith("/subsidiary")) return "subsidiary"
     return userRole || "subsidiary"
   }, [pathname, userRole])

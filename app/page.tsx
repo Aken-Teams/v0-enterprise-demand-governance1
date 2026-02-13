@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Users, BarChart3, Settings, Eye, EyeOff, Code2, ArrowRight, ArrowLeft, Mail } from "lucide-react"
+import { Building2, Users, BarChart3, Settings, Eye, EyeOff, Code2, ArrowRight, ArrowLeft, Mail, Shield, Truck } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,15 +16,29 @@ import {
 } from "@/components/ui/select"
 import { useAuth } from "@/hooks/use-auth"
 
-type RoleType = "subsidiary" | "admin"
+type RoleType = "subsidiary" | "admin" | "delivery"
 type FormView = "login" | "forgot-password"
 type LoginType = "company" | "admin"
+type AdminRoleType = "admin" | "jv-team"
 
 interface Subsidiary {
   id: string
   name: string
   email: string
 }
+
+interface AdminRole {
+  id: AdminRoleType
+  name: string
+  role: RoleType
+  route: string
+  displayName: string
+}
+
+const adminRoles: AdminRole[] = [
+  { id: "admin", name: "管理者", role: "admin", route: "/governance/inbox", displayName: "系統管理員" },
+  { id: "jv-team", name: "JV 團隊", role: "delivery", route: "/delivery", displayName: "JV 團隊成員" },
+]
 
 const subsidiaries: Subsidiary[] = [
   { id: "panjit", name: "強茂", email: "panjit@demo.com" },
@@ -75,6 +89,7 @@ export default function HomePage() {
   const [formView, setFormView] = useState<FormView>("login")
   const [forgotEmail, setForgotEmail] = useState("")
   const [forgotSubmitted, setForgotSubmitted] = useState(false)
+  const [selectedAdminRole, setSelectedAdminRole] = useState<AdminRole>(adminRoles[0])
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
@@ -120,12 +135,12 @@ export default function HomePage() {
 
       login({
         email: account,
-        name: "系統管理員",
-        role: "admin",
+        name: selectedAdminRole.displayName,
+        role: selectedAdminRole.role,
       })
 
       setTimeout(() => {
-        router.push("/admin/organizations")
+        router.push(selectedAdminRole.route)
       }, 500)
     }
   }
@@ -231,6 +246,35 @@ export default function HomePage() {
                     {/* Login Form */}
                     <CardContent className="p-6">
                       <form onSubmit={handleLogin} className="space-y-4">
+                        {/* 角色選擇 (只在管理方登入顯示) */}
+                        {loginType === "admin" && (
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                              登入身份
+                            </label>
+                            <Select
+                              value={selectedAdminRole.id}
+                              onValueChange={(value) => {
+                                const role = adminRoles.find((r) => r.id === value)
+                                if (role) {
+                                  setSelectedAdminRole(role)
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-11 w-full">
+                                <SelectValue placeholder="選擇登入身份" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {adminRoles.map((role) => (
+                                  <SelectItem key={role.id} value={role.id}>
+                                    {role.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
                         {/* 公司選擇 (只在公司登入顯示) */}
                         {loginType === "company" && (
                           <div>
