@@ -1,64 +1,28 @@
 "use client"
 
-import { useState } from "react"
 import { AppLayout } from "@/components/app-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { 
-  FileText, 
-  Clock, 
-  CheckCircle, 
-  Coins, 
-  TrendingUp, 
-  TrendingDown,
-  AlertCircle, 
-  Plus, 
-  CalendarIcon, 
-  Upload, 
-  GitBranch, 
-  HelpCircle,
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  FileText,
+  Clock,
+  CheckCircle,
+  Coins,
+  TrendingUp,
+  AlertCircle,
   ArrowUpRight,
   Activity,
   Target,
   Zap,
   Timer,
   ListTodo,
-  ChartBar,
   ChartLine,
-  Users,
   FolderOpen,
-  Rocket,
-  BarChart3,
   PieChart,
   Gauge
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 
@@ -145,7 +109,6 @@ const MiniLineChart = ({ data, color = "#3b82f6" }: { data: number[], color?: st
 const HalfCircleGauge = ({ percentage, size = 120, title, value }: { percentage: number, size?: number, title: string, value: string | number }) => {
   const radius = (size - 20) / 2
   const circumference = Math.PI * radius
-  const offset = circumference - (percentage / 100) * circumference
 
   return (
     <div className="flex flex-col items-center">
@@ -172,7 +135,7 @@ const HalfCircleGauge = ({ percentage, size = 120, title, value }: { percentage:
             strokeWidth="8"
             strokeLinecap="round"
             strokeDasharray={circumference}
-            strokeDashoffset={offset}
+            strokeDashoffset={circumference - (percentage / 100) * circumference}
             className="transition-all duration-1000 ease-out"
           />
         </svg>
@@ -200,7 +163,7 @@ const DonutChart = ({ data, size = 120 }: { data: Array<{ value: number, color: 
           const percentage = (item.value / total) * 100
           const offset = circumference - (cumulativePercentage / 100) * circumference
           const strokeDasharray = `${(percentage / 100) * circumference} ${circumference}`
-          
+
           cumulativePercentage += percentage
 
           return (
@@ -230,211 +193,39 @@ const DonutChart = ({ data, size = 120 }: { data: Array<{ value: number, color: 
 }
 
 export default function SubsidiaryDashboard() {
-  const [open, setOpen] = useState(false)
-  const [date, setDate] = useState<Date>()
-  
   const spData = [
     { name: "已使用", value: 244, color: "#3b82f6", label: "已使用" },
     { name: "已承諾", value: 100, color: "#f59e0b", label: "已承諾" },
     { name: "可用", value: 156, color: "#10b981", label: "可用" }
   ]
 
-  const trendData = [4, 7, 8, 6, 9, 5, 8]
-  
   return (
     <AppLayout userRole="subsidiary">
       <div className="space-y-6">
-        {/* Header Section with Welcome Message */}
+        {/* Header Section */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">子公司總覽</h1>
-            <p className="text-muted-foreground">歡迎回來，查看您的需求管理概況</p>
+            <p className="text-muted-foreground">查看您的需求進度與 SP 使用概況</p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" asChild>
               <Link href="/subsidiary/demands">
                 <ListTodo className="mr-2 h-4 w-4" />
-                我的需求
+                需求列表
               </Link>
             </Button>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
-                  <Plus className="mr-2 h-4 w-4" />
-                  提交需求
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[900px]">
-                <div className="flex gap-6">
-                  {/* Left - Form */}
-                  <div className="flex-1 min-w-0">
-                    <DialogHeader className="mb-4">
-                      <DialogTitle>提交需求</DialogTitle>
-                      <DialogDescription>填寫需求詳細資訊，合資企業團隊將進行評估</DialogDescription>
-                    </DialogHeader>
-                    <form className="space-y-5">
-                      <div className="space-y-2">
-                        <Label htmlFor="title">需求標題 *</Label>
-                        <Input id="title" placeholder="例如：客戶管理系統新增匯出功能" required />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="description">需求說明 *</Label>
-                        <Textarea
-                          id="description"
-                          placeholder="詳細描述需求的內容、範圍和具體要求..."
-                          className="min-h-[100px]"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="purpose">商業目的 / 預期效益 *</Label>
-                        <Textarea
-                          id="purpose"
-                          placeholder="說明此需求對業務的價值，預期帶來的效益..."
-                          className="min-h-[80px]"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>希望完成時間</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {date ? date.toLocaleDateString("zh-TW") : "選擇日期"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
-                          </PopoverContent>
-                        </Popover>
-                        <p className="text-xs text-muted-foreground">此為參考時間，不具約束力</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="attachments">附件上傳</Label>
-                        <Button type="button" variant="outline" className="w-full bg-transparent">
-                          <Upload className="mr-2 h-4 w-4" />
-                          選擇檔案
-                        </Button>
-                        <p className="text-xs text-muted-foreground">支援 PDF, Word, Excel, 圖片檔案，單檔最大 10MB</p>
-                      </div>
-
-                      <div className="flex gap-3 pt-2">
-                        <Button type="submit" className="flex-1">
-                          提交需求
-                        </Button>
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                          取消
-                        </Button>
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* Right - Process Guide */}
-                  <div className="hidden sm:block w-[260px] flex-shrink-0 border-l border-border pl-5 space-y-8 overflow-y-auto max-h-[calc(90vh-80px)]">
-                    {/* 剩餘 SP */}
-                    <div className="rounded-lg border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-medium text-green-700">目前可用 SP</p>
-                        <Coins className="h-4 w-4 text-green-600" />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <CircularProgress percentage={31.2} size={60} color="#10b981" />
-                        <div>
-                          <p className="text-2xl font-bold text-green-600">156</p>
-                          <p className="text-xs text-green-600/70">年度配額 500 SP</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 需求處理流程 */}
-                    <div>
-                      <h4 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
-                        <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
-                        需求處理流程
-                      </h4>
-                      <div className="space-y-2.5">
-                        <div className="relative pl-4">
-                          <div className="absolute left-0 top-1 h-3 w-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-600" />
-                          <div className="absolute left-[5px] top-4 h-full w-0.5 bg-gradient-to-b from-blue-300 to-transparent" />
-                          <p className="text-xs font-medium text-foreground">1. 提交需求</p>
-                          <p className="text-[11px] text-muted-foreground">填寫需求資訊</p>
-                        </div>
-                        <div className="relative pl-4">
-                          <div className="absolute left-0 top-1 h-3 w-3 rounded-full bg-gray-300" />
-                          <div className="absolute left-[5px] top-4 h-full w-0.5 bg-gray-200" />
-                          <p className="text-xs font-medium text-muted-foreground">2. 治理審核</p>
-                          <p className="text-[11px] text-muted-foreground">評估需求，確認 SP</p>
-                        </div>
-                        <div className="relative pl-4">
-                          <div className="absolute left-0 top-1 h-3 w-3 rounded-full bg-gray-300" />
-                          <div className="absolute left-[5px] top-4 h-full w-0.5 bg-gray-200" />
-                          <p className="text-xs font-medium text-muted-foreground">3. 排入開發</p>
-                          <p className="text-[11px] text-muted-foreground">進入 Backlog 等待規劃</p>
-                        </div>
-                        <div className="relative pl-4">
-                          <div className="absolute left-0 top-1 h-3 w-3 rounded-full bg-gray-300" />
-                          <div className="absolute left-[5px] top-4 h-full w-0.5 bg-gray-200" />
-                          <p className="text-xs font-medium text-muted-foreground">4. 開發階段</p>
-                          <p className="text-[11px] text-muted-foreground">交付團隊執行開發</p>
-                        </div>
-                        <div className="relative pl-4">
-                          <div className="absolute left-0 top-1 h-3 w-3 rounded-full bg-gray-300" />
-                          <p className="text-xs font-medium text-muted-foreground">5. 驗收結案</p>
-                          <p className="text-[11px] text-muted-foreground">驗收後自動扣除 SP</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 常見問題 - 手風琴 */}
-                    <div>
-                      <h4 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
-                        <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                        常見問題
-                      </h4>
-                      <Accordion type="single" collapsible className="w-full">
-                        <AccordionItem value="q1" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-xs hover:no-underline">
-                            審核需要多久？
-                          </AccordionTrigger>
-                          <AccordionContent className="text-xs text-muted-foreground pb-2">
-                            通常 3-5 個工作天
-                          </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="q2" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-xs hover:no-underline">
-                            SP 不夠怎麼辦？
-                          </AccordionTrigger>
-                          <AccordionContent className="text-xs text-muted-foreground pb-2">
-                            可申請額外配額或調整優先序
-                          </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="q3" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-xs hover:no-underline">
-                            可以修改已提交的需求嗎？
-                          </AccordionTrigger>
-                          <AccordionContent className="text-xs text-muted-foreground pb-2">
-                            審核前可在「我的需求」修改
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
-                    </div>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" asChild>
+              <Link href="/subsidiary/wallet">
+                <Coins className="mr-2 h-4 w-4" />
+                SP 錢包
+              </Link>
+            </Button>
           </div>
         </div>
 
-        {/* Enhanced KPI Cards with Visual Graphics */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+        {/* KPI Cards */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-blue-700">總需求數</CardTitle>
@@ -474,31 +265,6 @@ export default function SubsidiaryDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-orange-50 to-red-50 border-orange-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-orange-700">待驗收</CardTitle>
-              <div className="p-2 bg-orange-100 rounded-full">
-                <CheckCircle className="h-5 w-5 text-orange-600" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold text-orange-900">5</div>
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full border-4 border-orange-200">
-                    <div className="w-full h-full rounded-full bg-gradient-to-r from-orange-400 to-red-400 flex items-center justify-center">
-                      <AlertCircle className="h-5 w-5 text-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 text-xs">
-                <AlertCircle className="h-3 w-3 text-red-500" />
-                <span className="text-red-600 font-medium">2 項逾期</span>
-              </div>
-            </CardContent>
-          </Card>
-
           <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-green-700">可用 SP</CardTitle>
@@ -520,18 +286,18 @@ export default function SubsidiaryDashboard() {
 
           <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-cyan-50 to-teal-50 border-cyan-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-cyan-700">本月完成</CardTitle>
+              <CardTitle className="text-sm font-medium text-cyan-700">已完成</CardTitle>
               <div className="p-2 bg-cyan-100 rounded-full">
                 <Target className="h-5 w-5 text-cyan-600" />
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold text-cyan-900">7</div>
+                <div className="text-3xl font-bold text-cyan-900">12</div>
                 <div className="relative">
                   <svg width="50" height="50" className="transform -rotate-90">
                     <circle cx="25" cy="25" r="20" stroke="#e0f2fe" strokeWidth="4" fill="none" />
-                    <circle cx="25" cy="25" r="20" stroke="#06b6d4" strokeWidth="4" fill="none" 
+                    <circle cx="25" cy="25" r="20" stroke="#06b6d4" strokeWidth="4" fill="none"
                             strokeDasharray={`${2 * Math.PI * 20}`} strokeDashoffset={`${2 * Math.PI * 20 * (1 - 0.8)}`}
                             strokeLinecap="round" className="transition-all duration-1000" />
                   </svg>
@@ -540,7 +306,7 @@ export default function SubsidiaryDashboard() {
               </div>
               <div className="flex items-center gap-1 text-xs">
                 <TrendingUp className="h-3 w-3 text-green-500" />
-                <span className="text-green-600 font-medium">提前 2 天</span>
+                <span className="text-green-600 font-medium">50% 完成率</span>
               </div>
             </CardContent>
           </Card>
@@ -623,7 +389,7 @@ export default function SubsidiaryDashboard() {
                     <span className="text-sm font-medium text-muted-foreground w-8">{data.month}</span>
                     <div className="flex-1 flex items-center gap-2">
                       <div className="flex-1 bg-secondary rounded-full h-6 relative overflow-hidden">
-                        <div 
+                        <div
                           className="absolute left-0 top-0 h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full flex items-center justify-end pr-2 transition-all duration-1000 ease-out"
                           style={{ width: `${(data.submitted / 10) * 100}%` }}
                         >
@@ -631,7 +397,7 @@ export default function SubsidiaryDashboard() {
                         </div>
                       </div>
                       <div className="flex-1 bg-secondary rounded-full h-6 relative overflow-hidden">
-                        <div 
+                        <div
                           className="absolute left-0 top-0 h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-end pr-2 transition-all duration-1000 ease-out"
                           style={{ width: `${(data.completed / 10) * 100}%` }}
                         >
@@ -656,9 +422,9 @@ export default function SubsidiaryDashboard() {
           </Card>
         </div>
 
-        {/* Enhanced Activity Feed & Actions */}
+        {/* Activity Feed & Quick Links */}
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Activity Feed with visual enhancements */}
+          {/* Activity Feed */}
           <Card className="lg:col-span-2">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -675,40 +441,36 @@ export default function SubsidiaryDashboard() {
             <CardContent>
               <div className="space-y-4">
                 {[
-                  { 
-                    action: "需求已核准", 
-                    title: "客戶管理系統優化", 
-                    time: "2 小時前", 
+                  {
+                    action: "需求已核准",
+                    title: "客戶管理系統優化",
+                    time: "2 小時前",
                     status: "success",
                     sp: 15,
-                    user: "張經理",
                     priority: "高"
                   },
-                  { 
-                    action: "待您驗收", 
-                    title: "報表匯出功能", 
-                    time: "5 小時前", 
-                    status: "warning",
+                  {
+                    action: "開發完成",
+                    title: "報表匯出功能",
+                    time: "5 小時前",
+                    status: "success",
                     sp: 8,
-                    user: "系統",
                     priority: "中"
                   },
-                  { 
-                    action: "評估中", 
-                    title: "行動版介面開發", 
-                    time: "1 天前", 
+                  {
+                    action: "評估中",
+                    title: "行動版介面開發",
+                    time: "1 天前",
                     status: "info",
                     sp: 25,
-                    user: "李主任",
                     priority: "高"
                   },
-                  { 
-                    action: "Sprint 完成", 
-                    title: "權限管理模組", 
-                    time: "2 天前", 
+                  {
+                    action: "已結案",
+                    title: "權限管理模組",
+                    time: "2 天前",
                     status: "success",
                     sp: 12,
-                    user: "開發團隊",
                     priority: "低"
                   },
                 ].map((activity, i) => (
@@ -720,13 +482,11 @@ export default function SubsidiaryDashboard() {
                           activity.status === "success" && "bg-gradient-to-r from-green-400 to-green-600",
                           activity.status === "warning" && "bg-gradient-to-r from-orange-400 to-orange-600",
                           activity.status === "info" && "bg-gradient-to-r from-blue-400 to-blue-600",
-                          activity.status === "error" && "bg-gradient-to-r from-red-400 to-red-600",
                         )}
                       >
                         {activity.status === "success" && <CheckCircle className="h-5 w-5" />}
                         {activity.status === "warning" && <Clock className="h-5 w-5" />}
                         {activity.status === "info" && <FileText className="h-5 w-5" />}
-                        {activity.status === "error" && <AlertCircle className="h-5 w-5" />}
                       </div>
                       {i < 3 && <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-0.5 h-4 bg-border" />}
                     </div>
@@ -743,7 +503,7 @@ export default function SubsidiaryDashboard() {
                                 {activity.sp} SP
                               </Badge>
                             )}
-                            <Badge 
+                            <Badge
                               variant={activity.priority === "高" ? "destructive" : activity.priority === "中" ? "default" : "secondary"}
                               className="text-xs px-2 py-0"
                             >
@@ -751,8 +511,10 @@ export default function SubsidiaryDashboard() {
                             </Badge>
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <ArrowUpRight className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                          <Link href="/subsidiary/demands">
+                            <ArrowUpRight className="h-4 w-4" />
+                          </Link>
                         </Button>
                       </div>
                     </div>
@@ -760,19 +522,19 @@ export default function SubsidiaryDashboard() {
                 ))}
               </div>
               <div className="mt-6 pt-4 border-t">
-                <Button variant="link" className="p-0 h-auto text-primary">
-                  查看所有活動 →
+                <Button variant="link" className="p-0 h-auto text-primary" asChild>
+                  <Link href="/subsidiary/demands">查看所有需求 →</Link>
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Enhanced Quick Actions */}
+          {/* Quick Links & Stats */}
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Rocket className="h-5 w-5" />
-                快速操作
+                <FolderOpen className="h-5 w-5" />
+                快速連結
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -784,12 +546,6 @@ export default function SubsidiaryDashboard() {
                   </Link>
                 </Button>
                 <Button className="w-full justify-start bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700" asChild>
-                  <Link href="/subsidiary/acceptance">
-                    <CheckCircle className="mr-3 h-4 w-4" />
-                    前往驗收中心
-                  </Link>
-                </Button>
-                <Button className="w-full justify-start bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700" asChild>
                   <Link href="/subsidiary/wallet">
                     <Coins className="mr-3 h-4 w-4" />
                     查看 SP 錢包
@@ -810,12 +566,22 @@ export default function SubsidiaryDashboard() {
                     <div className="text-xs text-green-600">已完成</div>
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-3 rounded-lg text-center">
+                    <div className="text-lg font-bold text-orange-700">8</div>
+                    <div className="text-xs text-orange-600">進行中</div>
+                  </div>
+                  <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-3 rounded-lg text-center">
+                    <div className="text-lg font-bold text-purple-700">156</div>
+                    <div className="text-xs text-purple-600">可用 SP</div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Upcoming Milestones with Enhanced Visuals */}
+        {/* Upcoming Milestones */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -823,9 +589,6 @@ export default function SubsidiaryDashboard() {
                 <Target className="h-5 w-5" />
                 即將到來的里程碑
               </CardTitle>
-              <Button variant="ghost" size="sm">
-                查看全部
-              </Button>
             </div>
           </CardHeader>
           <CardContent>

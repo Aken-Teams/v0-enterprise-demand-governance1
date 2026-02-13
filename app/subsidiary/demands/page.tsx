@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useRouter } from "next/navigation"
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Search, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
@@ -335,10 +334,8 @@ const statusCategories = {
 }
 
 function DemandCard({ demand }: { demand: Demand }) {
-  const router = useRouter()
   const config = statusConfig[demand.status]
   const isRejected = demand.status === "rejected"
-  const needsAction = demand.status === "acceptance"
 
   // 白話日期顯示
   const formatDateReadable = (dateStr: string) => {
@@ -358,29 +355,8 @@ function DemandCard({ demand }: { demand: Demand }) {
     return null
   }
 
-  // 處理卡片點擊（當有操作按鈕時，不使用 Link 包裹）
-  const handleCardClick = (e: React.MouseEvent) => {
-    // 如果點擊的是按鈕區域，不處理卡片點擊
-    if ((e.target as HTMLElement).closest('button, a')) {
-      return
-    }
-    if (!isRejected) {
-      router.push(`/subsidiary/demands/${demand.id}`)
-    }
-  }
-
   const cardContent = (
     <>
-      {/* 待驗收標記 */}
-      {needsAction && (
-        <div className="absolute -top-1.5 -right-1.5">
-          <span className="flex h-4 w-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500"></span>
-          </span>
-        </div>
-      )}
-
       {/* 狀態標籤 */}
       <div className={cn("inline-block px-2 py-0.5 rounded text-[11px] font-medium mb-2", config.bgColor, config.textColor)}>
         {config.label}
@@ -430,47 +406,13 @@ function DemandCard({ demand }: { demand: Demand }) {
           <div className="text-lg font-bold text-foreground">{demand.sp} <span className="text-xs font-normal text-muted-foreground">SP</span></div>
         </div>
       </div>
-
-      {/* 操作按鈕 */}
-      {(isRejected || needsAction) && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          {isRejected ? (
-            <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5">
-              <RotateCcw className="h-3 w-3" />
-              重新提交
-            </Button>
-          ) : (
-            <Button size="sm" className="w-full h-8 text-xs" asChild>
-              <Link href="/subsidiary/acceptance">前往驗收</Link>
-            </Button>
-          )}
-        </div>
-      )}
     </>
   )
 
-  // 如果有操作按鈕，使用 div + onClick 避免嵌套 <a> 標籤
-  if (needsAction || isRejected) {
-    return (
-      <div
-        onClick={handleCardClick}
-        className={cn(
-          "group block relative rounded-xl border bg-white p-4 transition-all hover:shadow-md hover:border-primary/30 cursor-pointer",
-          needsAction && "ring-2 ring-orange-300"
-        )}
-      >
-        {cardContent}
-      </div>
-    )
-  }
-
-  // 否則使用 Link 包裹
   return (
     <Link
       href={`/subsidiary/demands/${demand.id}`}
-      className={cn(
-        "group block relative rounded-xl border bg-white p-4 transition-all hover:shadow-md hover:border-primary/30"
-      )}
+      className="group block relative rounded-xl border bg-white p-4 transition-all hover:shadow-md hover:border-primary/30"
     >
       {cardContent}
     </Link>

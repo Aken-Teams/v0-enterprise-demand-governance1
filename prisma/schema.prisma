@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  subsidiary
+  admin
+  delivery
+}
+
+enum OrgStatus {
+  active
+  inactive
+}
+
+enum DemandStatus {
+  SUBMITTED   // 需求提出
+  PRD_REVIEW  // PRD確認中
+  SP_REVIEW   // SP確認中
+  DEVELOPING  // 開發中
+  ACCEPTANCE  // 驗收中
+  CLOSED      // 已結案
+  REJECTED    // 已駁回
+}
+
+enum DemandPriority {
+  low
+  medium
+  high
+  critical
+}
+
+enum DocumentType {
+  MEETING_NOTES // 會議記錄
+  PRD           // 需求規格書
+  SDD           // 系統設計文件
+  TEST_REPORT   // 測試報告
+  ATTACHMENT    // 一般附件
+}
+
+enum SpTransactionType {
+  QUOTA  // 年度配額發放
+  COMMIT // 承諾 (進入開發時)
+  DEDUCT // 扣除 (驗收通過時)
+  ADJUST // 調整
+  REFUND // 退還 (需求取消時)
+}
+
+enum NotificationType {
+  DEMAND_STATUS // 需求狀態變更
+  ACCEPTANCE    // 驗收通知
+  SP_CHANGE     // SP變動
+  SYSTEM        // 系統通知
+}
+
+enum AcceptanceResult {
+  PASS
+  REJECT
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+/// 子公司 / 組織
+model Organization {
+  id        String    @id @default(cuid())
+  code      String    @unique /// e.g. "panjit", "hge"
+  name      String /// e.g. "強茂"
+  fullName  String? /// e.g. "強茂股份有限公司"
+  status    OrgStatus @default(active)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  users     User[]
+  demands   Demand[]
+  spWallets SpWallet[]
+
+  @@map("organizations")
+}
+
+/// 使用者
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  name           String
+  password       String /// bcrypt hashed
+  role           UserRole
+  avatarUrl      String?       @db.Text
+  isActive       Boolean       @default(true)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  submittedDemands  Demand[]          @relation("DemandSubmitter")
+  managedDemands    Demand[]          @relation("DemandManager")
+  developedDemands  Demand[]          @relation("DemandDeveloper")
+  createdDemands    Demand[]          @relation("DemandCreator")
+  notifications     Notification[]
+  demandComments    DemandComment[]
+  acceptanceRecords AcceptanceRecord[]
+
+  @@map("users")
+}
+
+/// SP 錢包 (每組織每年)
+model SpWallet {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  year           Int /// e.g. 2024
+  totalQuota     Int /// 年度 SP 配額
+  usedSp         Int          @default(0) /// 已扣除 (驗收完成)
+  committedSp    Int          @default(0) /// 已承諾 (開發中)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  transactions SpTransaction[]
+
+  @@unique([organizationId, year])
+  @@map("sp_wallets")
+}
+
+/// SP 交易紀錄
+model SpTransaction {
+  id          String            @id @default(cuid())
+  walletId    String
+  wallet      SpWallet          @relation(fields: [walletId], references: [id])
+  type        SpTransactionType
+  amount      Int /// 正數為入帳, 負數為扣除
+  balance     Int /// 交易後餘額
+  description String            @db.Text
+  demandId    String?
+  demand      Demand?           @relation(fields: [demandId], references: [id])
+  createdAt   DateTime          @default(now())
+
+  @@index([walletId])
+  @@map("sp_transactions")
+}
+
+/// 需求 (核心實體)
+model Demand {
+  id              String         @id @default(cuid())
+  demandNumber    String         @unique /// REQ-YYYY-NNN 自動產生
+  title           String
+  description     String         @db.Text
+  businessPurpose String?        @db.Text
+  status          DemandStatus   @default(SUBMITTED)
+  priority        DemandPriority @default(medium)
+  estimatedSp     Int? /// 初步 SP 估點
+  confirmedSp     Int? /// CEO 確認 SP
+  desiredDate     DateTime? /// 希望完成時間
+  expectedDate    DateTime? /// 預計完成時間
+  completedDate   DateTime? /// 實際完成時間
+  rejectReason    String?        @db.Text
+  adminNotes      String?        @db.Text /// 管理者備註 (內部)
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  submitterId     String
+  submitter       User           @relation("DemandSubmitter", fields: [submitterId], references: [id])
+  creatorId       String /// 建立者 (可能是管理者代建)
+  creator         User           @relation("DemandCreator", fields: [creatorId], references: [id])
+  managerId       String? /// PM / 管理者
+  manager         User?          @relation("DemandManager", fields: [managerId], references: [id])
+  developerId     String? /// 開發者
+  developer       User?          @relation("DemandDeveloper", fields: [developerId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  statusHistory     DemandStatusHistory[]
+  documents         DemandDocument[]
+  comments          DemandComment[]
+  spTransactions    SpTransaction[]
+  acceptanceRecords AcceptanceRecord[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([submitterId])
+  @@map("demands")
+}
+
+/// 需求狀態變更歷史
+model DemandStatusHistory {
+  id         String        @id @default(cuid())
+  demandId   String
+  demand     Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  fromStatus DemandStatus?
+  toStatus   DemandStatus
+  comment    String?       @db.Text
+  changedBy  String /// user ID or name
+  createdAt  DateTime      @default(now())
+
+  @@index([demandId])
+  @@map("demand_status_history")
+}
+
+/// 需求文件 (會議記錄, PRD, SDD, 測試報告等)
+model DemandDocument {
+  id         String       @id @default(cuid())
+  demandId   String
+  demand     Demand       @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  type       DocumentType
+  fileName   String
+  fileUrl    String?      @db.Text
+  fileSize   Int? /// bytes
+  uploadedBy String /// user ID or name
+  createdAt  DateTime     @default(now())
+
+  @@index([demandId])
+  @@map("demand_documents")
+}
+
+/// 需求討論 / 備註
+model DemandComment {
+  id         String   @id @default(cuid())
+  demandId   String
+  demand     Demand   @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  content    String   @db.Text
+  isInternal Boolean  @default(false) /// 管理者內部備註
+  createdAt  DateTime @default(now())
+
+  @@index([demandId])
+  @@map("demand_comments")
+}
+
+/// 驗收記錄
+model AcceptanceRecord {
+  id           String           @id @default(cuid())
+  demandId     String
+  demand       Demand           @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User             @relation(fields: [reviewerId], references: [id])
+  result       AcceptanceResult
+  rating       Int? /// 1-5 stars
+  feedback     String?          @db.Text
+  rejectReason String?          @db.Text
+  workUrl      String?          @db.Text /// demo/production URL
+  giteaUrl     String?          @db.Text /// git repository URL
+  checkItems   Json? /// [{id, label, checked}]
+  createdAt    DateTime         @default(now())
+
+  @@index([demandId])
+  @@map("acceptance_records")
+}
+
+/// 通知
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  isRead    Boolean          @default(false)
+  linkUrl   String? /// deep link
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}

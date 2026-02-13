@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation"
 import {
   Building2,
   LayoutDashboard,
-  CheckCircle,
   Inbox,
   FolderKanban,
   BarChart3,
@@ -58,8 +57,8 @@ const navSections: NavSection[] = [
     roles: ["subsidiary"],
     items: [
       { title: "需求總覽", href: "/subsidiary", icon: LayoutDashboard, roles: ["subsidiary"] },
-      { title: "提交需求", href: "/subsidiary/submit", icon: FilePlus, roles: ["subsidiary"] },
-      { title: "驗收測試", href: "/subsidiary/acceptance", icon: CheckCircle, roles: ["subsidiary"] },
+      { title: "需求列表", href: "/subsidiary/demands", icon: FileLineChart, roles: ["subsidiary"] },
+      { title: "SP 錢包", href: "/subsidiary/wallet", icon: BarChart3, roles: ["subsidiary"] },
     ],
   },
   {

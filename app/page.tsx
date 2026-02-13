@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Users, BarChart3, Settings, Eye, EyeOff, Code2, ArrowRight, ArrowLeft, Mail, Shield, Truck } from "lucide-react"
+import { Building2, Settings, Eye, EyeOff, ArrowRight, ArrowLeft, Mail } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select"
 import { useAuth } from "@/hooks/use-auth"
 
-type RoleType = "subsidiary" | "admin" | "delivery"
 type FormView = "login" | "forgot-password"
 type LoginType = "company" | "admin"
 type AdminRoleType = "admin" | "jv-team"
@@ -30,14 +29,13 @@ interface Subsidiary {
 interface AdminRole {
   id: AdminRoleType
   name: string
-  role: RoleType
+  email: string
   route: string
-  displayName: string
 }
 
 const adminRoles: AdminRole[] = [
-  { id: "admin", name: "管理者", role: "admin", route: "/governance/inbox", displayName: "系統管理員" },
-  { id: "jv-team", name: "JV 團隊", role: "delivery", route: "/delivery", displayName: "JV 團隊成員" },
+  { id: "admin", name: "管理者", email: "admin@demo.com", route: "/governance/inbox" },
+  { id: "jv-team", name: "JV 團隊", email: "jv@demo.com", route: "/delivery" },
 ]
 
 const subsidiaries: Subsidiary[] = [
@@ -50,98 +48,54 @@ const subsidiaries: Subsidiary[] = [
   { id: "hge", name: "虹冠電子工業", email: "hge@demo.com" },
 ]
 
-// 帳號到角色的映射（公司登入使用）
-interface AccountRoleMap {
-  role: RoleType
-  route: string
-  name: string
-  color: string
-}
-
-const accountRoleMap: Record<string, AccountRoleMap> = {
-  // 子公司帳號
-  "panjit@demo.com": { role: "subsidiary", route: "/subsidiary", name: "強茂", color: "blue" },
-  "panjit-tech@demo.com": { role: "subsidiary", route: "/subsidiary", name: "璟茂科技", color: "blue" },
-  "ymoptics@demo.com": { role: "subsidiary", route: "/subsidiary", name: "熒茂光學", color: "blue" },
-  "panjit-wuxi@demo.com": { role: "subsidiary", route: "/subsidiary", name: "強茂電子（無錫）", color: "blue" },
-  "panjit-xuzhou@demo.com": { role: "subsidiary", route: "/subsidiary", name: "強茂半導體（徐州）", color: "blue" },
-  "panjit-shandong@demo.com": { role: "subsidiary", route: "/subsidiary", name: "山東強茂電子", color: "blue" },
-  "hge@demo.com": { role: "subsidiary", route: "/subsidiary", name: "虹冠電子工業", color: "blue" },
-}
-
-const colorMap: Record<string, { button: string }> = {
-  blue: { button: "bg-blue-500 hover:bg-blue-600" },
-  green: { button: "bg-green-500 hover:bg-green-600" },
-  purple: { button: "bg-purple-500 hover:bg-purple-600" },
-  teal: { button: "bg-teal-500 hover:bg-teal-600" },
-  orange: { button: "bg-orange-500 hover:bg-orange-600" },
-}
-
 export default function HomePage() {
   const router = useRouter()
   const { login } = useAuth()
   const [loginType, setLoginType] = useState<LoginType>("company")
   const [selectedSubsidiary, setSelectedSubsidiary] = useState<Subsidiary>(subsidiaries[0])
-  const [account, setAccount] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
   const [formView, setFormView] = useState<FormView>("login")
   const [forgotEmail, setForgotEmail] = useState("")
   const [forgotSubmitted, setForgotSubmitted] = useState(false)
   const [selectedAdminRole, setSelectedAdminRole] = useState<AdminRole>(adminRoles[0])
 
-  const handleLogin = (e: React.FormEvent) => {
+  const currentEmail = loginType === "company"
+    ? selectedSubsidiary.email
+    : selectedAdminRole.email
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError("")
 
-    if (loginType === "company") {
-      // 公司登入：優先使用選擇的公司，否則使用輸入的帳號
-      const email = selectedSubsidiary?.email || account
-      
-      if (!email) {
-        setIsLoading(false)
-        alert("請選擇公司或輸入帳號")
-        return
-      }
-
-      const accountInfo = accountRoleMap[email]
-      
-      if (!accountInfo) {
-        setIsLoading(false)
-        alert("無效的帳號")
-        return
-      }
-
-      const subsidiary = subsidiaries.find((s) => s.email === email)
-      
-      login({
-        email,
-        name: accountInfo.name,
-        role: accountInfo.role,
-        subsidiary: subsidiary?.name,
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: currentEmail, password }),
       })
 
-      setTimeout(() => {
-        router.push(accountInfo.route)
-      }, 500)
-    } else {
-      // 管理方登入
-      if (!account) {
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || "登入失敗")
         setIsLoading(false)
-        alert("請輸入帳號")
         return
       }
 
-      login({
-        email: account,
-        name: selectedAdminRole.displayName,
-        role: selectedAdminRole.role,
-      })
+      login(data.user, data.token)
 
-      setTimeout(() => {
-        router.push(selectedAdminRole.route)
-      }, 500)
+      const route = loginType === "company"
+        ? "/subsidiary"
+        : selectedAdminRole.route
+
+      router.push(route)
+    } catch {
+      setError("網路錯誤，請稍後再試")
+      setIsLoading(false)
     }
   }
 
@@ -212,7 +166,8 @@ export default function HomePage() {
                           type="button"
                           onClick={() => {
                             setLoginType("company")
-                            setAccount("")
+                            setPassword("")
+                            setError("")
                             setSelectedSubsidiary(subsidiaries[0])
                           }}
                           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
@@ -228,8 +183,9 @@ export default function HomePage() {
                           type="button"
                           onClick={() => {
                             setLoginType("admin")
-                            setAccount("")
-                            setSelectedSubsidiary(subsidiaries[0])
+                            setPassword("")
+                            setError("")
+                            setSelectedAdminRole(adminRoles[0])
                           }}
                           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
                             loginType === "admin"
@@ -258,6 +214,7 @@ export default function HomePage() {
                                 const role = adminRoles.find((r) => r.id === value)
                                 if (role) {
                                   setSelectedAdminRole(role)
+                                  setError("")
                                 }
                               }}
                             >
@@ -287,7 +244,7 @@ export default function HomePage() {
                                 const sub = subsidiaries.find((s) => s.id === value)
                                 if (sub) {
                                   setSelectedSubsidiary(sub)
-                                  setAccount(sub.email)
+                                  setError("")
                                 }
                               }}
                             >
@@ -305,18 +262,16 @@ export default function HomePage() {
                           </div>
                         )}
 
-                        {/* 帳號 */}
+                        {/* 帳號 (唯讀顯示) */}
                         <div>
                           <label className="mb-1.5 block text-sm font-medium text-gray-700">
                             帳號
                           </label>
                           <Input
                             type="email"
-                            placeholder={loginType === "company" ? "請輸入帳號或選擇公司" : "請輸入管理員帳號"}
-                            value={account}
-                            onChange={(e) => setAccount(e.target.value)}
-                            className="h-11"
-                            required
+                            value={currentEmail}
+                            className="h-11 bg-gray-50 text-gray-600"
+                            readOnly
                           />
                         </div>
 
@@ -330,8 +285,12 @@ export default function HomePage() {
                               type={showPassword ? "text" : "password"}
                               placeholder="請輸入密碼"
                               value={password}
-                              onChange={(e) => setPassword(e.target.value)}
+                              onChange={(e) => {
+                                setPassword(e.target.value)
+                                setError("")
+                              }}
                               className="h-11 pr-10"
+                              required
                             />
                             <button
                               type="button"
@@ -341,10 +300,12 @@ export default function HomePage() {
                               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                           </div>
-                          <p className="mt-1.5 text-xs text-gray-500">
-                            測試密碼：<span className="font-medium text-primary">demo123</span>
-                          </p>
                         </div>
+
+                        {/* 錯誤訊息 */}
+                        {error && (
+                          <p className="text-sm text-red-500 font-medium">{error}</p>
+                        )}
 
                         {/* 選項 */}
                         <div className="flex items-center justify-between text-sm">
