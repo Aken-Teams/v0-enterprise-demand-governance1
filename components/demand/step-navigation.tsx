@@ -101,11 +101,6 @@ export function StepNavigation({
           onClick={() => handleClick("next")}
         >
           下一步
-          {nextPhase && (
-            <span className="ml-1">
-              ({STATUS_MAP[nextPhase]?.label})
-            </span>
-          )}
           <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
       </div>
