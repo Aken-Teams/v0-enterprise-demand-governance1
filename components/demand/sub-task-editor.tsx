@@ -40,6 +40,7 @@ interface SubTaskEditorProps {
   devEngineer: { id: string; name: string } | null
   onRefresh: () => void
   onViewGantt: () => void
+  onDatesSaved?: () => void
 }
 
 function toDateInput(val: string | null) {
@@ -68,6 +69,7 @@ export function SubTaskEditor({
   devEngineer,
   onRefresh,
   onViewGantt,
+  onDatesSaved,
 }: SubTaskEditorProps) {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [newTaskName, setNewTaskName] = useState("")
@@ -183,6 +185,7 @@ export function SubTaskEditor({
       await Promise.all(promises)
       setDirtyDates(new Set())
       setDateSaved(true)
+      onDatesSaved?.()
       onRefresh()
     } catch { /* ignore */ } finally {
       setSavingDates(false)
@@ -219,7 +222,7 @@ export function SubTaskEditor({
     <div className="space-y-3">
       {/* Dev phase date range reference */}
       {(devStartDate || devEndDate) && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
           <Calendar className="h-3.5 w-3.5 shrink-0" />
           <span>開發階段時程：</span>
           <span className="font-medium text-foreground">

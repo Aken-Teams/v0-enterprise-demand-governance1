@@ -119,6 +119,7 @@ export default function DemandDetailPage() {
   const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string }[]>([])
   const [activeTab, setActiveTab] = useState("overview")
   const [spPlanOpen, setSpPlanOpen] = useState<boolean | null>(null)
+  const [subTasksOpen, setSubTasksOpen] = useState<boolean | null>(null)
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
 
@@ -130,6 +131,15 @@ export default function DemandDetailPage() {
     )
     setSpPlanOpen(!hasContent)
   }, [demand, spPlanOpen])
+
+  // Auto-collapse sub-tasks if already have dates filled
+  useEffect(() => {
+    if (subTasksOpen !== null || !demand) return
+    const hasContent = demand.subTasks.length > 0 && demand.subTasks.some(
+      (t) => t.plannedStart || t.plannedEnd
+    )
+    setSubTasksOpen(!hasContent)
+  }, [demand, subTasksOpen])
 
   const fetchDemand = useCallback(async () => {
     if (!token || !demandId) return
@@ -486,27 +496,39 @@ export default function DemandDetailPage() {
                 {canManage && demand.status === "DEVELOPING" && (() => {
                   const devPlan = demand.phasePlans.find((p) => p.phase === "DEVELOPING")
                   return (
-                    <Card className="border-violet-200">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <GanttChart className="h-4 w-4 text-violet-600" />
-                          開發任務管理
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">設定子任務時程與負責人，日期須在開發階段範圍內</p>
-                      </CardHeader>
-                      <CardContent>
-                        <SubTaskEditor
-                          subTasks={demand.subTasks}
-                          demandId={demand.id}
-                          token={token}
-                          devStart={devPlan?.plannedStart ?? null}
-                          devEnd={devPlan?.plannedEnd ?? null}
-                          devEngineer={devPlan?.engineer ?? null}
-                          onRefresh={fetchDemand}
-                          onViewGantt={() => setActiveTab("gantt")}
-                        />
-                      </CardContent>
-                    </Card>
+                    <Collapsible open={subTasksOpen ?? false} onOpenChange={setSubTasksOpen}>
+                      <Card className="border-violet-200">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <GanttChart className="h-4 w-4 text-violet-600" />
+                              開發任務管理
+                            </CardTitle>
+                            <CollapsibleTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <ChevronDown className={cn("h-4 w-4 transition-transform", subTasksOpen && "rotate-180")} />
+                              </Button>
+                            </CollapsibleTrigger>
+                          </div>
+                          <p className="text-xs text-muted-foreground">設定子任務時程與負責人，日期須在開發階段範圍內</p>
+                        </CardHeader>
+                        <CollapsibleContent>
+                          <CardContent>
+                            <SubTaskEditor
+                              subTasks={demand.subTasks}
+                              demandId={demand.id}
+                              token={token}
+                              devStart={devPlan?.plannedStart ?? null}
+                              devEnd={devPlan?.plannedEnd ?? null}
+                              devEngineer={devPlan?.engineer ?? null}
+                              onRefresh={fetchDemand}
+                              onViewGantt={() => setActiveTab("gantt")}
+                              onDatesSaved={() => setSubTasksOpen(false)}
+                            />
+                          </CardContent>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
                   )
                 })()}
 
