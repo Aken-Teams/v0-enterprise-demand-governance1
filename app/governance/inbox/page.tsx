@@ -9,11 +9,11 @@ import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
-  DropdownMenuLabel,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu"
 import {
   Search, Inbox, Plus, Loader2, Building2,
-  Paperclip, User, MoreHorizontal, Eye, Trash2, Check,
+  Paperclip, User, MoreHorizontal, Eye, Trash2, RefreshCw, Check,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -289,27 +289,35 @@ export default function InboxPage() {
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" className="max-h-none overflow-visible">
                                 <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
                                   <Eye className="h-3.5 w-3.5 mr-2" />
                                   查看詳情
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                                  修改狀態
-                                </DropdownMenuLabel>
-                                {Object.entries(STATUS_MAP).map(([key, info]) => (
-                                  <DropdownMenuItem
-                                    key={key}
-                                    disabled={key === demand.status}
-                                    onClick={() => handleStatusChange(demand.id, key)}
-                                  >
-                                    {key === demand.status && <Check className="h-3.5 w-3.5 mr-2" />}
-                                    <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", key !== demand.status && "ml-5.5", info.color)}>
-                                      {info.label}
-                                    </Badge>
-                                  </DropdownMenuItem>
-                                ))}
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>
+                                    <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                                    修改狀態
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent className="max-h-none overflow-visible">
+                                    {Object.entries(STATUS_MAP).map(([key, info]) => (
+                                      <DropdownMenuItem
+                                        key={key}
+                                        disabled={key === demand.status}
+                                        onClick={() => handleStatusChange(demand.id, key)}
+                                        className="gap-2"
+                                      >
+                                        {key === demand.status
+                                          ? <Check className="h-3.5 w-3.5 shrink-0" />
+                                          : <span className="w-3.5 shrink-0" />}
+                                        <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", info.color)}>
+                                          {info.label}
+                                        </Badge>
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-destructive focus:text-destructive"
