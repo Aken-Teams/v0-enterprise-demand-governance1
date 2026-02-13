@@ -27,6 +27,7 @@ import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
+import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 
 interface DemandDetail {
   id: string
@@ -459,48 +460,32 @@ export default function DemandDetailPage() {
                   </Card>
                 )}
 
-                {canManage && demand.status === "DEVELOPING" && (
-                  <Card className="border-violet-200">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-base flex items-center gap-2">
-                            <GanttChart className="h-4 w-4 text-violet-600" />
-                            開發進度
-                          </CardTitle>
-                          <p className="text-xs text-muted-foreground mt-1">管理子任務，追蹤開發進度</p>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setActiveTab("gantt")}>
-                          <GanttChart className="h-3.5 w-3.5 mr-1" />
-                          查看甘特圖
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-1.5">
-                        {demand.subTasks.length > 0 ? demand.subTasks.slice(0, 5).map((task) => (
-                          <div key={task.id} className="flex items-center gap-2 text-sm">
-                            <div className={cn(
-                              "h-2 w-2 rounded-full",
-                              task.status === "completed" ? "bg-emerald-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-gray-400",
-                            )} />
-                            <span className={task.status === "completed" ? "line-through text-muted-foreground" : ""}>
-                              {task.name}
-                            </span>
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              {task.status === "completed" ? "已完成" : task.status === "in_progress" ? "進行中" : "待開始"}
-                            </span>
-                          </div>
-                        )) : (
-                          <p className="text-sm text-muted-foreground">尚未建立子任務，請至甘特圖新增</p>
-                        )}
-                        {demand.subTasks.length > 5 && (
-                          <p className="text-xs text-muted-foreground">⋯ 還有 {demand.subTasks.length - 5} 個任務</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                {canManage && demand.status === "DEVELOPING" && (() => {
+                  const devPlan = demand.phasePlans.find((p) => p.phase === "DEVELOPING")
+                  return (
+                    <Card className="border-violet-200">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <GanttChart className="h-4 w-4 text-violet-600" />
+                          開發任務管理
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">設定子任務時程與負責人，日期須在開發階段範圍內</p>
+                      </CardHeader>
+                      <CardContent>
+                        <SubTaskEditor
+                          subTasks={demand.subTasks}
+                          demandId={demand.id}
+                          token={token}
+                          staffUsers={staffUsers}
+                          devStart={devPlan?.plannedStart ?? null}
+                          devEnd={devPlan?.plannedEnd ?? null}
+                          onRefresh={fetchDemand}
+                          onViewGantt={() => setActiveTab("gantt")}
+                        />
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
 
                 {canManage && demand.status === "ACCEPTANCE" && (
                   <Card className="border-purple-200">
