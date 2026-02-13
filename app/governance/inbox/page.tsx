@@ -1,11 +1,11 @@
 "use client"
 
 import { AppLayout } from "@/components/app-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileText, Clock, CheckCircle, Code, ClipboardCheck, XCircle, Search, Inbox, Plus } from "lucide-react"
+import { Search, Inbox, Plus } from "lucide-react"
 import Link from "next/link"
 
 export default function InboxPage() {
@@ -26,48 +26,41 @@ export default function InboxPage() {
         </div>
 
         {/* Summary Cards - 整體管線狀態 */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">全部需求</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">累計建立需求數</p>
+        <div className="grid gap-3 md:grid-cols-4">
+          <Card className="border-l-4 border-l-blue-500">
+            <CardContent className="flex items-center gap-4 py-2.5">
+              <div className="text-3xl font-bold text-foreground">0</div>
+              <div>
+                <div className="text-sm font-medium text-foreground leading-tight">全部需求</div>
+                <div className="text-xs text-muted-foreground mt-0.5">累計建立</div>
+              </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">確認階段</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">需求確認 + MVP + 開案</p>
+          <Card className="border-l-4 border-l-amber-500">
+            <CardContent className="flex items-center gap-4 py-2.5">
+              <div className="text-3xl font-bold text-foreground">0</div>
+              <div>
+                <div className="text-sm font-medium text-foreground leading-tight">確認階段</div>
+                <div className="text-xs text-muted-foreground mt-0.5">需求 / MVP / 開案</div>
+              </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">開發中</CardTitle>
-              <Code className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">開發 + 驗收中</p>
+          <Card className="border-l-4 border-l-violet-500">
+            <CardContent className="flex items-center gap-4 py-2.5">
+              <div className="text-3xl font-bold text-foreground">0</div>
+              <div>
+                <div className="text-sm font-medium text-foreground leading-tight">開發中</div>
+                <div className="text-xs text-muted-foreground mt-0.5">開發 + 驗收</div>
+              </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">已結案</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">已完成驗收結案</p>
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="flex items-center gap-4 py-2.5">
+              <div className="text-3xl font-bold text-foreground">0</div>
+              <div>
+                <div className="text-sm font-medium text-foreground leading-tight">已結案</div>
+                <div className="text-xs text-muted-foreground mt-0.5">驗收完成</div>
+              </div>
             </CardContent>
           </Card>
         </div>
