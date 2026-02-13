@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ChevronRight, Plus, Trash2, Calendar, User, ZoomIn, ZoomOut } from "lucide-react"
+import { ChevronRight, Plus, Trash2, Calendar, User, ZoomIn, ZoomOut, RotateCcw } from "lucide-react"
 import { DEFAULT_SUBTASK_TEMPLATES } from "@/lib/constants/demand"
 
 interface PhasePlan {
@@ -89,6 +89,11 @@ export function ProjectGantt({
   const [submitting, setSubmitting] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(0) // 0=auto, 1..4=zoom levels
 
+  // Focus range (drag-to-zoom)
+  const [focusRange, setFocusRange] = useState<{ start: Date; end: Date } | null>(null)
+  const [dragSelection, setDragSelection] = useState<{ startPct: number; endPct: number } | null>(null)
+  const dragStartRef = useRef<number | null>(null)
+
   // Hover state
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string | null>(null)
@@ -119,25 +124,34 @@ export function ProjectGantt({
     const maxDate = new Date(Math.max(...dates.map((d) => d.getTime())))
     const dataSpan = differenceInDays(maxDate, minDate) || 1
 
-    // Compute padding based on zoom level
-    // zoom 0 = auto (tight fit), 1-4 = progressively more padding
-    let padBefore: number
-    let padAfter: number
-    if (zoomLevel === 0) {
-      // Auto: tight padding proportional to data span, min 3 days
-      padBefore = Math.max(3, Math.round(dataSpan * 0.15))
-      padAfter = Math.max(3, Math.round(dataSpan * 0.15))
+    // Compute timeline bounds
+    let tStart: Date
+    let tEnd: Date
+
+    if (focusRange) {
+      // Focused zoom: use selected range with small padding
+      const focusSpan = differenceInDays(focusRange.end, focusRange.start) || 1
+      const focusPad = Math.max(1, Math.round(focusSpan * 0.12))
+      tStart = addDays(focusRange.start, -focusPad)
+      tEnd = addDays(focusRange.end, focusPad)
     } else {
-      // Manual zoom-out: more padding at higher levels
-      const multiplier = zoomLevel
-      padBefore = Math.max(7, Math.round(dataSpan * 0.3 * multiplier))
-      padAfter = Math.max(7, Math.round(dataSpan * 0.3 * multiplier))
+      // Compute padding based on zoom level
+      // zoom 0 = auto (tight fit), 1-4 = progressively more padding
+      let padBefore: number
+      let padAfter: number
+      if (zoomLevel === 0) {
+        padBefore = Math.max(3, Math.round(dataSpan * 0.15))
+        padAfter = Math.max(3, Math.round(dataSpan * 0.15))
+      } else {
+        const multiplier = zoomLevel
+        padBefore = Math.max(7, Math.round(dataSpan * 0.3 * multiplier))
+        padAfter = Math.max(7, Math.round(dataSpan * 0.3 * multiplier))
+      }
+      tStart = startOfWeek(addDays(minDate, -padBefore), { weekStartsOn: 1 })
+      const rawEnd = addDays(maxDate, padAfter)
+      tEnd = zoomLevel === 0 && dataSpan < 45 ? rawEnd : endOfMonth(rawEnd)
     }
 
-    const tStart = startOfWeek(addDays(minDate, -padBefore), { weekStartsOn: 1 })
-    const rawEnd = addDays(maxDate, padAfter)
-    // For short spans, don't extend to end of month
-    const tEnd = zoomLevel === 0 && dataSpan < 45 ? rawEnd : endOfMonth(rawEnd)
     const total = differenceInDays(tEnd, tStart) || 1
 
     const monthsList = eachMonthOfInterval({ start: tStart, end: tEnd }).map((m) => {
@@ -206,30 +220,70 @@ export function ProjectGantt({
     })
 
     return { timelineStart: tStart, totalDays: total, months: monthsList, weeks: weeksList, days: daysList, rows: rowData, subRows: subRowData, dataSpanDays: dataSpan, showDayLabels: showDays }
-  }, [phasePlans, subTasks, zoomLevel])
+  }, [phasePlans, subTasks, zoomLevel, focusRange])
 
-  // Mouse tracking for crosshair
+  // Mouse tracking for crosshair + drag-to-zoom
+  const getPct = useCallback((e: React.MouseEvent) => {
+    if (!timelineRef.current) return null
+    const rect = timelineRef.current.getBoundingClientRect()
+    const pct = (e.clientX - rect.left) / rect.width
+    return pct >= 0 && pct <= 1 ? pct : null
+  }, [])
+
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!timelineRef.current || !timelineStart) return
-      const rect = timelineRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const pct = x / rect.width
-      if (pct < 0 || pct > 1) {
+      if (!timelineStart) return
+      const pct = getPct(e)
+      if (pct === null) {
         setHoverX(null)
         setHoverDate(null)
         return
       }
+      // Update crosshair
       setHoverX(pct * 100)
       const day = Math.round(pct * totalDays)
       setHoverDate(format(addDays(timelineStart, day), "yyyy/MM/dd (EEE)", { locale: zhTW }))
+      // Update drag selection
+      if (dragStartRef.current !== null) {
+        const startPct = Math.min(dragStartRef.current, pct * 100)
+        const endPct = Math.max(dragStartRef.current, pct * 100)
+        setDragSelection({ startPct, endPct })
+      }
     },
-    [timelineStart, totalDays],
+    [timelineStart, totalDays, getPct],
   )
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const pct = getPct(e)
+    if (pct === null) return
+    dragStartRef.current = pct * 100
+    setDragSelection(null)
+  }, [getPct])
+
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    const dragStart = dragStartRef.current
+    dragStartRef.current = null
+    setDragSelection(null)
+    if (dragStart === null || !timelineStart) return
+    const pct = getPct(e)
+    if (pct === null) return
+    const minPct = Math.min(dragStart / 100, pct)
+    const maxPct = Math.max(dragStart / 100, pct)
+    // Need at least 3% drag to trigger zoom
+    if (maxPct - minPct < 0.03) return
+    const startDay = Math.floor(minPct * totalDays)
+    const endDay = Math.ceil(maxPct * totalDays)
+    setFocusRange({
+      start: addDays(timelineStart, startDay),
+      end: addDays(timelineStart, endDay),
+    })
+  }, [timelineStart, totalDays, getPct])
 
   const handleMouseLeave = useCallback(() => {
     setHoverX(null)
     setHoverDate(null)
+    dragStartRef.current = null
+    setDragSelection(null)
   }, [])
 
   // Sub-task actions
@@ -286,6 +340,17 @@ export function ProjectGantt({
     <>
       {/* Zoom controls */}
       <div className="flex items-center justify-end gap-1 mb-2">
+        {focusRange && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-xs px-2 mr-1 text-primary"
+            onClick={() => setFocusRange(null)}
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            重置檢視
+          </Button>
+        )}
         <span className="text-[11px] text-muted-foreground mr-1">
           {totalDays <= 45 ? `${totalDays} 天` : `${Math.round(totalDays / 7)} 週`}
         </span>
@@ -294,7 +359,7 @@ export function ProjectGantt({
           size="icon"
           className="h-6 w-6"
           onClick={() => setZoomLevel((z) => Math.max(0, z - 1))}
-          disabled={zoomLevel === 0}
+          disabled={zoomLevel === 0 || !!focusRange}
           title="放大（縮短時間範圍）"
         >
           <ZoomIn className="h-3 w-3" />
@@ -304,7 +369,7 @@ export function ProjectGantt({
           size="icon"
           className="h-6 w-6"
           onClick={() => setZoomLevel((z) => Math.min(4, z + 1))}
-          disabled={zoomLevel === 4}
+          disabled={zoomLevel === 4 || !!focusRange}
           title="縮小（擴大時間範圍）"
         >
           <ZoomOut className="h-3 w-3" />
@@ -353,8 +418,10 @@ export function ProjectGantt({
 
           {/* Main body with crosshair area */}
           <div
-            className="relative"
+            className="relative select-none"
             onMouseMove={handleMouseMove}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
           >
             {/* Gridlines */}
@@ -404,6 +471,22 @@ export function ProjectGantt({
                     {hoverDate}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Drag selection overlay */}
+            {dragSelection && dragSelection.endPct - dragSelection.startPct > 1 && (
+              <div
+                className="absolute top-0 bottom-0 z-10 pointer-events-none"
+                style={{
+                  left: `calc(${LEFT_COL} + (100% - ${LEFT_COL}) * ${dragSelection.startPct / 100})`,
+                  width: `calc((100% - ${LEFT_COL}) * ${(dragSelection.endPct - dragSelection.startPct) / 100})`,
+                }}
+              >
+                <div className="w-full h-full bg-primary/10 border-l border-r border-primary/40 rounded-sm" />
+                <div className="absolute top-1 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2 py-0.5 rounded whitespace-nowrap font-medium">
+                  放開以放大此區間
+                </div>
               </div>
             )}
 
@@ -641,6 +724,9 @@ export function ProjectGantt({
                 <span>週末</span>
               </div>
             )}
+            <div className="ml-auto text-[11px] text-muted-foreground/60">
+              拖曳時間軸可放大區間
+            </div>
           </div>
         </div>
       </div>
