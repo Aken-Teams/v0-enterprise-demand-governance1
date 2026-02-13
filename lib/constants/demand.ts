@@ -35,7 +35,7 @@ export const PHASE_DOCUMENT_MAP: Record<
     optional: ["AUDIO", "VIDEO", "ATTACHMENT"],
   },
   PRD_REVIEW: {
-    required: ["PRD", "MODULE_ARCHITECTURE"],
+    required: ["PRD"],
     optional: ["ATTACHMENT"],
   },
   SP_REVIEW: {

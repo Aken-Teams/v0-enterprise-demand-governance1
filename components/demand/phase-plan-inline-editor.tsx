@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -26,7 +26,7 @@ interface PhasePlanInlineEditorProps {
   totalSp: number
   demandId: string
   token: string | null
-  staffUsers: { id: string; name: string }[]
+  staffUsers: { id: string; name: string; role?: string }[]
   onSaved: () => void
 }
 
@@ -149,14 +149,34 @@ export function PhasePlanInlineEditor({
                   value={row.engineerId || "none"}
                   onValueChange={(v) => updateRow(idx, "engineerId", v === "none" ? "" : v)}
                 >
-                  <SelectTrigger className="h-8 text-xs">
+                  <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">未指派</SelectItem>
-                    {staffUsers.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                    ))}
+                    {(() => {
+                      const groups: Record<string, typeof staffUsers> = {}
+                      for (const u of staffUsers) {
+                        const g = u.role || "other"
+                        ;(groups[g] ??= []).push(u)
+                      }
+                      const roleMeta: Record<string, { label: string; color: string }> = {
+                        delivery: { label: "交付團隊", color: "text-blue-600" },
+                        admin: { label: "管理員", color: "text-amber-600" },
+                        subsidiary: { label: "需求單位", color: "text-emerald-600" },
+                      }
+                      const order = ["delivery", "admin", "subsidiary"]
+                      return order
+                        .filter((r) => groups[r]?.length)
+                        .map((r) => (
+                          <SelectGroup key={r}>
+                            <SelectLabel className={`text-xs font-semibold ${roleMeta[r]?.color || "text-muted-foreground"}`}>{roleMeta[r]?.label || r}</SelectLabel>
+                            {groups[r].map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))
+                    })()}
                   </SelectContent>
                 </Select>
               </TableCell>

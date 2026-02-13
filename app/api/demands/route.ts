@@ -258,8 +258,8 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       }),
       prisma.user.findMany({
-        where: { isActive: true, role: { in: ["admin", "delivery"] } },
-        select: { id: true, name: true },
+        where: { isActive: true },
+        select: { id: true, name: true, role: true },
         orderBy: { name: "asc" },
       }),
     ])
@@ -292,7 +292,7 @@ export async function GET(request: NextRequest) {
       statusCounts,
       filters: {
         submitters: submitters.map((u) => ({ id: u.id, name: u.name })),
-        developers: developers.map((u) => ({ id: u.id, name: u.name })),
+        developers: developers.map((u) => ({ id: u.id, name: u.name, role: u.role })),
       },
     })
   } catch (error) {

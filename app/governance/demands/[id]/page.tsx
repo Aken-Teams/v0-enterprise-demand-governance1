@@ -115,7 +115,7 @@ export default function DemandDetailPage() {
 
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [staffUsers, setStaffUsers] = useState<{ id: string; name: string }[]>([])
+  const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string }[]>([])
   const [activeTab, setActiveTab] = useState("overview")
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
