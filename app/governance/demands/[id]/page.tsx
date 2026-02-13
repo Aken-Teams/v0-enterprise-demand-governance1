@@ -4,11 +4,11 @@ import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   ArrowLeft, Building2, User, Calendar, FileText,
-  MessageSquare, Loader2, Send, Pencil, Trash2, Check, Settings2,
+  Loader2, Pencil, Trash2, Check, Settings2,
+  BarChart3, GanttChart, FolderOpen,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -101,13 +101,6 @@ function formatDate(dateStr: string) {
   })
 }
 
-function formatDateTime(dateStr: string) {
-  return new Date(dateStr).toLocaleString("zh-TW", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit",
-  })
-}
-
 export default function DemandDetailPage() {
   const { token, user } = useAuth()
   const params = useParams()
@@ -116,8 +109,6 @@ export default function DemandDetailPage() {
 
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [commentText, setCommentText] = useState("")
-  const [submittingComment, setSubmittingComment] = useState(false)
   const [showPlanEditor, setShowPlanEditor] = useState(false)
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
@@ -148,24 +139,6 @@ export default function DemandDetailPage() {
       })
       if (res.ok) router.push("/governance/inbox")
     } catch { /* ignore */ }
-  }
-
-  const handleAddComment = async () => {
-    if (!token || !commentText.trim()) return
-    setSubmittingComment(true)
-    try {
-      const res = await fetch(`/api/demands/${demandId}/comments`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ content: commentText.trim() }),
-      })
-      if (res.ok) {
-        setCommentText("")
-        fetchDemand()
-      }
-    } catch { /* ignore */ } finally {
-      setSubmittingComment(false)
-    }
   }
 
   if (loading) {
@@ -292,22 +265,21 @@ export default function DemandDetailPage() {
           {/* Main Content - Left 2 cols */}
           <div className="lg:col-span-2 space-y-6">
             <Tabs defaultValue="overview">
-              <TabsList>
-                <TabsTrigger value="overview">概覽</TabsTrigger>
-                <TabsTrigger value="gantt">甘特圖</TabsTrigger>
-                <TabsTrigger value="documents">
+              <TabsList className="h-10 p-1 bg-muted/60">
+                <TabsTrigger value="overview" className="gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  概覽
+                </TabsTrigger>
+                <TabsTrigger value="gantt" className="gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <GanttChart className="h-3.5 w-3.5" />
+                  甘特圖
+                </TabsTrigger>
+                <TabsTrigger value="documents" className="gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <FolderOpen className="h-3.5 w-3.5" />
                   文件
                   {demand.documents.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-1">
+                    <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
                       {demand.documents.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="discussion">
-                  討論
-                  {demand.comments.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-1">
-                      {demand.comments.length}
                     </Badge>
                   )}
                 </TabsTrigger>
@@ -414,50 +386,6 @@ export default function DemandDetailPage() {
                 </Card>
               </TabsContent>
 
-              {/* 討論 Tab */}
-              <TabsContent value="discussion" className="mt-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      討論（{demand.comments.length}）
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex gap-2">
-                      <Textarea
-                        placeholder="輸入留言..."
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        className="min-h-[80px]"
-                      />
-                      <Button
-                        size="icon"
-                        className="shrink-0 self-end h-10 w-10"
-                        disabled={!commentText.trim() || submittingComment}
-                        onClick={handleAddComment}
-                      >
-                        {submittingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {demand.comments.length > 0 ? (
-                      <div className="space-y-3">
-                        {demand.comments.map((comment) => (
-                          <div key={comment.id} className="rounded-lg bg-muted/50 p-3 space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">{comment.user.name}</span>
-                              <span className="text-xs text-muted-foreground">{formatDateTime(comment.createdAt)}</span>
-                            </div>
-                            <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-4">尚無留言</p>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
             </Tabs>
           </div>
 
