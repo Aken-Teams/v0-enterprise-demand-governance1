@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import {
   Search, Inbox, Plus, Loader2, Building2,
-  Paperclip, User, MoreHorizontal, Eye, Trash2, ArrowRight,
+  Paperclip, User, MoreHorizontal, Eye, Trash2, Check,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -48,16 +49,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
 }
 
-
-// Valid next statuses for each current status
-const NEXT_STATUSES: Record<string, string[]> = {
-  SUBMITTED: ["PRD_REVIEW", "REJECTED"],
-  PRD_REVIEW: ["SP_REVIEW", "SUBMITTED", "REJECTED"],
-  SP_REVIEW: ["DEVELOPING", "PRD_REVIEW", "REJECTED"],
-  DEVELOPING: ["ACCEPTANCE"],
-  ACCEPTANCE: ["CLOSED", "DEVELOPING"],
-  REJECTED: ["SUBMITTED"],
-}
 
 const TAB_STATUS_MAP: Record<string, string | null> = {
   all: null,
@@ -251,7 +242,6 @@ export default function InboxPage() {
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {demands.map((demand) => {
                     const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
-                    const nextStatuses = NEXT_STATUSES[demand.status] || []
                     return (
                       <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
                         <CardContent className="px-4 py-3 space-y-2">
@@ -304,23 +294,22 @@ export default function InboxPage() {
                                   <Eye className="h-3.5 w-3.5 mr-2" />
                                   查看詳情
                                 </DropdownMenuItem>
-                                {nextStatuses.length > 0 && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    {nextStatuses.map((s) => {
-                                      const info = STATUS_MAP[s] || { label: s, color: "" }
-                                      return (
-                                        <DropdownMenuItem key={s} onClick={() => handleStatusChange(demand.id, s)}>
-                                          <ArrowRight className="h-3.5 w-3.5 mr-2" />
-                                          轉為
-                                          <Badge variant="secondary" className={cn("text-xs px-1.5 py-0 ml-1", info.color)}>
-                                            {info.label}
-                                          </Badge>
-                                        </DropdownMenuItem>
-                                      )
-                                    })}
-                                  </>
-                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                                  修改狀態
+                                </DropdownMenuLabel>
+                                {Object.entries(STATUS_MAP).map(([key, info]) => (
+                                  <DropdownMenuItem
+                                    key={key}
+                                    disabled={key === demand.status}
+                                    onClick={() => handleStatusChange(demand.id, key)}
+                                  >
+                                    {key === demand.status && <Check className="h-3.5 w-3.5 mr-2" />}
+                                    <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", key !== demand.status && "ml-5.5", info.color)}>
+                                      {info.label}
+                                    </Badge>
+                                  </DropdownMenuItem>
+                                ))}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-destructive focus:text-destructive"
