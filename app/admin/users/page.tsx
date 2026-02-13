@@ -1,544 +1,382 @@
 "use client"
 
 import { AppLayout } from "@/components/app-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Search, Users, Shield, UserCheck, Edit, Trash2, UserPlus, Settings } from "lucide-react"
-import { useState } from "react"
+import { Users, Shield, UserCheck, Edit, Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { useAuth } from "@/hooks/use-auth"
 
-interface User {
+interface UserRow {
   id: string
   name: string
   email: string
-  role: "subsidiary" | "admin"
-  organization: string
-  status: "active" | "inactive"
-  lastLogin: string
+  role: string
+  roleLabel: string
+  isActive: boolean
+  organizationId: string | null
+  organizationName: string | null
   createdAt: string
 }
 
-interface Role {
-  id: string
-  name: string
-  description: string
-  permissions: string[]
-  users: number
-  type: "system" | "custom"
+interface Summary {
+  totalUsers: number
+  activeUsers: number
+  roleCounts: Record<string, number>
 }
 
-interface Organization {
+interface OrgOption {
   id: string
   name: string
 }
 
-const organizations: Organization[] = [
-  { id: "panjit", name: "強茂" },
-  { id: "panjit-tech", name: "璟茂科技" },
-  { id: "ymoptics", name: "熒茂光學" },
-  { id: "panjit-wuxi", name: "強茂電子（無錫）" },
-  { id: "panjit-xuzhou", name: "強茂半導體（徐州）" },
-  { id: "panjit-shandong", name: "山東強茂電子" },
-  { id: "hge", name: "虹冠電子工業" },
-  { id: "system", name: "系統" },
-]
-
-const initialUsers: User[] = [
-  { id: "1", name: "王小明", email: "wang@panjit.com", role: "subsidiary", organization: "強茂", status: "active", lastLogin: "2024-12-24", createdAt: "2024-01-01" },
-  { id: "2", name: "李小華", email: "lee@panjit-tech.com", role: "subsidiary", organization: "璟茂科技", status: "active", lastLogin: "2024-12-23", createdAt: "2024-01-15" },
-  { id: "3", name: "張小美", email: "zhang@ymoptics.com", role: "subsidiary", organization: "熒茂光學", status: "active", lastLogin: "2024-12-24", createdAt: "2024-02-01" },
-  { id: "4", name: "陳小強", email: "chen@panjit-wuxi.com", role: "subsidiary", organization: "強茂電子（無錫）", status: "active", lastLogin: "2024-12-22", createdAt: "2024-01-01" },
-  { id: "5", name: "林管理", email: "admin@system.com", role: "admin", organization: "系統", status: "active", lastLogin: "2024-12-24", createdAt: "2024-01-01" },
-]
-
-const initialRoles: Role[] = [
-  { id: "1", name: "子公司使用者", description: "子公司員工，可提交需求並查看進度", permissions: ["submit_demand", "view_own_demands", "view_sp_wallet"], users: 20, type: "system" },
-  { id: "2", name: "系統管理員", description: "系統設定與使用者管理", permissions: ["manage_users", "manage_organizations", "manage_permissions", "system_settings", "evaluate_demands"], users: 1, type: "system" },
-]
-
-const roleLabels: Record<string, string> = {
-  subsidiary: "子公司使用者",
-  admin: "系統管理員"
+const ROLE_LABELS: Record<string, string> = {
+  admin: "管理員",
+  delivery: "交付團隊",
+  subsidiary: "需求單位",
 }
+
+const ROLE_BADGE_COLORS: Record<string, string> = {
+  admin: "border-amber-300 text-amber-600",
+  delivery: "border-emerald-300 text-emerald-600",
+  subsidiary: "border-blue-300 text-blue-600",
+}
+
+const PAGE_SIZE = 10
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(initialUsers)
-  const [roles, setRoles] = useState<Role[]>(initialRoles)
-  const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false)
-  const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false)
-  const [isCreateRoleDialogOpen, setIsCreateRoleDialogOpen] = useState(false)
-  const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [userFormData, setUserFormData] = useState({
-    name: "",
-    email: "",
-    role: "subsidiary" as User["role"],
-    organization: "",
-    status: "active" as "active" | "inactive"
-  })
-  const [roleFormData, setRoleFormData] = useState({
-    name: "",
-    description: "",
-    permissions: [] as string[]
-  })
+  const { token } = useAuth()
+  const [loading, setLoading] = useState(true)
+  const [users, setUsers] = useState<UserRow[]>([])
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [organizations, setOrganizations] = useState<OrgOption[]>([])
+  const [editUser, setEditUser] = useState<UserRow | null>(null)
+  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", isActive: true, organizationId: "" })
+  const [saving, setSaving] = useState(false)
 
-  const handleCreateUser = () => {
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: userFormData.name,
-      email: userFormData.email,
-      role: userFormData.role,
-      organization: userFormData.organization,
-      status: userFormData.status,
-      lastLogin: "-",
-      createdAt: new Date().toISOString().split('T')[0]
+  // Filter & pagination
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterRole, setFilterRole] = useState("all")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [page, setPage] = useState(1)
+
+  const fetchData = useCallback(async () => {
+    if (!token) return
+    try {
+      const [usersRes, orgsRes] = await Promise.all([
+        fetch("/api/admin/users", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/organizations", { headers: { Authorization: `Bearer ${token}` } }),
+      ])
+      const usersData = await usersRes.json()
+      const orgsData = await orgsRes.json()
+      if (usersRes.ok) {
+        setUsers(usersData.users)
+        setSummary(usersData.summary)
+      }
+      if (orgsRes.ok) {
+        setOrganizations(orgsData.organizations)
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false)
     }
-    setUsers([...users, newUser])
-    setUserFormData({ name: "", email: "", role: "subsidiary", organization: "", status: "active" })
-    setIsCreateUserDialogOpen(false)
-  }
+  }, [token])
 
-  const handleEditUser = () => {
-    if (!editingUser) return
-    const updatedUsers = users.map(user => 
-      user.id === editingUser.id 
-        ? { ...user, ...userFormData }
-        : user
-    )
-    setUsers(updatedUsers)
-    setEditingUser(null)
-    setUserFormData({ name: "", email: "", role: "subsidiary", organization: "", status: "active" })
-    setIsEditUserDialogOpen(false)
-  }
+  useEffect(() => { fetchData() }, [fetchData])
 
-  const handleDeleteUser = (id: string) => {
-    setUsers(users.filter(user => user.id !== id))
-  }
+  // Filtered users
+  const filtered = useMemo(() => {
+    let list = users
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      list = list.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.organizationName || "").toLowerCase().includes(q))
+    }
+    if (filterRole !== "all") {
+      list = list.filter((u) => u.role === filterRole)
+    }
+    if (filterStatus !== "all") {
+      list = list.filter((u) => (filterStatus === "active" ? u.isActive : !u.isActive))
+    }
+    return list
+  }, [users, searchQuery, filterRole, filterStatus])
 
-  const openEditUserDialog = (user: User) => {
-    setEditingUser(user)
-    setUserFormData({
+  // Reset page when filters change
+  useEffect(() => { setPage(1) }, [searchQuery, filterRole, filterStatus])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const openEdit = (user: UserRow) => {
+    setEditUser(user)
+    setEditForm({
       name: user.name,
       email: user.email,
       role: user.role,
-      organization: user.organization,
-      status: user.status
+      isActive: user.isActive,
+      organizationId: user.organizationId || "",
     })
-    setIsEditUserDialogOpen(true)
   }
+
+  const handleSave = async () => {
+    if (!token || !editUser) return
+    setSaving(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editUser.id,
+          name: editForm.name,
+          email: editForm.email,
+          role: editForm.role,
+          isActive: editForm.isActive,
+          organizationId: editForm.organizationId || null,
+        }),
+      })
+      if (res.ok) {
+        setEditUser(null)
+        fetchData()
+      }
+    } catch { /* ignore */ } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <AppLayout userRole="admin">
+        <div className="flex items-center justify-center py-32">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    )
+  }
+
+  const roleCount = summary?.roleCounts ?? {}
+  const hasFilters = searchQuery || filterRole !== "all" || filterStatus !== "all"
 
   return (
     <AppLayout userRole="admin">
       <div className="space-y-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">使用者與角色管理</h1>
-            <p className="text-muted-foreground">管理系統使用者、角色權限與組織分配</p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">帳號管理</h1>
+          <p className="text-muted-foreground">管理系統使用者帳號與角色分配</p>
         </div>
 
         {/* Summary */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">總使用者數</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">{users.length}</div>
-              <p className="text-xs text-muted-foreground">啟用: {users.filter(u => u.status === "active").length}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">系統角色</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">{roles.length}</div>
-              <p className="text-xs text-muted-foreground">系統: {roles.filter(r => r.type === "system").length}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">活躍使用者</CardTitle>
-              <UserPlus className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">
-                {users.filter(u => u.lastLogin !== "-").length}
+        {summary && (
+          <div className="grid gap-4 md:grid-cols-4">
+            {[
+              { label: "總使用者", sub: `啟用 ${summary.activeUsers}`, value: summary.totalUsers, color: "border-blue-500", icon: Users },
+              { label: "管理員", sub: "系統管理角色", value: roleCount.admin || 0, color: "border-amber-500", icon: Shield },
+              { label: "交付團隊", sub: "開發與交付", value: roleCount.delivery || 0, color: "border-emerald-500", icon: UserCheck },
+              { label: "需求單位", sub: "子公司使用者", value: roleCount.subsidiary || 0, color: "border-violet-500", icon: Users },
+            ].map((item) => (
+              <div key={item.label} className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}>
+                <span className="text-3xl font-bold">{item.value}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <p className="font-medium text-sm">{item.label}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{item.sub}</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">本週登入</p>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
+        )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">權限配置</CardTitle>
-              <Settings className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">
-                {roles.reduce((sum, role) => sum + role.permissions.length, 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">總權限數</p>
-            </CardContent>
-          </Card>
+        {/* Filter Bar */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg bg-muted/50 p-3">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="搜尋姓名、信箱或組織..."
+              className="pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={filterRole} onValueChange={setFilterRole}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue placeholder="角色" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部角色</SelectItem>
+                <SelectItem value="admin">管理員</SelectItem>
+                <SelectItem value="delivery">交付團隊</SelectItem>
+                <SelectItem value="subsidiary">需求單位</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="狀態" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部狀態</SelectItem>
+                <SelectItem value="active">啟用</SelectItem>
+                <SelectItem value="inactive">停用</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasFilters && (
+              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setSearchQuery(""); setFilterRole("all"); setFilterStatus("all") }}>
+                清除篩選
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="users" className="w-full">
-          <TabsList>
-            <TabsTrigger value="users">使用者管理</TabsTrigger>
-            <TabsTrigger value="roles">角色管理</TabsTrigger>
-          </TabsList>
+        {/* Users Table */}
+        <Card>
+          <CardContent className="pt-6">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>使用者</TableHead>
+                  <TableHead className="text-center">角色</TableHead>
+                  <TableHead className="text-center">組織</TableHead>
+                  <TableHead className="text-center">狀態</TableHead>
+                  <TableHead className="text-center">建立時間</TableHead>
+                  <TableHead className="text-center">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paged.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      無符合條件的使用者
+                    </TableCell>
+                  </TableRow>
+                ) : paged.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{user.name}</div>
+                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className={ROLE_BADGE_COLORS[user.role] || ""}>
+                        {ROLE_LABELS[user.role] || user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">{user.organizationName || "-"}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge
+                        variant={user.isActive ? "outline" : "secondary"}
+                        className={user.isActive ? "border-emerald-300 text-emerald-600" : ""}
+                      >
+                        {user.isActive ? "啟用" : "停用"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center text-sm text-muted-foreground">
+                      {new Date(user.createdAt).toLocaleDateString("zh-TW")}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(user)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
 
-          <TabsContent value="users" className="space-y-4">
-            <div className="flex justify-between">
-              <h3 className="text-lg font-semibold">使用者列表</h3>
-              <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    新增使用者
+            {/* Pagination */}
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between border-t pt-4 mt-4">
+                <p className="text-sm text-muted-foreground">
+                  共 {filtered.length} 筆，第 {page}/{totalPages} 頁
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>新增使用者</DialogTitle>
-                    <DialogDescription>建立新的系統使用者帳號</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="user-name">姓名</Label>
-                      <Input
-                        id="user-name"
-                        value={userFormData.name}
-                        onChange={(e) => setUserFormData({ ...userFormData, name: e.target.value })}
-                        placeholder="輸入使用者姓名"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="user-email">電子郵件</Label>
-                      <Input
-                        id="user-email"
-                        type="email"
-                        value={userFormData.email}
-                        onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
-                        placeholder="輸入電子郵件"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="user-role">角色</Label>
-                      <Select value={userFormData.role} onValueChange={(value: User["role"]) => setUserFormData({ ...userFormData, role: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="subsidiary">子公司使用者</SelectItem>
-                          <SelectItem value="admin">系統管理員</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="user-org">組織</Label>
-                      <Select value={userFormData.organization} onValueChange={(value) => setUserFormData({ ...userFormData, organization: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="選擇組織" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {organizations.map((org) => (
-                            <SelectItem key={org.id} value={org.name}>
-                              {org.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="user-status">狀態</Label>
-                      <Select value={userFormData.status} onValueChange={(value: "active" | "inactive") => setUserFormData({ ...userFormData, status: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">啟用</SelectItem>
-                          <SelectItem value="inactive">停用</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="outline" onClick={() => setIsCreateUserDialogOpen(false)}>
-                        取消
-                      </Button>
-                      <Button onClick={handleCreateUser}>
-                        建立使用者
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            <Card>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>使用者</TableHead>
-                      <TableHead>角色</TableHead>
-                      <TableHead>組織</TableHead>
-                      <TableHead>狀態</TableHead>
-                      <TableHead>最後登入</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          <div>
-                            <div className="font-medium">{user.name}</div>
-                            <div className="text-sm text-muted-foreground">{user.email}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {roleLabels[user.role]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{user.organization}</TableCell>
-                        <TableCell>
-                          <Badge variant={user.status === "active" ? "outline" : "secondary"} 
-                                 className={user.status === "active" ? "border-chart-3 text-chart-3" : ""}>
-                            {user.status === "active" ? "啟用" : "停用"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{user.lastLogin}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(user)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>確認刪除</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    您確定要刪除使用者「{user.name}」嗎？此操作無法復原。
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>取消</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>
-                                    刪除
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="roles" className="space-y-4">
-            <div className="flex justify-between">
-              <h3 className="text-lg font-semibold">角色列表</h3>
-              <Dialog open={isCreateRoleDialogOpen} onOpenChange={setIsCreateRoleDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    新增角色
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <Button
+                      key={p}
+                      variant={p === page ? "default" : "outline"}
+                      size="sm"
+                      className="w-8"
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </Button>
+                  ))}
+                  <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>新增角色</DialogTitle>
-                    <DialogDescription>建立新的系統角色</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="role-name">角色名稱</Label>
-                      <Input
-                        id="role-name"
-                        value={roleFormData.name}
-                        onChange={(e) => setRoleFormData({ ...roleFormData, name: e.target.value })}
-                        placeholder="輸入角色名稱"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="role-description">描述</Label>
-                      <Input
-                        id="role-description"
-                        value={roleFormData.description}
-                        onChange={(e) => setRoleFormData({ ...roleFormData, description: e.target.value })}
-                        placeholder="角色描述"
-                      />
-                    </div>
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="outline" onClick={() => setIsCreateRoleDialogOpen(false)}>
-                        取消
-                      </Button>
-                      <Button onClick={() => {
-                        const newRole: Role = {
-                          id: Date.now().toString(),
-                          name: roleFormData.name,
-                          description: roleFormData.description,
-                          permissions: [],
-                          users: 0,
-                          type: "custom"
-                        }
-                        setRoles([...roles, newRole])
-                        setRoleFormData({ name: "", description: "", permissions: [] })
-                        setIsCreateRoleDialogOpen(false)
-                      }}>
-                        建立角色
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-            <Card>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>角色名稱</TableHead>
-                      <TableHead>描述</TableHead>
-                      <TableHead>權限數量</TableHead>
-                      <TableHead>使用者數</TableHead>
-                      <TableHead>類型</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {roles.map((role) => (
-                      <TableRow key={role.id}>
-                        <TableCell className="font-medium">{role.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{role.description}</TableCell>
-                        <TableCell>{role.permissions.length}</TableCell>
-                        <TableCell>{role.users}</TableCell>
-                        <TableCell>
-                          <Badge variant={role.type === "system" ? "default" : "outline"}>
-                            {role.type === "system" ? "系統" : "自訂"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {role.type === "custom" && (
-                              <Button variant="ghost" size="sm">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* Edit User Dialog */}
-        <Dialog open={isEditUserDialogOpen} onOpenChange={setIsEditUserDialogOpen}>
-          <DialogContent>
+        {/* Edit Dialog */}
+        <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>編輯使用者</DialogTitle>
-              <DialogDescription>修改使用者資訊</DialogDescription>
+              <DialogDescription>修改「{editUser?.name}」的帳號資訊</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="edit-user-name">姓名</Label>
-                <Input
-                  id="edit-user-name"
-                  value={userFormData.name}
-                  onChange={(e) => setUserFormData({ ...userFormData, name: e.target.value })}
-                  placeholder="輸入使用者姓名"
-                />
+            {editUser && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>姓名</Label>
+                  <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>電子郵件</Label>
+                  <Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>角色</Label>
+                  <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">管理員</SelectItem>
+                      <SelectItem value="delivery">交付團隊</SelectItem>
+                      <SelectItem value="subsidiary">需求單位</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>組織</Label>
+                  <Select value={editForm.organizationId || "none"} onValueChange={(v) => setEditForm({ ...editForm, organizationId: v === "none" ? "" : v })}>
+                    <SelectTrigger><SelectValue placeholder="選擇組織" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">無</SelectItem>
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>狀態</Label>
+                  <Select value={editForm.isActive ? "active" : "inactive"} onValueChange={(v) => setEditForm({ ...editForm, isActive: v === "active" })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">啟用</SelectItem>
+                      <SelectItem value="inactive">停用</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setEditUser(null)}>取消</Button>
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    儲存
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="edit-user-email">電子郵件</Label>
-                <Input
-                  id="edit-user-email"
-                  type="email"
-                  value={userFormData.email}
-                  onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
-                  placeholder="輸入電子郵件"
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-user-role">角色</Label>
-                <Select value={userFormData.role} onValueChange={(value: User["role"]) => setUserFormData({ ...userFormData, role: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="subsidiary">子公司使用者</SelectItem>
-                    <SelectItem value="admin">系統管理員</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit-user-org">組織</Label>
-                <Select value={userFormData.organization} onValueChange={(value) => setUserFormData({ ...userFormData, organization: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="選擇組織" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {organizations.map((org) => (
-                      <SelectItem key={org.id} value={org.name}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit-user-status">狀態</Label>
-                <Select value={userFormData.status} onValueChange={(value: "active" | "inactive") => setUserFormData({ ...userFormData, status: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">啟用</SelectItem>
-                    <SelectItem value="inactive">停用</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsEditUserDialogOpen(false)}>
-                  取消
-                </Button>
-                <Button onClick={handleEditUser}>
-                  儲存變更
-                </Button>
-              </div>
-            </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
