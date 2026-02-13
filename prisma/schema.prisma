@@ -154,10 +154,11 @@ model Demand {
   demandNumber    String         @unique /// REQ-YYYY-NNN 自動產生
   title           String
   description     String         @db.Text
-  businessPurpose String?        @db.Text
+  painPoint       String?        @db.Text /// 痛點說明
+  expectedBenefit String?        @db.Text /// 預期效益
   status          DemandStatus   @default(SUBMITTED)
   priority        DemandPriority @default(medium)
-  estimatedSp     Int? /// 初步 SP 估點
+  estimatedSp     Int /// 初步 SP 估點
   confirmedSp     Int? /// CEO 確認 SP
   desiredDate     DateTime? /// 希望完成時間
   expectedDate    DateTime? /// 預計完成時間

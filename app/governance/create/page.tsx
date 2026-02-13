@@ -42,11 +42,13 @@ export default function CreateDemandPage() {
   const [selectedSubsidiary, setSelectedSubsidiary] = useState("")
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [purpose, setPurpose] = useState("")
+  const [painPoint, setPainPoint] = useState("")
+  const [expectedBenefit, setExpectedBenefit] = useState("")
+  const [estimatedSp, setEstimatedSp] = useState("")
 
   const canNext = () => {
     if (currentStep === 1) return selectedSubsidiary !== "" && title.trim() !== ""
-    if (currentStep === 2) return description.trim() !== "" && purpose.trim() !== ""
+    if (currentStep === 2) return description.trim() !== "" && painPoint.trim() !== "" && estimatedSp.trim() !== ""
     return true
   }
 
@@ -114,7 +116,7 @@ export default function CreateDemandPage() {
             {currentStep === 1 && (
               <div className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="subsidiary">需求所屬子公司 *</Label>
+                  <Label htmlFor="subsidiary" className="text-base">需求所屬子公司 <span className="text-red-500">*</span></Label>
                   <Select value={selectedSubsidiary} onValueChange={setSelectedSubsidiary}>
                     <SelectTrigger className="h-11 w-full">
                       <div className="flex items-center gap-2">
@@ -133,7 +135,7 @@ export default function CreateDemandPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="title">需求標題 *</Label>
+                  <Label htmlFor="title" className="text-base">需求標題 <span className="text-red-500">*</span></Label>
                   <Input
                     id="title"
                     placeholder="例如：客戶管理系統新增匯出功能"
@@ -149,7 +151,7 @@ export default function CreateDemandPage() {
             {currentStep === 2 && (
               <div className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="description">需求說明 *</Label>
+                  <Label htmlFor="description" className="text-base">需求說明 <span className="text-red-500">*</span></Label>
                   <Textarea
                     id="description"
                     placeholder="詳細描述需求的內容、範圍和具體要求..."
@@ -161,15 +163,40 @@ export default function CreateDemandPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="purpose">商業目的 / 預期效益 *</Label>
+                  <Label htmlFor="painPoint" className="text-base">痛點說明 <span className="text-red-500">*</span></Label>
                   <Textarea
-                    id="purpose"
-                    placeholder="說明此需求對業務的價值，預期帶來的效益..."
+                    id="painPoint"
+                    placeholder="目前遇到什麼問題？對業務造成什麼影響？..."
                     className="min-h-[100px]"
-                    value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
+                    value={painPoint}
+                    onChange={(e) => setPainPoint(e.target.value)}
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="expectedBenefit" className="text-base">預期效益</Label>
+                  <Textarea
+                    id="expectedBenefit"
+                    placeholder="解決後預期帶來的效益、改善程度..."
+                    className="min-h-[80px]"
+                    value={expectedBenefit}
+                    onChange={(e) => setExpectedBenefit(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="sp" className="text-base">SP 估點 <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="sp"
+                    type="number"
+                    placeholder="例如：13"
+                    min={1}
+                    value={estimatedSp}
+                    onChange={(e) => setEstimatedSp(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">初步 Story Points 估算</p>
                 </div>
               </div>
             )}
@@ -177,35 +204,27 @@ export default function CreateDemandPage() {
             {/* Step 3: 補充資訊 */}
             {currentStep === 3 && (
               <div className="space-y-5">
-                <div className="grid gap-5 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="sp">初步 SP 估點</Label>
-                    <Input id="sp" type="number" placeholder="例如：13" min={1} />
-                    <p className="text-xs text-muted-foreground">初步 Story Points 估算</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>希望完成時間</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {date ? date.toLocaleDateString("zh-TW") : "選擇日期"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                    <p className="text-xs text-muted-foreground">參考時間，不具約束力</p>
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-base">希望完成時間</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? date.toLocaleDateString("zh-TW") : "選擇日期"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-muted-foreground">參考時間，不具約束力</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="attachments">附件上傳</Label>
+                  <Label htmlFor="attachments" className="text-base">附件上傳</Label>
                   <Button type="button" variant="outline" className="w-full bg-transparent">
                     <Upload className="mr-2 h-4 w-4" />
                     選擇檔案
@@ -214,7 +233,7 @@ export default function CreateDemandPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">管理者備註</Label>
+                  <Label htmlFor="notes" className="text-base">管理者備註</Label>
                   <Textarea
                     id="notes"
                     placeholder="內部備註，僅管理者可見..."
