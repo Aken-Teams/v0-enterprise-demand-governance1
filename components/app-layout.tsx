@@ -121,8 +121,12 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
     if (pathname.startsWith("/governance")) return "admin"
     if (pathname.startsWith("/delivery")) return "delivery"
     if (pathname.startsWith("/subsidiary")) return "subsidiary"
+    // Shared pages (/documents etc.): use actual user role
+    if (user?.role && ["admin", "delivery", "subsidiary"].includes(user.role)) {
+      return user.role as UserRole
+    }
     return userRole || "subsidiary"
-  }, [pathname, userRole])
+  }, [pathname, userRole, user?.role])
 
   const visibleSections = React.useMemo(() => 
     navSections.filter((section) => section.roles.includes(detectedRole)),
