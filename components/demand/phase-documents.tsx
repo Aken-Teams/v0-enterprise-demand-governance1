@@ -89,6 +89,7 @@ export function PhaseDocuments({
   const [uploadPhase, setUploadPhase] = useState(currentPhase)
   const [uploadType, setUploadType] = useState("ATTACHMENT")
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
@@ -126,6 +127,7 @@ export function PhaseDocuments({
   const handleUpload = async () => {
     if (!token || selectedFiles.length === 0) return
     setUploading(true)
+    setUploadError("")
     try {
       const formData = new FormData()
       formData.set("phase", uploadPhase)
@@ -141,9 +143,15 @@ export function PhaseDocuments({
       if (res.ok) {
         setShowUploadDialog(false)
         setSelectedFiles([])
+        setUploadError("")
         onRefresh()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setUploadError(data.error || `上傳失敗 (${res.status})`)
       }
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "網路錯誤")
+    } finally {
       setUploading(false)
     }
   }
@@ -350,6 +358,9 @@ export function PhaseDocuments({
               </Button>
             </div>
           </div>
+          {uploadError && (
+            <p className="text-sm text-destructive font-medium">{uploadError}</p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowUploadDialog(false)}>取消</Button>
             <Button onClick={handleUpload} disabled={selectedFiles.length === 0 || uploading}>

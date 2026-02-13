@@ -25,6 +25,14 @@ const ALLOWED_MIME_TYPES = new Set([
   "video/mp4",
   "video/webm",
   "video/ogg",
+  "application/octet-stream", // fallback for .md etc. on Windows
+])
+
+// Extensions allowed when MIME is application/octet-stream
+const ALLOWED_EXTENSIONS = new Set([
+  "md", "txt", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "jpg", "jpeg", "png", "gif", "webp",
+  "mp3", "wav", "ogg", "mp4", "webm",
 ])
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB for audio/video
@@ -101,6 +109,16 @@ export async function POST(
           { error: `檔案 "${file.name}" 格式不支援 (${file.type})` },
           { status: 400 }
         )
+      }
+      // For octet-stream, verify by file extension
+      if (file.size > 0 && file.type === "application/octet-stream") {
+        const ext = file.name.split(".").pop()?.toLowerCase() || ""
+        if (!ALLOWED_EXTENSIONS.has(ext)) {
+          return NextResponse.json(
+            { error: `檔案 "${file.name}" 格式不支援 (.${ext})` },
+            { status: 400 }
+          )
+        }
       }
     }
 
