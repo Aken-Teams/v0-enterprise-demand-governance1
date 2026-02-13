@@ -212,11 +212,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
     const search = searchParams.get("search")?.trim()
+    const submitterId = searchParams.get("submitterId")
+    const developerId = searchParams.get("developerId")
 
     // Build where clause
     const where: Record<string, unknown> = {}
     if (status && VALID_STATUSES.has(status)) {
       where.status = status
+    }
+    if (submitterId) {
+      where.submitterId = submitterId
+    }
+    if (developerId) {
+      where.developerId = developerId === "unassigned" ? null : developerId
     }
     if (search) {
       where.OR = [
@@ -226,8 +234,8 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    // Fetch demands + counts in parallel
-    const [demands, total, counts] = await Promise.all([
+    // Fetch demands, counts, and filter options in parallel
+    const [demands, total, counts, submitters, developers] = await Promise.all([
       prisma.demand.findMany({
         where,
         include: {
@@ -243,6 +251,16 @@ export async function GET(request: NextRequest) {
       prisma.demand.groupBy({
         by: ["status"],
         _count: { _all: true },
+      }),
+      prisma.user.findMany({
+        where: { isActive: true, role: "subsidiary" },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.user.findMany({
+        where: { isActive: true, role: { in: ["admin", "delivery"] } },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
       }),
     ])
 
@@ -272,6 +290,10 @@ export async function GET(request: NextRequest) {
       })),
       total,
       statusCounts,
+      filters: {
+        submitters: submitters.map((u) => ({ id: u.id, name: u.name })),
+        developers: developers.map((u) => ({ id: u.id, name: u.name })),
+      },
     })
   } catch (error) {
     if (error instanceof AuthError) {

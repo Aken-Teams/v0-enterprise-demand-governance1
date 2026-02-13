@@ -4,8 +4,10 @@ import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -39,6 +41,11 @@ interface Demand {
   commentCount: number
 }
 
+interface FilterOption {
+  id: string
+  name: string
+}
+
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700" },
   PRD_REVIEW: { label: "MVP 架構確認", color: "bg-amber-100 text-amber-700" },
@@ -49,18 +56,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
 }
 
-
-const TAB_STATUS_MAP: Record<string, string | null> = {
-  all: null,
-  submitted: "SUBMITTED",
-  prd_review: "PRD_REVIEW",
-  sp_review: "SP_REVIEW",
-  developing: "DEVELOPING",
-  acceptance: "ACCEPTANCE",
-  closed: "CLOSED",
-  rejected: "REJECTED",
-}
-
 export default function InboxPage() {
   const { token } = useAuth()
   const router = useRouter()
@@ -68,9 +63,13 @@ export default function InboxPage() {
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [filterSubmitter, setFilterSubmitter] = useState("all")
+  const [filterDeveloper, setFilterDeveloper] = useState("all")
+  const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
+  const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
 
   // Debounce search
   useEffect(() => {
@@ -83,8 +82,9 @@ export default function InboxPage() {
     if (showLoading) setLoading(true)
     try {
       const params = new URLSearchParams()
-      const status = TAB_STATUS_MAP[activeTab]
-      if (status) params.set("status", status)
+      if (filterStatus !== "all") params.set("status", filterStatus)
+      if (filterSubmitter !== "all") params.set("submitterId", filterSubmitter)
+      if (filterDeveloper !== "all") params.set("developerId", filterDeveloper)
       if (debouncedSearch) params.set("search", debouncedSearch)
 
       const res = await fetch(`/api/demands?${params}`, {
@@ -95,13 +95,17 @@ export default function InboxPage() {
         setDemands(data.demands)
         setTotal(data.total)
         setStatusCounts(data.statusCounts)
+        if (data.filters) {
+          setSubmitterOptions(data.filters.submitters)
+          setDeveloperOptions(data.filters.developers)
+        }
       }
     } catch {
       // ignore
     } finally {
       setLoading(false)
     }
-  }, [token, activeTab, debouncedSearch])
+  }, [token, filterStatus, filterSubmitter, filterDeveloper, debouncedSearch])
 
   useEffect(() => {
     fetchDemands(true)
@@ -133,6 +137,7 @@ export default function InboxPage() {
   const getCount = (status: string) => statusCounts[status] || 0
   const confirmStage = getCount("SUBMITTED") + getCount("PRD_REVIEW") + getCount("SP_REVIEW")
   const devStage = getCount("DEVELOPING") + getCount("ACCEPTANCE")
+  const hasActiveFilters = filterStatus !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all"
 
   return (
     <AppLayout userRole="admin">
@@ -190,154 +195,191 @@ export default function InboxPage() {
           </Card>
         </div>
 
-        {/* Tabs + List */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <TabsList>
-              <TabsTrigger value="all">全部 ({total})</TabsTrigger>
-              <TabsTrigger value="submitted">需求確認 ({getCount("SUBMITTED")})</TabsTrigger>
-              <TabsTrigger value="prd_review">MVP 架構確認 ({getCount("PRD_REVIEW")})</TabsTrigger>
-              <TabsTrigger value="sp_review">開案確認 ({getCount("SP_REVIEW")})</TabsTrigger>
-              <TabsTrigger value="developing">開發中 ({getCount("DEVELOPING")})</TabsTrigger>
-              <TabsTrigger value="acceptance">驗收中 ({getCount("ACCEPTANCE")})</TabsTrigger>
-              <TabsTrigger value="closed">已結案 ({getCount("CLOSED")})</TabsTrigger>
-              <TabsTrigger value="rejected">已駁回 ({getCount("REJECTED")})</TabsTrigger>
-            </TabsList>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="搜尋需求標題、編號或子公司..."
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+        {/* Filter Bar: search left, filters right */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg bg-muted/50 p-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="搜尋需求標題、編號或子公司..."
+              className="pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
+          <div className="flex items-center gap-2">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="狀態" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部狀態</SelectItem>
+                {Object.entries(STATUS_MAP).map(([key, info]) => (
+                  <SelectItem key={key} value={key}>
+                    {info.label} ({getCount(key)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterSubmitter} onValueChange={setFilterSubmitter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="需求者" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部需求者</SelectItem>
+                {submitterOptions.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="開發者" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部開發者</SelectItem>
+                <SelectItem value="unassigned">尚未指派</SelectItem>
+                {developerOptions.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => {
+                  setFilterStatus("all")
+                  setFilterSubmitter("all")
+                  setFilterDeveloper("all")
+                }}
+              >
+                清除篩選
+              </Button>
+            )}
+          </div>
+        </div>
 
-          {Object.keys(TAB_STATUS_MAP).map((tab) => (
-            <TabsContent key={tab} value={tab}>
-              {loading ? (
-                <Card>
-                  <CardContent className="flex items-center justify-center py-16">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    <span className="ml-2 text-muted-foreground">載入中...</span>
-                  </CardContent>
-                </Card>
-              ) : demands.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <Inbox className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                    <p className="text-muted-foreground">尚無資料</p>
-                    {tab === "all" && !debouncedSearch && (
-                      <Button variant="outline" className="mt-4" asChild>
-                        <Link href="/governance/create">
-                          <Plus className="mr-2 h-4 w-4" />
-                          建立第一筆需求
-                        </Link>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {demands.map((demand) => {
-                    const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
-                    return (
-                      <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
-                        <CardContent className="px-4 py-3 space-y-2">
-                          {/* Row 1: number + status */}
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
-                            <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
-                              {statusInfo.label}
-                            </Badge>
-                          </div>
-
-                          {/* Title */}
-                          <p className="font-semibold leading-snug line-clamp-2">{demand.title}</p>
-
-                          <hr className="border-border/60" />
-
-                          {/* Meta row + actions */}
-                          <div className="flex items-center justify-between text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <span className="flex items-center gap-1">
-                                <Building2 className="h-3.5 w-3.5" />
-                                {demand.organization}
-                              </span>
-                              <span>·</span>
-                              <span>{demand.estimatedSp} SP</span>
-                              {demand.documentCount > 0 && (
-                                <>
-                                  <span>·</span>
-                                  <span className="flex items-center gap-1">
-                                    <Paperclip className="h-3.5 w-3.5" />
-                                    {demand.documentCount}
-                                  </span>
-                                </>
-                              )}
-                              <span>·</span>
-                              <span className="flex items-center gap-1">
-                                <User className="h-3.5 w-3.5" />
-                                {demand.developer || "尚未指派"}
-                              </span>
-                            </div>
-
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="max-h-none overflow-visible">
-                                <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
-                                  <Eye className="h-3.5 w-3.5 mr-2" />
-                                  查看詳情
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuSub>
-                                  <DropdownMenuSubTrigger>
-                                    <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                                    修改狀態
-                                  </DropdownMenuSubTrigger>
-                                  <DropdownMenuSubContent className="max-h-none overflow-visible">
-                                    {Object.entries(STATUS_MAP).map(([key, info]) => (
-                                      <DropdownMenuItem
-                                        key={key}
-                                        disabled={key === demand.status}
-                                        onClick={() => handleStatusChange(demand.id, key)}
-                                        className="gap-2"
-                                      >
-                                        {key === demand.status
-                                          ? <Check className="h-3.5 w-3.5 shrink-0" />
-                                          : <span className="w-3.5 shrink-0" />}
-                                        <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", info.color)}>
-                                          {info.label}
-                                        </Badge>
-                                      </DropdownMenuItem>
-                                    ))}
-                                  </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => handleDelete(demand.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                  刪除需求
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
+        {/* Demand List */}
+        {loading ? (
+          <Card>
+            <CardContent className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground">載入中...</span>
+            </CardContent>
+          </Card>
+        ) : demands.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <Inbox className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground">尚無資料</p>
+              {!debouncedSearch && !hasActiveFilters && (
+                <Button variant="outline" className="mt-4" asChild>
+                  <Link href="/governance/create">
+                    <Plus className="mr-2 h-4 w-4" />
+                    建立第一筆需求
+                  </Link>
+                </Button>
               )}
-            </TabsContent>
-          ))}
-        </Tabs>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {demands.map((demand) => {
+              const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+              return (
+                <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
+                  <CardContent className="px-4 py-3 space-y-2">
+                    {/* Row 1: number + status */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
+                      <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
+                        {statusInfo.label}
+                      </Badge>
+                    </div>
+
+                    {/* Title */}
+                    <p className="font-semibold leading-snug line-clamp-2">{demand.title}</p>
+
+                    <hr className="border-border/60" />
+
+                    {/* Meta row + actions */}
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3.5 w-3.5" />
+                          {demand.organization}
+                        </span>
+                        <span>·</span>
+                        <span>{demand.estimatedSp} SP</span>
+                        {demand.documentCount > 0 && (
+                          <>
+                            <span>·</span>
+                            <span className="flex items-center gap-1">
+                              <Paperclip className="h-3.5 w-3.5" />
+                              {demand.documentCount}
+                            </span>
+                          </>
+                        )}
+                        <span>·</span>
+                        <span className="flex items-center gap-1">
+                          <User className="h-3.5 w-3.5" />
+                          {demand.developer || "尚未指派"}
+                        </span>
+                      </div>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="max-h-none overflow-visible">
+                          <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
+                            <Eye className="h-3.5 w-3.5 mr-2" />
+                            查看詳情
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                              修改狀態
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="max-h-none overflow-visible">
+                              {Object.entries(STATUS_MAP).map(([key, info]) => (
+                                <DropdownMenuItem
+                                  key={key}
+                                  disabled={key === demand.status}
+                                  onClick={() => handleStatusChange(demand.id, key)}
+                                  className="gap-2"
+                                >
+                                  {key === demand.status
+                                    ? <Check className="h-3.5 w-3.5 shrink-0" />
+                                    : <span className="w-3.5 shrink-0" />}
+                                  <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", info.color)}>
+                                    {info.label}
+                                  </Badge>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(demand.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                            刪除需求
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </div>
     </AppLayout>
   )
