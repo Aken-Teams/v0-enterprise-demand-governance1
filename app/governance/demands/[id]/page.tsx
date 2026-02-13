@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion"
+import {
   ArrowLeft, Building2, User, Calendar, FileText,
-  Loader2, Pencil, Trash2, Check, Settings2,
+  Loader2, Pencil, Trash2, Check,
   BarChart3, GanttChart, FolderOpen,
 } from "lucide-react"
 import Link from "next/link"
@@ -21,7 +24,6 @@ import { ProjectGantt } from "@/components/demand/project-gantt"
 import { DevGantt } from "@/components/demand/dev-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
-import { PhasePlanEditor } from "@/components/demand/phase-plan-editor"
 
 interface DemandDetail {
   id: string
@@ -109,7 +111,7 @@ export default function DemandDetailPage() {
 
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showPlanEditor, setShowPlanEditor] = useState(false)
+
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
 
@@ -319,52 +321,49 @@ export default function DemandDetailPage() {
                   </CardContent>
                 </Card>
 
-                {/* SP Allocation Pie Chart */}
-                {demand.phasePlans.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">SP 分配</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <SpAllocationChart
-                        phasePlans={demand.phasePlans}
-                        totalSp={demand.estimatedSp}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
               </TabsContent>
 
               {/* 甘特圖 Tab */}
-              <TabsContent value="gantt" className="space-y-6 mt-4">
+              <TabsContent value="gantt" className="mt-4">
                 <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">專案流程甘特圖</CardTitle>
+                  <CardHeader className="pb-0">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <GanttChart className="h-4 w-4" />
+                      甘特圖
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <ProjectGantt
-                      phasePlans={demand.phasePlans}
-                      currentStatus={demand.status}
-                    />
+                  <CardContent className="pt-2">
+                    <Accordion type="multiple" defaultValue={["project", ...(showDevGantt ? ["dev"] : [])]}>
+                      <AccordionItem value="project">
+                        <AccordionTrigger className="hover:no-underline py-3 text-sm">
+                          專案流程甘特圖
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <ProjectGantt
+                            phasePlans={demand.phasePlans}
+                            currentStatus={demand.status}
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
+                      {showDevGantt && (
+                        <AccordionItem value="dev">
+                          <AccordionTrigger className="hover:no-underline py-3 text-sm">
+                            開發甘特圖
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <DevGantt
+                              subTasks={demand.subTasks}
+                              demandId={demand.id}
+                              canEdit={canManage}
+                              token={token}
+                              onRefresh={fetchDemand}
+                            />
+                          </AccordionContent>
+                        </AccordionItem>
+                      )}
+                    </Accordion>
                   </CardContent>
                 </Card>
-
-                {showDevGantt && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">開發甘特圖</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <DevGantt
-                        subTasks={demand.subTasks}
-                        demandId={demand.id}
-                        canEdit={canManage}
-                        token={token}
-                        onRefresh={fetchDemand}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
               </TabsContent>
 
               {/* 文件 Tab */}
@@ -448,81 +447,22 @@ export default function DemandDetailPage() {
               </CardContent>
             </Card>
 
-            {/* 階段規劃 */}
-            {canManage && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">階段規劃</CardTitle>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowPlanEditor(true)}>
-                      <Settings2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {demand.phasePlans.length > 0 ? (
-                    demand.phasePlans
-                      .filter((p) => PIPELINE_STEPS.includes(p.phase as typeof PIPELINE_STEPS[number]))
-                      .sort(
-                        (a, b) =>
-                          PIPELINE_STEPS.indexOf(a.phase as typeof PIPELINE_STEPS[number]) -
-                          PIPELINE_STEPS.indexOf(b.phase as typeof PIPELINE_STEPS[number])
-                      )
-                      .map((plan) => {
-                        const isCurrent = plan.phase === demand.status
-                        return (
-                          <div
-                            key={plan.phase}
-                            className={cn(
-                              "rounded-lg border p-2 text-xs space-y-0.5",
-                              isCurrent && "border-primary/50 bg-primary/5",
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium">
-                                {STATUS_MAP[plan.phase]?.label}
-                              </span>
-                              {plan.plannedSp != null && plan.plannedSp > 0 && (
-                                <span className="text-muted-foreground">{plan.plannedSp} SP</span>
-                              )}
-                            </div>
-                            {(plan.plannedStart || plan.plannedEnd) && (
-                              <p className="text-muted-foreground">
-                                {plan.plannedStart ? formatDate(plan.plannedStart) : "?"}
-                                {" — "}
-                                {plan.plannedEnd ? formatDate(plan.plannedEnd) : "?"}
-                              </p>
-                            )}
-                            {plan.engineer && (
-                              <p className="text-muted-foreground">
-                                工程師：{plan.engineer.name}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })
-                  ) : (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                      點擊齒輪設定規劃
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            {/* SP 分配 */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">SP 分配</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SpAllocationChart
+                  phasePlans={demand.phasePlans}
+                  totalSp={demand.estimatedSp}
+                />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
 
-      {/* Phase Plan Editor Dialog */}
-      <PhasePlanEditor
-        open={showPlanEditor}
-        onOpenChange={setShowPlanEditor}
-        demandId={demand.id}
-        phasePlans={demand.phasePlans}
-        totalSp={demand.estimatedSp}
-        token={token}
-        onSave={fetchDemand}
-      />
     </AppLayout>
   )
 }
