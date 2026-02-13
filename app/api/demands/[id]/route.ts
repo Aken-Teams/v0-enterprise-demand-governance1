@@ -1,9 +1,53 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyRole, AuthError } from "@/lib/auth"
+import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
+
+// GET: Get demand detail
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    verifyAuth(request)
+    const { id } = await params
+
+    const demand = await prisma.demand.findUnique({
+      where: { id },
+      include: {
+        organization: { select: { id: true, name: true } },
+        submitter: { select: { id: true, name: true, email: true } },
+        creator: { select: { id: true, name: true } },
+        manager: { select: { id: true, name: true } },
+        developer: { select: { id: true, name: true } },
+        documents: {
+          orderBy: { createdAt: "desc" },
+        },
+        comments: {
+          include: { user: { select: { id: true, name: true } } },
+          orderBy: { createdAt: "desc" },
+        },
+        statusHistory: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    })
+
+    if (!demand) {
+      return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+    }
+
+    return NextResponse.json({ demand })
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    }
+    console.error("Get demand detail error:", error)
+    return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
+  }
+}
 
 // PATCH: Update demand status
 export async function PATCH(
