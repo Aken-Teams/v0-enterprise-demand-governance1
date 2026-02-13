@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select,
   SelectContent,
@@ -16,40 +15,127 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CalendarIcon, Upload, Building2, HelpCircle, ChevronRight, ChevronLeft, Check, FileText, Settings2 } from "lucide-react"
+import {
+  CalendarIcon, Upload, Building2, ChevronRight, ChevronLeft,
+  Check, FileText, Settings2, ClipboardCheck, X, FileIcon, Loader2,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useAuth } from "@/hooks/use-auth"
+import { useRouter } from "next/navigation"
 
-const subsidiaries = [
-  { id: "panjit", name: "強茂" },
-  { id: "panjit-tech", name: "璟茂科技" },
-  { id: "ymoptics", name: "熒茂光學" },
-  { id: "panjit-wuxi", name: "強茂電子（無錫）" },
-  { id: "panjit-xuzhou", name: "強茂半導體（徐州）" },
-  { id: "panjit-shandong", name: "山東強茂電子" },
-  { id: "hge", name: "虹冠電子工業" },
-]
+interface Organization {
+  id: string
+  code: string
+  name: string
+  users: { id: string; name: string; email: string }[]
+}
 
 const steps = [
   { id: 1, title: "基本資訊", icon: Building2 },
   { id: 2, title: "需求內容", icon: FileText },
   { id: 3, title: "補充資訊", icon: Settings2 },
+  { id: 4, title: "確認內容", icon: ClipboardCheck },
 ]
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export default function CreateDemandPage() {
+  const { token } = useAuth()
+  const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [currentStep, setCurrentStep] = useState(1)
   const [date, setDate] = useState<Date>()
-  const [selectedSubsidiary, setSelectedSubsidiary] = useState("")
+  const [selectedOrgId, setSelectedOrgId] = useState("")
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [painPoint, setPainPoint] = useState("")
   const [expectedBenefit, setExpectedBenefit] = useState("")
   const [estimatedSp, setEstimatedSp] = useState("")
+  const [files, setFiles] = useState<File[]>([])
+  const [notes, setNotes] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState("")
+
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+
+  // Load organizations from API
+  useEffect(() => {
+    if (!token) return
+    fetch("/api/organizations", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.organizations) setOrganizations(data.organizations)
+      })
+      .catch(() => {})
+  }, [token])
+
+  const selectedOrg = organizations.find((o) => o.id === selectedOrgId)
 
   const canNext = () => {
-    if (currentStep === 1) return selectedSubsidiary !== "" && title.trim() !== ""
+    if (currentStep === 1) return selectedOrgId !== "" && title.trim() !== ""
     if (currentStep === 2) return description.trim() !== "" && painPoint.trim() !== "" && estimatedSp.trim() !== ""
     return true
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files || [])
+    const maxSize = 10 * 1024 * 1024
+    const valid = selected.filter((f) => f.size <= maxSize)
+    setFiles((prev) => [...prev, ...valid])
+    // Reset input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSubmit = async () => {
+    if (!token) return
+    setIsSubmitting(true)
+    setSubmitError("")
+
+    try {
+      const formData = new FormData()
+      formData.append("organizationId", selectedOrgId)
+      formData.append("title", title)
+      formData.append("description", description)
+      formData.append("painPoint", painPoint)
+      formData.append("expectedBenefit", expectedBenefit)
+      formData.append("estimatedSp", estimatedSp)
+      formData.append("desiredDate", date?.toISOString() || "")
+      formData.append("adminNotes", notes)
+      for (const file of files) {
+        formData.append("files", file)
+      }
+
+      const res = await fetch("/api/demands", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setSubmitError(data.error || "建立失敗")
+        return
+      }
+
+      router.push("/governance/inbox")
+    } catch {
+      setSubmitError("網路錯誤，請稍後再試")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -61,20 +147,6 @@ export default function CreateDemandPage() {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">建立需求</h1>
             <p className="text-muted-foreground">代需求者建立需求，或根據口頭溝通內容登錄需求</p>
           </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" className="ml-auto text-muted-foreground hover:text-foreground transition-colors">
-                  <HelpCircle className="h-5 w-5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs text-sm space-y-1 p-3">
-                <p>• 建立後系統將自動通知需求者確認</p>
-                <p>• 需求者確認後即可正式開案</p>
-                <p>• 管理者備註僅內部可見</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
 
         {/* Step Indicator */}
@@ -117,7 +189,7 @@ export default function CreateDemandPage() {
               <div className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="subsidiary" className="text-base">需求所屬子公司 <span className="text-red-500">*</span></Label>
-                  <Select value={selectedSubsidiary} onValueChange={setSelectedSubsidiary}>
+                  <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
                     <SelectTrigger className="h-11 w-full">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -125,9 +197,9 @@ export default function CreateDemandPage() {
                       </div>
                     </SelectTrigger>
                     <SelectContent>
-                      {subsidiaries.map((sub) => (
-                        <SelectItem key={sub.id} value={sub.id}>
-                          {sub.name}
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          {org.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -224,22 +296,135 @@ export default function CreateDemandPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="attachments" className="text-base">附件上傳</Label>
-                  <Button type="button" variant="outline" className="w-full bg-transparent">
+                  <Label className="text-base">附件上傳</Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.jpg,.jpeg,.png,.gif,.webp"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     <Upload className="mr-2 h-4 w-4" />
                     選擇檔案
                   </Button>
-                  <p className="text-xs text-muted-foreground">支援 PDF, Word, Excel, 圖片，單檔最大 10MB</p>
+                  <p className="text-xs text-muted-foreground">支援 PDF, Word, Excel, PPT, Markdown, 圖片，單檔最大 10MB</p>
+
+                  {files.length > 0 && (
+                    <div className="space-y-2 mt-3">
+                      {files.map((file, index) => (
+                        <div key={`${file.name}-${index}`} className="flex items-center gap-3 rounded-lg border p-3">
+                          <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm truncate">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes" className="text-base">管理者備註</Label>
+                  <Label htmlFor="notes" className="text-base">備註</Label>
                   <Textarea
                     id="notes"
-                    placeholder="內部備註，僅管理者可見..."
+                    placeholder="額外補充說明..."
                     className="min-h-[80px]"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Step 4: 確認內容 */}
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <p className="text-muted-foreground">請確認以下資訊無誤後建立需求</p>
+
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">子公司</p>
+                      <p className="text-base font-medium">{selectedOrg?.name || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">SP 估點</p>
+                      <p className="text-base font-medium">{estimatedSp} SP</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-muted-foreground">需求標題</p>
+                    <p className="text-base font-medium">{title}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-muted-foreground">需求說明</p>
+                    <p className="text-sm whitespace-pre-wrap">{description}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-muted-foreground">痛點說明</p>
+                    <p className="text-sm whitespace-pre-wrap">{painPoint}</p>
+                  </div>
+
+                  {expectedBenefit && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">預期效益</p>
+                      <p className="text-sm whitespace-pre-wrap">{expectedBenefit}</p>
+                    </div>
+                  )}
+
+                  {date && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">希望完成時間</p>
+                      <p className="text-base font-medium">{date.toLocaleDateString("zh-TW")}</p>
+                    </div>
+                  )}
+
+                  {files.length > 0 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">附件（{files.length} 個檔案）</p>
+                      <div className="mt-1 space-y-1">
+                        {files.map((file, index) => (
+                          <p key={`confirm-${file.name}-${index}`} className="text-sm flex items-center gap-2">
+                            <FileIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            {file.name}
+                            <span className="text-muted-foreground">({formatFileSize(file.size)})</span>
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {notes && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">備註</p>
+                      <p className="text-sm whitespace-pre-wrap">{notes}</p>
+                    </div>
+                  )}
+                </div>
+
+                {submitError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                    {submitError}
+                  </div>
+                )}
               </div>
             )}
 
@@ -254,7 +439,7 @@ export default function CreateDemandPage() {
                 <div />
               )}
 
-              {currentStep < 3 ? (
+              {currentStep < 4 ? (
                 <Button
                   type="button"
                   onClick={() => setCurrentStep(currentStep + 1)}
@@ -264,15 +449,23 @@ export default function CreateDemandPage() {
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               ) : (
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline">
-                    儲存草稿
-                  </Button>
-                  <Button type="submit">
-                    建立需求
-                    <Check className="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      建立中...
+                    </>
+                  ) : (
+                    <>
+                      建立需求
+                      <Check className="ml-1 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
               )}
             </div>
           </CardContent>
