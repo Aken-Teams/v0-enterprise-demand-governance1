@@ -702,18 +702,20 @@ export default function DemandDetailPage() {
                   </div>
                 )}
                 <hr className="border-border/60" />
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground w-16 shrink-0">建立時間</span>
-                  <span className="font-medium">{formatDate(demand.createdAt)}</span>
-                </div>
-                {demand.desiredDate && (
-                  <div className="flex items-center gap-2 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-1.5 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground w-16 shrink-0">希望完成</span>
-                    <span className="font-medium">{formatDate(demand.desiredDate)}</span>
+                    <span className="text-muted-foreground shrink-0">開案時間</span>
+                    <span className="font-medium">{formatDate(demand.phasePlans.find(p => p.phase === "SUBMITTED")?.plannedStart ?? demand.createdAt)}</span>
                   </div>
-                )}
+                  {demand.desiredDate && (
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground shrink-0">希望完成</span>
+                      <span className="font-medium">{formatDate(demand.desiredDate)}</span>
+                    </div>
+                  )}
+                </div>
                 {demand.completedDate && (
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
