@@ -50,8 +50,8 @@ export function SpAllocationChart({ phasePlans, totalSp }: SpAllocationChartProp
   )
 
   return (
-    <div className="space-y-3">
-      <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[220px]">
+    <div className="flex items-center gap-4">
+      <ChartContainer config={chartConfig} className="aspect-square h-[180px] shrink-0">
         <PieChart>
           <ChartTooltip
             content={
@@ -72,8 +72,8 @@ export function SpAllocationChart({ phasePlans, totalSp }: SpAllocationChartProp
             data={data}
             dataKey="sp"
             nameKey="phase"
-            innerRadius={55}
-            outerRadius={85}
+            innerRadius={50}
+            outerRadius={75}
             strokeWidth={2}
             stroke="var(--background)"
           >
@@ -101,12 +101,12 @@ export function SpAllocationChart({ phasePlans, totalSp }: SpAllocationChartProp
       </ChartContainer>
 
       {/* Legend */}
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 px-2">
+      <div className="flex flex-col gap-2 min-w-0">
         {data.map((d) => (
-          <div key={d.phase} className="flex items-center gap-1.5 text-sm">
+          <div key={d.phase} className="flex items-center gap-2 text-sm">
             <div className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.fill }} />
-            <span className="text-muted-foreground">{d.label}</span>
-            <span className="font-medium">{d.sp}</span>
+            <span className="text-muted-foreground truncate">{d.label}</span>
+            <span className="font-medium shrink-0">{d.sp} SP</span>
           </div>
         ))}
       </div>
