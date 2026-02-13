@@ -17,7 +17,6 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  FilePlus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -69,8 +68,7 @@ const navSections: NavSection[] = [
     roles: ["admin"],
     items: [
       { title: "需求管理", href: "/governance/inbox", icon: Inbox, roles: ["admin"] },
-      { title: "建立需求", href: "/governance/create", icon: FilePlus, roles: ["admin"] },
-      { title: "組織管理", href: "/admin/organizations", icon: Building2, roles: ["admin"] },
+      { title: "SP 管理", href: "/admin/organizations", icon: Building2, roles: ["admin"] },
       { title: "報表", href: "/governance/analytics", icon: BarChart3, roles: ["admin"] },
     ],
   },
@@ -86,9 +84,7 @@ const navSections: NavSection[] = [
     title: "共用",
     roles: ["subsidiary", "admin", "delivery"],
     items: [
-      { title: "通知中心", href: "/notifications", icon: Bell, roles: ["subsidiary", "admin", "delivery"] },
-      { title: "文件與規範", href: "/documents", icon: BookOpen, roles: ["subsidiary", "admin", "delivery"] },
-      { title: "個人設定", href: "/profile", icon: User, roles: ["subsidiary", "admin", "delivery"] },
+      { title: "文件管理", href: "/documents", icon: BookOpen, roles: ["subsidiary", "admin", "delivery"] },
     ],
   },
 ]

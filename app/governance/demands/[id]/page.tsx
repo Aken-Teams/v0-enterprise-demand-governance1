@@ -142,6 +142,7 @@ export default function DemandDetailPage() {
   const [loading, setLoading] = useState(true)
   const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string }[]>([])
   const [activeTab, setActiveTab] = useState("overview")
+  const [docPhaseKey, setDocPhaseKey] = useState(0)
   const [spPlanOpen, setSpPlanOpen] = useState<boolean | null>(null)
   const [subTasksOpen, setSubTasksOpen] = useState<boolean | null>(null)
 
@@ -439,7 +440,7 @@ export default function DemandDetailPage() {
                 demandId={demand.id}
                 documents={demand.documents}
                 token={token}
-                onStatusChange={fetchDemand}
+                onStatusChange={() => { setActiveTab("overview"); setDocPhaseKey((k) => k + 1); fetchDemand() }}
               />
             )}
           </CardContent>
@@ -649,6 +650,7 @@ export default function DemandDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <PhaseDocuments
+                      key={`${demand.status}-${docPhaseKey}`}
                       documents={demand.documents}
                       currentPhase={demand.status}
                       demandId={demand.id}

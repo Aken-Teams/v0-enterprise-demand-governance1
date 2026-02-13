@@ -20,7 +20,7 @@ interface StepNavigationProps {
   demandId: string
   documents: { type: string; phase: string | null }[]
   token: string | null
-  onStatusChange: () => void
+  onStatusChange: (newStatus: string) => void
 }
 
 export function StepNavigation({
@@ -66,7 +66,7 @@ export function StepNavigation({
       })
       if (res.ok) {
         setShowConfirm(false)
-        onStatusChange()
+        onStatusChange(targetStatus!)
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
