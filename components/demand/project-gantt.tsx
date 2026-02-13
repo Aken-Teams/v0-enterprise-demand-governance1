@@ -383,7 +383,7 @@ export function ProjectGantt({
         </Button>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-hidden">
         <div style={{ minWidth: focusRange ? "700px" : showDayLabels ? `${Math.max(700, totalDays * 28)}px` : "700px" }}>
           {/* Timeline header */}
           <div className="grid" style={{ gridTemplateColumns: `${LEFT_COL} 1fr` }}>
@@ -622,7 +622,7 @@ export function ProjectGantt({
                               )}
                               <span className={cn(
                                 "text-xs truncate",
-                                sub.status === "completed" ? "text-muted-foreground line-through" : "text-foreground/80",
+                                sub.status === "completed" ? "text-muted-foreground" : "text-foreground/80",
                               )}>
                                 {sub.name}
                               </span>

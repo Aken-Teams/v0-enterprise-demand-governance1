@@ -22,22 +22,22 @@ export const updateSubTaskSchema = z.object({
     .string()
     .optional()
     .nullable()
-    .transform((val) => (val ? new Date(val) : null)),
+    .transform((val) => (val === undefined ? undefined : val ? new Date(val) : null)),
   plannedEnd: z
     .string()
     .optional()
     .nullable()
-    .transform((val) => (val ? new Date(val) : null)),
+    .transform((val) => (val === undefined ? undefined : val ? new Date(val) : null)),
   actualStart: z
     .string()
     .optional()
     .nullable()
-    .transform((val) => (val ? new Date(val) : null)),
+    .transform((val) => (val === undefined ? undefined : val ? new Date(val) : null)),
   actualEnd: z
     .string()
     .optional()
     .nullable()
-    .transform((val) => (val ? new Date(val) : null)),
+    .transform((val) => (val === undefined ? undefined : val ? new Date(val) : null)),
   status: z.enum(["pending", "in_progress", "completed"]).optional(),
   assigneeId: z.string().optional().nullable(),
   order: z.coerce.number().int().min(0).optional(),

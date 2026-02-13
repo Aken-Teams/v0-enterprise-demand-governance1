@@ -11,11 +11,10 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
-  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu"
 import {
   Search, Inbox, Plus, Loader2, Building2,
-  Paperclip, User, MoreHorizontal, Eye, Trash2, RefreshCw, Check,
+  Paperclip, User, MoreHorizontal, Eye, Trash2,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -110,18 +109,6 @@ export default function InboxPage() {
   useEffect(() => {
     fetchDemands(true)
   }, [fetchDemands])
-
-  const handleStatusChange = async (demandId: string, newStatus: string) => {
-    if (!token) return
-    try {
-      const res = await fetch(`/api/demands/${demandId}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      })
-      if (res.ok) fetchDemands()
-    } catch { /* ignore */ }
-  }
 
   const handleDelete = async (demandId: string) => {
     if (!token) return
@@ -339,30 +326,6 @@ export default function InboxPage() {
                             <Eye className="h-3.5 w-3.5 mr-2" />
                             查看詳情
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                              <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                              修改狀態
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="max-h-none overflow-visible">
-                              {Object.entries(STATUS_MAP).map(([key, info]) => (
-                                <DropdownMenuItem
-                                  key={key}
-                                  disabled={key === demand.status}
-                                  onClick={() => handleStatusChange(demand.id, key)}
-                                  className="gap-2"
-                                >
-                                  {key === demand.status
-                                    ? <Check className="h-3.5 w-3.5 shrink-0" />
-                                    : <span className="w-3.5 shrink-0" />}
-                                  <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", info.color)}>
-                                    {info.label}
-                                  </Badge>
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"

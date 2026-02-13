@@ -232,6 +232,16 @@ export function SubTaskEditor({
         </div>
       )}
 
+      {/* Status legend */}
+      {subTasks.length > 0 && (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>點擊圓點切換狀態：</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400" />待開始</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" />進行中</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />已完成</span>
+        </div>
+      )}
+
       {subTasks.length > 0 ? (
         <Table>
           <TableHeader>
@@ -253,9 +263,22 @@ export function SubTaskEditor({
                 <TableRow key={task.id} className={cn(outOfRange && "bg-red-50/50 hover:bg-red-50/70")}>
                   <TableCell className="pr-0">
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         const next = task.status === "pending" ? "in_progress" : task.status === "in_progress" ? "completed" : "pending"
-                        handleUpdate(task.id, "status", next)
+                        if (!token) return
+                        setSavingId(task.id)
+                        const now = new Date().toISOString()
+                        const body: Record<string, unknown> = { status: next }
+                        if (next === "in_progress" && !task.actualStart) body.actualStart = now
+                        if (next === "completed") body.actualEnd = now
+                        try {
+                          await fetch(`/api/demands/${demandId}/sub-tasks/${task.id}`, {
+                            method: "PATCH",
+                            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                            body: JSON.stringify(body),
+                          })
+                          onRefresh()
+                        } catch { /* ignore */ } finally { setSavingId(null) }
                       }}
                       className={cn("h-4 w-4 rounded-full shrink-0 transition-colors cursor-pointer", STATUS_COLORS[task.status])}
                       title={`${STATUS_LABELS[task.status]}（點擊切換）`}
@@ -263,7 +286,7 @@ export function SubTaskEditor({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={cn("text-sm truncate", task.status === "completed" && "line-through text-muted-foreground")}>
+                      <span className={cn("text-sm truncate", task.status === "completed" && "text-muted-foreground")}>
                         {task.name}
                       </span>
                       {devEngineer && (
