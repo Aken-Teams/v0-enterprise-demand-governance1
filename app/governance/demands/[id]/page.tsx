@@ -584,27 +584,36 @@ export default function DemandDetailPage() {
                       需求說明
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
+                  <CardContent className="space-y-0">
+                    <div className="pb-4">
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.description}</p>
                     </div>
                     {demand.painPoint && (
-                      <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-4 space-y-1">
-                        <p className="text-xs font-semibold text-orange-600">痛點說明</p>
-                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.painPoint}</p>
-                      </div>
+                      <>
+                        <hr className="border-border/60" />
+                        <div className="py-4">
+                          <p className="text-xs font-semibold text-orange-600 mb-1.5">痛點說明</p>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.painPoint}</p>
+                        </div>
+                      </>
                     )}
                     {demand.expectedBenefit && (
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 space-y-1">
-                        <p className="text-xs font-semibold text-emerald-600">預期效益</p>
-                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.expectedBenefit}</p>
-                      </div>
+                      <>
+                        <hr className="border-border/60" />
+                        <div className="py-4">
+                          <p className="text-xs font-semibold text-emerald-600 mb-1.5">預期效益</p>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.expectedBenefit}</p>
+                        </div>
+                      </>
                     )}
                     {demand.adminNotes && (
-                      <div className="rounded-lg border border-border/60 bg-muted/30 p-4 space-y-1">
-                        <p className="text-xs font-semibold text-muted-foreground">管理者備註</p>
-                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.adminNotes}</p>
-                      </div>
+                      <>
+                        <hr className="border-border/60" />
+                        <div className="pt-4">
+                          <p className="text-xs font-semibold text-muted-foreground mb-1.5">管理者備註</p>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.adminNotes}</p>
+                        </div>
+                      </>
                     )}
                   </CardContent>
                 </Card>
