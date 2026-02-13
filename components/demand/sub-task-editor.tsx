@@ -267,7 +267,7 @@ export function SubTaskEditor({
                         {task.name}
                       </span>
                       {devEngineer && (
-                        <Badge variant="outline" className="text-[10px] shrink-0 px-1.5 py-0">
+                        <Badge variant="outline" className="text-xs shrink-0 px-1.5 py-0">
                           {devEngineer.name}
                         </Badge>
                       )}
