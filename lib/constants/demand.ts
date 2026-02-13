@@ -43,8 +43,8 @@ export const PHASE_DOCUMENT_MAP: Record<
     optional: ["ATTACHMENT"],
   },
   DEVELOPING: {
-    required: ["SDD"],
-    optional: ["APP_RESULT", "ATTACHMENT"],
+    required: ["SDD", "APP_RESULT"],
+    optional: ["ATTACHMENT"],
   },
   ACCEPTANCE: {
     required: ["BDD", "TDD", "TEST_REPORT"],
@@ -83,7 +83,7 @@ export const PHASE_ACTIONS: Record<string, string[]> = {
   SUBMITTED: ["上傳會議記錄"],
   PRD_REVIEW: ["指派 PM 與工程師", "上傳 PRD", "上傳模組架構文件"],
   SP_REVIEW: ["填寫各階段 SP 點數", "填寫各階段甘特圖時程", "上傳 SP 規劃文件"],
-  DEVELOPING: ["管理開發子任務", "上傳 SDD 文件"],
+  DEVELOPING: ["管理開發子任務", "上傳 SDD 文件", "上傳 APP 交付成果"],
   ACCEPTANCE: ["上傳 BDD 文件", "上傳 TDD 文件", "上傳測試報告"],
   CLOSED: [],
 }

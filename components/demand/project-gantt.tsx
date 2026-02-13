@@ -186,20 +186,27 @@ export function ProjectGantt({
 
     const phasePlanMap = Object.fromEntries(phasePlans.map((p) => [p.phase, p]))
 
+    // Clamp bar to visible [0, 100] range; return null if fully outside
+    const clampBar = (rawLeft: number, rawWidth: number) => {
+      const right = rawLeft + rawWidth
+      if (right <= 0 || rawLeft >= 100) return null
+      const left = Math.max(0, rawLeft)
+      const width = Math.min(100, right) - left
+      return { left, width: Math.max(width, 0.5) }
+    }
+
     const calcBar = (start: Date | null, end: Date | null) => {
       if (!start || !end) return null
       // +1 so same-day range (e.g. 2/11~2/11) fills the entire day cell
       const days = differenceInDays(end, start) + 1
-      const w = (days / total) * 100
-      return { left: (differenceInDays(start, tStart) / total) * 100, width: Math.max(w, 0.5) }
+      return clampBar((differenceInDays(start, tStart) / total) * 100, (days / total) * 100)
     }
 
     const calcActualBar = (start: Date | null, end: Date | null) => {
       if (!start) return null
       const e = end || new Date()
       const days = differenceInDays(e, start) + 1
-      const w = (days / total) * 100
-      return { left: (differenceInDays(start, tStart) / total) * 100, width: Math.max(w, 0.5) }
+      return clampBar((differenceInDays(start, tStart) / total) * 100, (days / total) * 100)
     }
 
     const rowData = PIPELINE_STEPS.map((phase) => {
@@ -377,7 +384,7 @@ export function ProjectGantt({
       </div>
 
       <div className="overflow-x-auto">
-        <div style={{ minWidth: showDayLabels ? `${Math.max(700, totalDays * 28)}px` : "700px" }}>
+        <div style={{ minWidth: focusRange ? "700px" : showDayLabels ? `${Math.max(700, totalDays * 28)}px` : "700px" }}>
           {/* Timeline header */}
           <div className="grid" style={{ gridTemplateColumns: `${LEFT_COL} 1fr` }}>
             <div className="border-b border-border/30" />
@@ -532,14 +539,14 @@ export function ProjectGantt({
                       )}>
                         {info?.label}
                       </span>
-                      {row.sp != null && row.sp > 0 && (
-                        <Badge variant="secondary" className="text-[10px] h-[18px] px-1.5 rounded-md ml-auto font-medium">
-                          {row.sp} SP
-                        </Badge>
-                      )}
                       {hasSubTasks && isDev && (
                         <Badge variant="outline" className="text-[10px] h-[18px] px-1.5 rounded-md ml-auto">
                           {subTasks.length}
+                        </Badge>
+                      )}
+                      {row.sp != null && row.sp > 0 && (
+                        <Badge variant="secondary" className={cn("text-[10px] h-[18px] px-1.5 rounded-md font-medium", !(hasSubTasks && isDev) && "ml-auto")}>
+                          {row.sp} SP
                         </Badge>
                       )}
                     </div>

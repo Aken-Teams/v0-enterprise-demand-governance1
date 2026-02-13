@@ -532,43 +532,6 @@ export default function DemandDetailPage() {
                   )
                 })()}
 
-                {canManage && demand.status === "ACCEPTANCE" && (
-                  <Card className="border-purple-200">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-base flex items-center gap-2">
-                            <Check className="h-4 w-4 text-purple-600" />
-                            驗收階段
-                          </CardTitle>
-                          <p className="text-xs text-muted-foreground mt-1">工程師提供 BDD/TDD，使用者進行測試回饋</p>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setActiveTab("documents")}>
-                          <FolderOpen className="h-3.5 w-3.5 mr-1" />
-                          查看文件
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-1.5">
-                        {["BDD", "TDD", "TEST_REPORT"].map((type) => {
-                          const uploaded = demand.documents.some((d) => d.phase === "ACCEPTANCE" && d.type === type)
-                          return (
-                            <div key={type} className="flex items-center gap-2 text-sm">
-                              {uploaded
-                                ? <Check className="h-4 w-4 text-emerald-500" />
-                                : <CircleDot className="h-4 w-4 text-amber-500" />
-                              }
-                              <span className={uploaded ? "" : "text-muted-foreground"}>
-                                {DOCUMENT_TYPE_LABELS[type]}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
 
                 {/* 需求說明 (always shown) */}
                 <Card>

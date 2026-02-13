@@ -85,6 +85,43 @@ export async function POST(
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
 
+    const contentType = request.headers.get("content-type") || ""
+
+    // ── JSON body: URL-based document (APP_RESULT) ──
+    if (contentType.includes("application/json")) {
+      const body = await request.json()
+      const { phase, type, url } = body as { phase?: string; type?: string; url?: string }
+
+      if (!url || typeof url !== "string" || !url.startsWith("http")) {
+        return NextResponse.json({ error: "請提供有效的連結" }, { status: 400 })
+      }
+      const docType = type || "APP_RESULT"
+      if (!VALID_DOC_TYPES.has(docType)) {
+        return NextResponse.json({ error: "無效的文件類型" }, { status: 400 })
+      }
+      if (phase && !VALID_STATUSES.has(phase)) {
+        return NextResponse.json({ error: "無效的階段" }, { status: 400 })
+      }
+
+      const doc = await prisma.demandDocument.create({
+        data: {
+          demandId: id,
+          type: docType as DocumentType,
+          phase: phase ? (phase as DemandStatus) : null,
+          fileName: url,
+          fileUrl: url,
+          fileSize: null,
+          uploadedBy: auth.userId,
+        },
+      })
+
+      return NextResponse.json(
+        { documents: [{ id: doc.id, fileName: doc.fileName, fileSize: doc.fileSize, type: doc.type, phase: doc.phase }] },
+        { status: 201 }
+      )
+    }
+
+    // ── FormData body: file upload ──
     const formData = await request.formData()
     const phase = formData.get("phase") as string | null
     const docType = (formData.get("type") as string) || "ATTACHMENT"
