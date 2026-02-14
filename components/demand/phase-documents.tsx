@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -13,8 +12,10 @@ import {
 import {
   FileText, FileSpreadsheet, FileImage, FileVideo2, FileAudio, File, Presentation,
   Download, Upload, Loader2, Check, Circle, ExternalLink, Link, Trash2,
+  ChevronRight, ChevronLeft,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
 import {
   STATUS_MAP,
   PIPELINE_STEPS,
@@ -74,12 +75,6 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("zh-TW", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-  })
-}
-
 export function PhaseDocuments({
   documents,
   currentPhase,
@@ -101,6 +96,7 @@ export function PhaseDocuments({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [appResultUrl, setAppResultUrl] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [activePhase, setActivePhase] = useState<string | null>(null)
 
   const isLinkType = uploadType === "APP_RESULT"
 
@@ -113,11 +109,6 @@ export function PhaseDocuments({
     el.addEventListener("click", handler)
     return () => el.removeEventListener("click", handler)
   }, [uploadTriggerSelector])
-
-  // Default tab to current phase
-  const defaultTab = PIPELINE_STEPS.includes(currentPhase as typeof PIPELINE_STEPS[number])
-    ? currentPhase
-    : "all"
 
   const getPhaseDocuments = (phase: string) =>
     documents.filter((d) => d.phase === phase)
@@ -216,202 +207,183 @@ export function PhaseDocuments({
     return unique.map((t) => ({ value: t, label: DOCUMENT_TYPE_LABELS[t] || t }))
   }
 
+  const renderDocRow = (doc: Document) => {
+    const isExternalLink = doc.type === "APP_RESULT" && doc.fileUrl?.startsWith("http")
+    const { icon: Icon, color: iconColor } = isExternalLink
+      ? { icon: ExternalLink, color: "text-blue-500" }
+      : getFileIconAndColor(doc.fileName)
+    return (
+      <div
+        key={doc.id}
+        className={cn(
+          "flex items-center justify-between rounded-md border px-3 py-2.5 transition-colors",
+          onDocumentSelect && "cursor-pointer hover:bg-muted/50",
+          selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
+        )}
+        onClick={() => onDocumentSelect?.(doc)}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Icon className={cn("h-4 w-4 shrink-0", iconColor)} />
+          <div className="min-w-0">
+            {isExternalLink ? (
+              <a
+                href={doc.fileUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-blue-600 hover:underline truncate block"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {doc.fileUrl}
+              </a>
+            ) : (
+              <p className="text-sm font-medium truncate">{doc.fileName}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
+              {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {canDownload && doc.fileUrl && !isExternalLink && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <a href={doc.fileUrl} download><Download className="h-4 w-4" /></a>
+            </Button>
+          )}
+          {canDownload && isExternalLink && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <a href={doc.fileUrl!} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </Button>
+          )}
+          {canUpload && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground/40 hover:text-destructive"
+              onClick={() => handleDelete(doc.id)}
+              disabled={deletingId === doc.id}
+            >
+              {deletingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const allPhases = [
+    ...PIPELINE_STEPS.map((phase) => ({
+      key: phase,
+      label: STATUS_MAP[phase]?.label || phase,
+      color: PHASE_COLORS[phase],
+      docs: getPhaseDocuments(phase),
+      required: getRequiredStatus(phase),
+    })),
+    ...(getUnassignedDocuments().length > 0
+      ? [{ key: "OTHER", label: "其他", color: "oklch(0.6 0 0)", docs: getUnassignedDocuments(), required: [] as ReturnType<typeof getRequiredStatus> }]
+      : []),
+  ]
+
+  const activeData = allPhases.find((p) => p.key === activePhase)
+
   return (
-    <div className="space-y-3">
-      <Tabs defaultValue={defaultTab}>
-        <TabsList className="w-full h-auto p-1 bg-muted/50 justify-start gap-0 flex-wrap">
-          {PIPELINE_STEPS.map((phase, idx) => {
-            const count = getPhaseDocuments(phase).length
-            const required = getRequiredStatus(phase)
-            const reqDone = required.filter((r) => r.uploaded).length
-            const reqTotal = required.length
-            return (
-              <TabsTrigger
-                key={phase}
-                value={phase}
-                className={cn(
-                  "text-xs px-2 py-1.5 gap-1 rounded-md transition-all",
-                  "data-[state=active]:bg-background data-[state=active]:shadow-sm",
-                )}
+    <div>
+      {!activeData ? (
+        /* ── Phase list ── */
+        allPhases.map((phase, idx) => {
+          const count = phase.docs.length
+          const reqDone = phase.required.filter((r) => r.uploaded).length
+          const reqTotal = phase.required.length
+          return (
+            <div key={phase.key}>
+              {idx > 0 && <Separator />}
+              <button
+                className="flex items-center w-full gap-2.5 px-3 py-3 text-left transition-colors hover:bg-muted/40"
+                onClick={() => setActivePhase(phase.key)}
               >
                 <div
                   className="h-2 w-2 rounded-full shrink-0"
-                  style={{ backgroundColor: PHASE_COLORS[phase] }}
+                  style={{ backgroundColor: phase.color }}
                 />
-                {STATUS_MAP[phase]?.label}
-                {(count > 0 || reqTotal > 0) && (
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "text-[10px] h-4 px-1 ml-0.5 rounded-full",
-                      reqTotal > 0 && reqDone === reqTotal && "bg-emerald-100 text-emerald-700",
-                    )}
-                  >
-                    {count > 0 ? count : `${reqDone}/${reqTotal}`}
+                <span className="text-sm font-medium text-muted-foreground">
+                  {phase.label}
+                </span>
+                {count > 0 && (
+                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full font-medium">
+                    {count}
                   </Badge>
                 )}
-              </TabsTrigger>
-            )
-          })}
-          {getUnassignedDocuments().length > 0 && (
-            <TabsTrigger value="all" className="text-xs px-2 py-1.5 rounded-md">
-              其他
-            </TabsTrigger>
-          )}
-        </TabsList>
-
-        {PIPELINE_STEPS.map((phase) => {
-          const phaseDocs = getPhaseDocuments(phase)
-          const requiredChecklist = getRequiredStatus(phase)
-
-          return (
-            <TabsContent key={phase} value={phase} className="space-y-4 mt-4">
-              {/* Required checklist */}
-              {requiredChecklist.length > 0 && (
-                <div className="rounded-lg border border-border/60 p-4 space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">必要文件</p>
-                  {requiredChecklist.map((item) => (
-                    <div key={item.type} className="flex items-center gap-2.5">
-                      {item.uploaded ? (
-                        <Check className="h-4 w-4 text-emerald-500" />
-                      ) : (
-                        <Circle className="h-4 w-4 text-muted-foreground/40" />
-                      )}
-                      <span className={cn("text-sm", item.uploaded ? "text-foreground" : "text-muted-foreground")}>
-                        {item.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Documents */}
-              {phaseDocs.length > 0 ? (
-                <div className="space-y-2">
-                  {phaseDocs.map((doc) => {
-                    const isExternalLink = doc.type === "APP_RESULT" && doc.fileUrl?.startsWith("http")
-                    const { icon: Icon, color: iconColor } = isExternalLink
-                      ? { icon: ExternalLink, color: "text-blue-500" }
-                      : getFileIconAndColor(doc.fileName)
-                    return (
-                    <div
-                      key={doc.id}
-                      className={cn(
-                        "flex items-center justify-between rounded-lg border p-3.5 transition-colors",
-                        onDocumentSelect && "cursor-pointer hover:bg-muted/50",
-                        selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
-                      )}
-                      onClick={() => onDocumentSelect?.(doc)}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
-                        <div className="min-w-0">
-                          {isExternalLink ? (
-                            <a
-                              href={doc.fileUrl!}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-blue-600 hover:underline truncate block"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {doc.fileUrl}
-                            </a>
-                          ) : (
-                            <p className="text-sm font-medium truncate">{doc.fileName}</p>
-                          )}
-                          <p className="text-sm text-muted-foreground">
-                            {DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
-                            {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
-                            {" · "}{formatDate(doc.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {canDownload && doc.fileUrl && !isExternalLink && (
-                          <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
-                            <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>
-                          </Button>
-                        )}
-                        {canDownload && isExternalLink && (
-                          <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
-                            <a href={doc.fileUrl!} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4.5 w-4.5" />
-                            </a>
-                          </Button>
-                        )}
-                        {canUpload && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 text-muted-foreground/40 hover:text-destructive"
-                            onClick={() => handleDelete(doc.id)}
-                            disabled={deletingId === doc.id}
-                          >
-                            {deletingId === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-6">此階段尚無文件</p>
-              )}
-            </TabsContent>
-          )
-        })}
-
-        {getUnassignedDocuments().length > 0 && (
-          <TabsContent value="all" className="mt-4">
-            <div className="space-y-2">
-              {getUnassignedDocuments().map((doc) => {
-                const { icon: Icon, color: iconColor } = getFileIconAndColor(doc.fileName)
-                return (
-                <div
-                  key={doc.id}
-                  className={cn(
-                    "flex items-center justify-between rounded-lg border p-3.5 transition-colors",
-                    onDocumentSelect && "cursor-pointer hover:bg-muted/50",
-                    selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
-                  )}
-                  onClick={() => onDocumentSelect?.(doc)}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{doc.fileName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
-                        {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {canDownload && doc.fileUrl && (
-                      <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
-                        <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>
-                      </Button>
-                    )}
-                    {canUpload && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 text-muted-foreground/40 hover:text-destructive"
-                        onClick={() => handleDelete(doc.id)}
-                        disabled={deletingId === doc.id}
-                      >
-                        {deletingId === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                )
-              })}
+                <span className="flex-1" />
+                {reqTotal > 0 && (
+                  <span className={cn(
+                    "text-[11px] font-medium tabular-nums",
+                    reqDone === reqTotal ? "text-emerald-600" : "text-muted-foreground/50",
+                  )}>
+                    {reqDone}/{reqTotal}
+                  </span>
+                )}
+                <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
+              </button>
             </div>
-          </TabsContent>
-        )}
-      </Tabs>
+          )
+        })
+      ) : (
+        /* ── Selected phase detail ── */
+        <div>
+          {/* Back + phase title */}
+          <button
+            className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+            onClick={() => setActivePhase(null)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>返回</span>
+          </button>
+          <Separator />
+          <div className="flex items-center gap-2.5 px-3 py-3">
+            <div
+              className="h-2 w-2 rounded-full shrink-0"
+              style={{ backgroundColor: activeData.color }}
+            />
+            <span className="text-sm font-semibold">{activeData.label}</span>
+            {activeData.docs.length > 0 && (
+              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full font-medium">
+                {activeData.docs.length}
+              </Badge>
+            )}
+          </div>
+
+          <div className="px-3 pb-3 space-y-2">
+            {/* Required checklist */}
+            {activeData.required.length > 0 && (
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">必要文件</p>
+                {activeData.required.map((item) => (
+                  <div key={item.type} className="flex items-center gap-2.5">
+                    {item.uploaded ? (
+                      <Check className="h-4 w-4 text-emerald-500" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-muted-foreground/30" />
+                    )}
+                    <span className={cn("text-sm", item.uploaded ? "text-foreground" : "text-muted-foreground/50")}>
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Document list */}
+            {activeData.docs.length > 0 ? (
+              <div className="space-y-1.5">
+                {activeData.docs.map(renderDocRow)}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground/40 text-center py-4">尚無文件</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Upload Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
