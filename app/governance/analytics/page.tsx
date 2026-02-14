@@ -78,12 +78,12 @@ const STATUS_COLORS: Record<string, string> = {
   PRD_REVIEW: "#f59e0b",
   SP_REVIEW: "#f97316",
   DEVELOPING: "#8b5cf6",
-  ACCEPTANCE: "#a855f7",
+  ACCEPTANCE: "#ec4899",
   CLOSED: "#22c55e",
   REJECTED: "#ef4444",
 }
 
-const ORG_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"]
+const ORG_COLORS = ["#0ea5e9", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"]
 
 export default function GovernanceAnalyticsPage() {
   const { token } = useAuth()
@@ -135,7 +135,7 @@ export default function GovernanceAnalyticsPage() {
     fill: ORG_COLORS[i % ORG_COLORS.length],
   }))
 
-  const DEV_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6", "#6366f1"]
+  const DEV_COLORS = ["#f97316", "#10b981", "#3b82f6", "#ec4899", "#f59e0b", "#8b5cf6", "#14b8a6", "#ef4444"]
   const devChartData = Object.entries(d?.devDemandCounts ?? {}).map(([name, count], i) => ({
     name,
     value: count,
@@ -198,7 +198,7 @@ export default function GovernanceAnalyticsPage() {
           <KpiCard color="#6366f1" icon={FileText} title="活躍需求" value={d.kpi.activeDemands} sub={`共 ${d.kpi.totalDemands} 筆`} />
           <KpiCard color="#f59e0b" icon={CheckCircle} title="本月交付" value={d.kpi.thisMonthClosed} sub="本月結案" />
           <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.kpi.ytdUsedSp} / ${d.sp.totalQuota}`} sub={`已承諾 ${d.sp.totalCommittedSp}`} />
-          <KpiCard color="#10b981" icon={TrendingUp} title="交付效率" value={d.kpi.avgDays > 0 ? `${d.kpi.avgDays} 天` : "—"} sub={d.kpi.avgDays > 0 ? "平均處理天數" : "尚無結案數據"} />
+          <KpiCard color="#10b981" icon={TrendingUp} title="交付率" value={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"} sub={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeCount} / ${d.performance.deliverableTotal} 準時交付` : "尚無驗收/結案需求"} />
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">

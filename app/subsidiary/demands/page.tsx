@@ -71,11 +71,6 @@ function DemandCard({ demand }: { demand: Demand }) {
         {demand.title}
       </h3>
 
-      {/* Description */}
-      <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-        {demand.description}
-      </p>
-
       {/* Bottom: owner + date + SP */}
       <div className="flex items-center justify-between pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
         <div className="flex items-center gap-2 min-w-0">

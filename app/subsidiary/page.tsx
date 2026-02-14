@@ -302,6 +302,7 @@ export default function SubsidiaryDashboard() {
                 <Gauge className="h-5 w-5" />
                 績效儀表板
               </CardTitle>
+              <p className="text-xs text-muted-foreground">僅統計已進入驗收或結案階段的需求</p>
             </CardHeader>
             <CardContent className="space-y-5">
               {/* 交付率 */}
