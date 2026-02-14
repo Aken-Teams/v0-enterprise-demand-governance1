@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const currentYear = new Date().getFullYear()
 
     // Fetch all data in parallel
-    const [wallet, demands, recentHistory, acceptanceRecords] = await Promise.all([
+    const [wallet, demands] = await Promise.all([
       // SP wallet
       prisma.spWallet.findUnique({
         where: {
@@ -40,24 +40,11 @@ export async function GET(request: NextRequest) {
           estimatedSp: true,
           confirmedSp: true,
           createdAt: true,
+          expectedDate: true,
           completedDate: true,
           updatedAt: true,
         },
         orderBy: { updatedAt: "desc" },
-      }),
-      // Recent status changes (for activity feed)
-      prisma.demandStatusHistory.findMany({
-        where: { demand: { organizationId: orgId } },
-        include: {
-          demand: { select: { demandNumber: true, title: true, estimatedSp: true, confirmedSp: true, priority: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
-      // Acceptance records (for pass rate)
-      prisma.acceptanceRecord.findMany({
-        where: { demand: { organizationId: orgId } },
-        select: { result: true },
       }),
     ])
 
@@ -83,10 +70,25 @@ export async function GET(request: NextRequest) {
     const nonRejected = demands.filter((d) => d.status !== "REJECTED").length
     const completionRate = nonRejected > 0 ? Math.round((completed / nonRejected) * 100) : 0
 
-    // Acceptance pass rate
-    const totalAcceptance = acceptanceRecords.length
-    const passedAcceptance = acceptanceRecords.filter((r) => r.result === "PASS").length
-    const passRate = totalAcceptance > 0 ? Math.round((passedAcceptance / totalAcceptance) * 100) : 0
+    // --- 交付率: CLOSED demands where completedDate <= expectedDate ---
+    const deliverableDemands = demands.filter(
+      (d) => d.status === "CLOSED" && d.completedDate && d.expectedDate
+    )
+    const onTimeDelivery = deliverableDemands.filter(
+      (d) => new Date(d.completedDate!) <= new Date(d.expectedDate!)
+    ).length
+    const deliveryRate = deliverableDemands.length > 0
+      ? Math.round((onTimeDelivery / deliverableDemands.length) * 100)
+      : 0
+
+    // --- 通過率: demands at SP_REVIEW or beyond (not REJECTED), how many reached CLOSED ---
+    const passStatuses = new Set(["SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED"])
+    const passEligible = demands.filter(
+      (d) => passStatuses.has(d.status)
+    )
+    const passTotal = passEligible.length
+    const passClosed = passEligible.filter((d) => d.status === "CLOSED").length
+    const passRate = passTotal > 0 ? Math.round((passClosed / passTotal) * 100) : 0
 
     // Average processing time (days from createdAt to completedDate for CLOSED demands)
     const closedDemands = demands.filter((d) => d.status === "CLOSED" && d.completedDate)
@@ -99,14 +101,14 @@ export async function GET(request: NextRequest) {
       avgDays = Math.round((totalDays / closedDemands.length) * 10) / 10
     }
 
-    // --- Monthly trends (last 6 months) ---
+    // --- Monthly trends (last 12 months) ---
     const now = new Date()
     const monthlyTrends: { month: string; submitted: number; completed: number }[] = []
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 7; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const monthStart = new Date(d.getFullYear(), d.getMonth(), 1)
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1)
-      const monthLabel = d.toLocaleString("en-US", { month: "short" })
+      const monthLabel = `${String(d.getFullYear()).slice(2)}/${String(d.getMonth() + 1).padStart(2, "0")}`
 
       const submitted = demands.filter(
         (dem) => new Date(dem.createdAt) >= monthStart && new Date(dem.createdAt) < monthEnd
@@ -120,34 +122,6 @@ export async function GET(request: NextRequest) {
 
       monthlyTrends.push({ month: monthLabel, submitted, completed: completedInMonth })
     }
-
-    // --- Recent activity ---
-    const STATUS_LABELS: Record<string, string> = {
-      SUBMITTED: "需求提出",
-      PRD_REVIEW: "PRD 確認中",
-      SP_REVIEW: "SP 確認中",
-      DEVELOPING: "開發中",
-      ACCEPTANCE: "驗收中",
-      CLOSED: "已結案",
-      REJECTED: "已駁回",
-    }
-
-    const PRIORITY_LABELS: Record<string, string> = {
-      low: "低",
-      medium: "中",
-      high: "高",
-      critical: "緊急",
-    }
-
-    const recentActivity = recentHistory.map((h) => ({
-      action: STATUS_LABELS[h.toStatus] ?? h.toStatus,
-      title: h.demand.title,
-      demandNumber: h.demand.demandNumber,
-      time: h.createdAt,
-      sp: h.demand.confirmedSp ?? h.demand.estimatedSp,
-      priority: PRIORITY_LABELS[h.demand.priority] ?? h.demand.priority,
-      status: h.toStatus === "CLOSED" ? "success" : h.toStatus === "REJECTED" ? "warning" : "info",
-    }))
 
     return NextResponse.json({
       kpi: {
@@ -164,12 +138,15 @@ export async function GET(request: NextRequest) {
         availablePercent: totalQuota > 0 ? Math.round((availableSp / totalQuota) * 1000) / 10 : 0,
       },
       performance: {
-        deliveryRate: completionRate,
+        deliveryRate,
+        deliveryOnTime: onTimeDelivery,
+        deliveryTotal: deliverableDemands.length,
         passRate,
+        passClosed,
+        passTotal,
         avgProcessingDays: avgDays,
       },
       monthlyTrends,
-      recentActivity,
     })
   } catch (error) {
     if (error instanceof AuthError) {

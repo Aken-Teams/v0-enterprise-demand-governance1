@@ -5,122 +5,101 @@ import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   FileText,
-  Clock,
-  CheckCircle,
   Coins,
-  TrendingUp,
-  ArrowUpRight,
-  Activity,
-  Target,
-  Zap,
   Timer,
   ListTodo,
   ChartLine,
-  FolderOpen,
   PieChart,
   Gauge,
   Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 
-// --- Chart components (unchanged) ---
-
-const CircularProgress = ({ percentage, size = 80, strokeWidth = 8, color = "#3b82f6" }: { percentage: number, size?: number, strokeWidth?: number, color?: string }) => {
-  const radius = (size - strokeWidth) / 2
-  const circumference = radius * 2 * Math.PI
-  const offset = circumference - (percentage / 100) * circumference
-
-  return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg width={size} height={size} className="transform -rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="none" className="text-gray-200" />
-        <circle cx={size / 2} cy={size / 2} r={radius} stroke={color} strokeWidth={strokeWidth} fill="none"
-          strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-1000 ease-out" />
-      </svg>
-      <span className="absolute text-lg font-bold" style={{ color }}>
-        {percentage}%
-      </span>
-    </div>
-  )
-}
-
-const MiniLineChart = ({ data, color = "#3b82f6" }: { data: number[], color?: string }) => {
-  const max = Math.max(...data)
-  const min = Math.min(...data)
-  const range = max - min
-  const points = data
-    .map((value: number, index: number) => {
-      const x = (index / (data.length - 1)) * 100
-      const y = range === 0 ? 50 : ((max - value) / range) * 80 + 10
-      return `${x},${y}`
-    })
-    .join(" ")
-  return (
-    <div className="w-20 h-8">
-      <svg viewBox="0 0 100 100" className="w-full h-full">
-        <polyline points={points} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-80" />
-      </svg>
-    </div>
-  )
-}
-
-const HalfCircleGauge = ({ percentage, size = 120, title, value }: { percentage: number, size?: number, title: string, value: string | number }) => {
-  const radius = (size - 20) / 2
-  const circumference = Math.PI * radius
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative">
-        <svg width={size} height={size / 2 + 10} className="overflow-visible">
-          <defs>
-            <linearGradient id={`gradient-${title}`} x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#ef4444" />
-              <stop offset="50%" stopColor="#f59e0b" />
-              <stop offset="100%" stopColor="#10b981" />
-            </linearGradient>
-          </defs>
-          <path d={`M 10 ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 10} ${size / 2}`} fill="none" stroke="#e5e7eb" strokeWidth="8" strokeLinecap="round" />
-          <path d={`M 10 ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 10} ${size / 2}`} fill="none" stroke={`url(#gradient-${title})`} strokeWidth="8" strokeLinecap="round"
-            strokeDasharray={circumference} strokeDashoffset={circumference - (percentage / 100) * circumference} className="transition-all duration-1000 ease-out" />
-        </svg>
-        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 text-center">
-          <div className="text-2xl font-bold">{value}</div>
-          <div className="text-xs text-muted-foreground">{title}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const DonutChart = ({ data, size = 120 }: { data: Array<{ value: number, color: string, label: string }>, size?: number }) => {
-  const total = data.reduce((sum: number, item) => sum + item.value, 0)
-  let cumulativePercentage = 0
-  const radius = 35
+/** Donut chart where `total` is the full ring (gray bg), and `segments` fill on top. */
+const SpDonutChart = ({ total, segments, availableSp, size = 150 }: {
+  total: number
+  segments: { value: number; color: string; label: string }[]
+  availableSp: number
+  size?: number
+}) => {
+  const sw = size * 0.09
+  const radius = (size - sw) / 2 - 4
   const circumference = 2 * Math.PI * radius
+  let cumulativePercent = 0
+  const [tooltip, setTooltip] = useState<{ label: string; value: number; pct: string; x: number; y: number } | null>(null)
+
+  // Pre-compute segment midpoints for tooltip positioning (in un-rotated coords)
+  const segMeta = segments.map((seg) => {
+    const pct = total > 0 ? (seg.value / total) * 100 : 0
+    const midPct = cumulativePercent + pct / 2
+    cumulativePercent += pct
+    // Convert percentage to angle (0% = top, clockwise). SVG is rotated -90deg so 0% starts at top.
+    const angle = (midPct / 100) * 2 * Math.PI - Math.PI / 2
+    return {
+      ...seg, pct,
+      mx: size / 2 + radius * Math.cos(angle),
+      my: size / 2 + radius * Math.sin(angle),
+    }
+  })
+  // Available segment midpoint
+  const availPct = total > 0 ? (availableSp / total) * 100 : 100
+  const availMidPct = cumulativePercent + availPct / 2
+  const availAngle = (availMidPct / 100) * 2 * Math.PI - Math.PI / 2
+  const availMx = size / 2 + radius * Math.cos(availAngle)
+  const availMy = size / 2 + radius * Math.sin(availAngle)
+
+  // Reset for render
+  cumulativePercent = 0
+
   return (
-    <div className="relative">
+    <div className="relative"
+      onMouseLeave={() => setTooltip(null)}
+    >
       <svg width={size} height={size} className="transform -rotate-90">
-        {data.map((item, index: number) => {
-          const percentage = total > 0 ? (item.value / total) * 100 : 0
-          const offset = circumference - (cumulativePercentage / 100) * circumference
-          const strokeDasharray = `${(percentage / 100) * circumference} ${circumference}`
-          cumulativePercentage += percentage
+        {/* Gray background ring = available */}
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#e5e7eb" strokeWidth={sw}
+          className="cursor-pointer"
+          onMouseEnter={(e) => {
+            const rect = e.currentTarget.ownerSVGElement!.getBoundingClientRect()
+            setTooltip({ label: "可用", value: availableSp, pct: `${total > 0 ? Math.round((availableSp / total) * 100) : 0}%`, x: availMx, y: availMy })
+          }}
+        />
+        {/* Colored segments on top */}
+        {segMeta.map((seg, i) => {
+          const pct = total > 0 ? (seg.value / total) * 100 : 0
+          const offset = circumference - (cumulativePercent / 100) * circumference
+          const dash = `${(pct / 100) * circumference} ${circumference}`
+          cumulativePercent += pct
           return (
-            <circle key={index} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={item.color} strokeWidth="12"
-              strokeDasharray={strokeDasharray} strokeDashoffset={-offset} className="transition-all duration-1000 ease-out" />
+            <circle key={i} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={seg.color} strokeWidth={sw}
+              strokeDasharray={dash} strokeDashoffset={-offset} strokeLinecap="round"
+              className="transition-all duration-1000 ease-out cursor-pointer"
+              onMouseEnter={() => {
+                setTooltip({ label: seg.label, value: seg.value, pct: `${Math.round(seg.pct)}%`, x: seg.mx, y: seg.my })
+              }}
+            />
           )
         })}
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="text-center">
           <div className="text-lg font-bold">{total}</div>
-          <div className="text-xs text-muted-foreground">總計</div>
+          <div className="text-xs text-muted-foreground">總配額</div>
         </div>
       </div>
+      {/* Tooltip */}
+      {tooltip && (
+        <div
+          className="absolute z-10 pointer-events-none rounded-md bg-popover border px-3 py-1.5 shadow-md text-sm"
+          style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -140%)" }}
+        >
+          <span className="font-medium">{tooltip.label}</span>
+          <span className="text-muted-foreground ml-2">{tooltip.value}</span>
+          <span className="text-muted-foreground ml-1">({tooltip.pct})</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -143,30 +122,14 @@ interface DashboardData {
   }
   performance: {
     deliveryRate: number
+    deliveryOnTime: number
+    deliveryTotal: number
     passRate: number
+    passClosed: number
+    passTotal: number
     avgProcessingDays: number
   }
   monthlyTrends: { month: string; submitted: number; completed: number }[]
-  recentActivity: {
-    action: string
-    title: string
-    demandNumber: string
-    time: string
-    sp: number
-    priority: string
-    status: string
-  }[]
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now()
-  const diff = now - new Date(dateStr).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 60) return `${minutes} 分鐘前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} 小時前`
-  const days = Math.floor(hours / 24)
-  return `${days} 天前`
 }
 
 export default function SubsidiaryDashboard() {
@@ -197,20 +160,15 @@ export default function SubsidiaryDashboard() {
 
   const kpi = data?.kpi ?? { totalDemands: 0, inProgress: 0, completed: 0, completionRate: 0 }
   const sp = data?.sp ?? { totalQuota: 0, usedSp: 0, committedSp: 0, availableSp: 0, availablePercent: 0 }
-  const perf = data?.performance ?? { deliveryRate: 0, passRate: 0, avgProcessingDays: 0 }
+  const perf = data?.performance ?? { deliveryRate: 0, deliveryOnTime: 0, deliveryTotal: 0, passRate: 0, passClosed: 0, passTotal: 0, avgProcessingDays: 0 }
   const monthlyTrends = data?.monthlyTrends ?? []
-  const recentActivity = data?.recentActivity ?? []
 
-  const inProgressPercent = kpi.totalDemands > 0 ? Math.round((kpi.inProgress / kpi.totalDemands) * 100) : 0
-
-  const spData = [
-    { name: "已使用", value: sp.usedSp, color: "#3b82f6", label: "已使用" },
-    { name: "已承諾", value: sp.committedSp, color: "#f59e0b", label: "已承諾" },
-    { name: "可用", value: sp.availableSp, color: "#10b981", label: "可用" },
+  // Only used & committed are colored segments; available = gray background
+  const spSegments = [
+    { value: sp.usedSp, color: "#3b82f6", label: "已使用" },
+    { value: sp.committedSp, color: "#f59e0b", label: "已承諾" },
   ]
 
-  // Build sparkline data from monthly trends
-  const trendSubmitted = monthlyTrends.map((m) => m.submitted)
   const maxMonthlyVal = Math.max(...monthlyTrends.map((m) => Math.max(m.submitted, m.completed)), 1)
 
   return (
@@ -238,84 +196,57 @@ export default function SubsidiaryDashboard() {
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-blue-700">總需求數</CardTitle>
-              <div className="p-2 bg-blue-100 rounded-full">
-                <FileText className="h-5 w-5 text-blue-600" />
+        {/* KPI Summary */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* 需求概況 */}
+          <Card className="py-4">
+            <CardContent className="flex items-center gap-6 pb-0">
+              <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-bold">{kpi.totalDemands}</span>
+                <span className="text-sm text-muted-foreground">需求</span>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold text-blue-900">{kpi.totalDemands}</div>
-                {trendSubmitted.length > 1 && <MiniLineChart data={trendSubmitted} color="#3b82f6" />}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-purple-700">進行中</CardTitle>
-              <div className="p-2 bg-purple-100 rounded-full">
-                <Clock className="h-5 w-5 text-purple-600" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold text-purple-900">{kpi.inProgress}</div>
-                <CircularProgress percentage={inProgressPercent} size={50} color="#8b5cf6" />
-              </div>
-              <div className="flex items-center gap-1 text-xs">
-                <Activity className="h-3 w-3 text-purple-500" />
-                <span className="text-purple-600/70">佔總數 {inProgressPercent}%</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-green-700">可用 SP</CardTitle>
-              <div className="p-2 bg-green-100 rounded-full">
-                <Coins className="h-5 w-5 text-green-600" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold text-green-900">{sp.availableSp}</div>
-                <CircularProgress percentage={sp.availablePercent} size={50} color="#10b981" />
-              </div>
-              <div className="w-full">
-                <div className="text-xs text-green-600/70 mb-1">剩餘 {sp.availablePercent}%</div>
-                <Progress value={sp.availablePercent} className="h-2 bg-green-100 [&>div]:bg-gradient-to-r [&>div]:from-green-400 [&>div]:to-emerald-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-cyan-50 to-teal-50 border-cyan-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-cyan-700">已完成</CardTitle>
-              <div className="p-2 bg-cyan-100 rounded-full">
-                <Target className="h-5 w-5 text-cyan-600" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold text-cyan-900">{kpi.completed}</div>
-                <div className="relative">
-                  <svg width="50" height="50" className="transform -rotate-90">
-                    <circle cx="25" cy="25" r="20" stroke="#e0f2fe" strokeWidth="4" fill="none" />
-                    <circle cx="25" cy="25" r="20" stroke="#06b6d4" strokeWidth="4" fill="none"
-                      strokeDasharray={`${2 * Math.PI * 20}`} strokeDashoffset={`${2 * Math.PI * 20 * (1 - kpi.completionRate / 100)}`}
-                      strokeLinecap="round" className="transition-all duration-1000" />
-                  </svg>
-                  <Zap className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-4 w-4 text-cyan-600" />
+              <div className="h-8 w-px bg-border" />
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-purple-500" />
+                  <span className="text-muted-foreground">進行中</span>
+                  <span className="font-medium">{kpi.inProgress}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-cyan-500" />
+                  <span className="text-muted-foreground">已完成</span>
+                  <span className="font-medium">{kpi.completed}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1 text-xs">
-                <TrendingUp className="h-3 w-3 text-green-500" />
-                <span className="text-green-600 font-medium">{kpi.completionRate}% 完成率</span>
+            </CardContent>
+          </Card>
+
+          {/* SP 配額 */}
+          <Card className="py-4">
+            <CardContent className="flex items-center gap-6 pb-0">
+              <Coins className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-bold">{sp.totalQuota}</span>
+                <span className="text-sm text-muted-foreground">SP 配額</span>
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-blue-500" />
+                  <span className="text-muted-foreground">已使用</span>
+                  <span className="font-medium">{sp.usedSp}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="text-muted-foreground">已承諾</span>
+                  <span className="font-medium">{sp.committedSp}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  <span className="text-muted-foreground">可用</span>
+                  <span className="font-medium">{sp.availableSp}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -332,17 +263,23 @@ export default function SubsidiaryDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
-              <DonutChart data={spData} size={150} />
+              <SpDonutChart total={sp.totalQuota} segments={spSegments} availableSp={sp.availableSp} size={200} />
               <div className="grid grid-cols-3 gap-4 w-full text-center">
-                {spData.map((item, index) => (
-                  <div key={index} className="space-y-1">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                    </div>
-                    <div className="text-sm font-medium">{item.value}</div>
-                    <div className="text-xs text-muted-foreground">{item.name}</div>
-                  </div>
-                ))}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /></div>
+                  <div className="text-sm font-medium">{sp.usedSp}</div>
+                  <div className="text-xs text-muted-foreground">已使用</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-amber-500" /></div>
+                  <div className="text-sm font-medium">{sp.committedSp}</div>
+                  <div className="text-xs text-muted-foreground">已承諾</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-gray-300" /></div>
+                  <div className="text-sm font-medium">{sp.availableSp}</div>
+                  <div className="text-xs text-muted-foreground">可用</div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -355,22 +292,55 @@ export default function SubsidiaryDashboard() {
                 績效儀表板
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <HalfCircleGauge percentage={perf.deliveryRate} title="交付率" value={`${perf.deliveryRate}%`} />
+            <CardContent className="space-y-5">
+              {/* 交付率 */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium">交付率</div>
+                    <div className="text-xs text-muted-foreground">預計完成日前結案</div>
+                  </div>
+                  <span className="text-2xl font-bold">{perf.deliveryRate}%</span>
                 </div>
-                <div className="text-center">
-                  <HalfCircleGauge percentage={perf.passRate} title="通過率" value={`${perf.passRate}%`} />
+                <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-700" style={{ width: `${perf.deliveryRate}%` }} />
+                </div>
+                <div className="text-xs text-muted-foreground text-right">
+                  {perf.deliveryOnTime} / {perf.deliveryTotal} 需求準時交付
                 </div>
               </div>
-              <div className="space-y-3 pt-4 border-t">
+
+              <div className="border-t" />
+
+              {/* 通過率 */}
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">平均處理時間</span>
-                  <div className="flex items-center gap-2">
-                    <Timer className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{perf.avgProcessingDays > 0 ? `${perf.avgProcessingDays} 天` : "—"}</span>
+                  <div>
+                    <div className="text-sm font-medium">通過率</div>
+                    <div className="text-xs text-muted-foreground">開案確認後成功結案</div>
                   </div>
+                  <span className="text-2xl font-bold">{perf.passRate}%</span>
+                </div>
+                <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full transition-all duration-700" style={{ width: `${perf.passRate}%` }} />
+                </div>
+                <div className="text-xs text-muted-foreground text-right">
+                  {perf.passClosed} / {perf.passTotal} 需求結案
+                </div>
+              </div>
+
+              <div className="border-t" />
+
+              {/* 平均處理時間 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">平均處理時間</div>
+                  <div className="text-xs text-muted-foreground">提出到結案</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Timer className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-2xl font-bold">{perf.avgProcessingDays > 0 ? `${perf.avgProcessingDays}` : "—"}</span>
+                  {perf.avgProcessingDays > 0 && <span className="text-sm text-muted-foreground">天</span>}
                 </div>
               </div>
             </CardContent>
@@ -385,178 +355,52 @@ export default function SubsidiaryDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {monthlyTrends.length === 0 ? (
-                  <div className="text-sm text-muted-foreground text-center py-8">尚無資料</div>
-                ) : (
-                  monthlyTrends.map((d, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-muted-foreground w-8">{d.month}</span>
-                      <div className="flex-1 flex items-center gap-2">
-                        <div className="flex-1 bg-secondary rounded-full h-6 relative overflow-hidden">
-                          <div
-                            className="absolute left-0 top-0 h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full flex items-center justify-end pr-2 transition-all duration-1000 ease-out"
-                            style={{ width: `${maxMonthlyVal > 0 ? (d.submitted / maxMonthlyVal) * 100 : 0}%` }}
-                          >
-                            {d.submitted > 0 && <span className="text-xs text-white font-medium">{d.submitted}</span>}
-                          </div>
-                        </div>
-                        <div className="flex-1 bg-secondary rounded-full h-6 relative overflow-hidden">
-                          <div
-                            className="absolute left-0 top-0 h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-end pr-2 transition-all duration-1000 ease-out"
-                            style={{ width: `${maxMonthlyVal > 0 ? (d.completed / maxMonthlyVal) * 100 : 0}%` }}
-                          >
-                            {d.completed > 0 && <span className="text-xs text-white font-medium">{d.completed}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-                <div className="flex items-center gap-4 pt-2 border-t">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-gradient-to-r from-blue-400 to-blue-600" />
-                    <span className="text-xs text-muted-foreground">已提交</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-gradient-to-r from-green-400 to-green-600" />
-                    <span className="text-xs text-muted-foreground">已完成</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Activity Feed & Quick Links */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Activity Feed */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  最近活動
-                </CardTitle>
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  <div className="w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse" />
-                  即時更新
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <div className="text-sm text-muted-foreground text-center py-8">尚無活動記錄</div>
+              {monthlyTrends.length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-8">尚無資料</div>
               ) : (
-                <div className="space-y-4">
-                  {recentActivity.map((activity, i) => (
-                    <div key={i} className="flex items-start gap-4 p-3 rounded-lg hover:bg-gradient-to-r hover:from-muted/30 hover:to-transparent transition-all duration-200 border border-transparent hover:border-border/50">
-                      <div className="relative">
+                <div className="space-y-3">
+                  {/* Legend */}
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2 w-2 rounded-full bg-blue-500" />
+                      <span>提交</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2 w-2 rounded-full bg-green-500" />
+                      <span>完成</span>
+                    </div>
+                  </div>
+                  {/* Rows */}
+                  {monthlyTrends.map((d, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-10 shrink-0 tabular-nums">{d.month}</span>
+                      {/* Stacked bar: gray bg = max, blue = submitted, green = completed overlaid */}
+                      <div className="flex-1 bg-secondary rounded h-5 relative overflow-hidden">
+                        {/* Blue: submitted */}
                         <div
-                          className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium",
-                            activity.status === "success" && "bg-gradient-to-r from-green-400 to-green-600",
-                            activity.status === "warning" && "bg-gradient-to-r from-orange-400 to-orange-600",
-                            activity.status === "info" && "bg-gradient-to-r from-blue-400 to-blue-600",
-                          )}
-                        >
-                          {activity.status === "success" && <CheckCircle className="h-5 w-5" />}
-                          {activity.status === "warning" && <Clock className="h-5 w-5" />}
-                          {activity.status === "info" && <FileText className="h-5 w-5" />}
-                        </div>
-                        {i < recentActivity.length - 1 && <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-0.5 h-4 bg-border" />}
+                          className="absolute left-0 top-0 h-full bg-blue-500/20 rounded transition-all duration-700"
+                          style={{ width: `${maxMonthlyVal > 0 ? (d.submitted / maxMonthlyVal) * 100 : 0}%` }}
+                        />
+                        {/* Green: completed, overlaid */}
+                        <div
+                          className="absolute left-0 top-0 h-full bg-green-500 rounded transition-all duration-700"
+                          style={{ width: `${maxMonthlyVal > 0 ? (d.completed / maxMonthlyVal) * 100 : 0}%` }}
+                        />
                       </div>
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{activity.title}</p>
-                            <div className="flex items-center gap-3 mt-1">
-                              <p className="text-xs text-muted-foreground">
-                                {activity.action} &bull; {formatRelativeTime(activity.time)}
-                              </p>
-                              {activity.sp > 0 && (
-                                <Badge variant="secondary" className="text-xs px-2 py-0">
-                                  {activity.sp} SP
-                                </Badge>
-                              )}
-                              <Badge
-                                variant={activity.priority === "高" || activity.priority === "緊急" ? "destructive" : activity.priority === "中" ? "default" : "secondary"}
-                                className="text-xs px-2 py-0"
-                              >
-                                {activity.priority}
-                              </Badge>
-                            </div>
-                          </div>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                            <Link href="/subsidiary/demands">
-                              <ArrowUpRight className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                        </div>
+                      {/* Numbers */}
+                      <div className="flex items-center gap-2 shrink-0 text-xs tabular-nums w-16 justify-end">
+                        <span className="text-blue-600 font-medium">{d.submitted}</span>
+                        <span className="text-muted-foreground">/</span>
+                        <span className="text-green-600 font-medium">{d.completed}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <div className="mt-6 pt-4 border-t">
-                <Button variant="link" className="p-0 h-auto text-primary" asChild>
-                  <Link href="/subsidiary/demands">查看所有需求 →</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Links & Stats */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <FolderOpen className="h-5 w-5" />
-                快速連結
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3">
-                <Button className="w-full justify-start bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700" asChild>
-                  <Link href="/subsidiary/demands">
-                    <FolderOpen className="mr-3 h-4 w-4" />
-                    查看所有需求
-                  </Link>
-                </Button>
-                <Button className="w-full justify-start bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700" asChild>
-                  <Link href="/subsidiary/wallet">
-                    <Coins className="mr-3 h-4 w-4" />
-                    查看 SP 錢包
-                  </Link>
-                </Button>
-              </div>
-
-              {/* Quick Stats */}
-              <div className="space-y-3 pt-4 border-t">
-                <div className="text-sm font-medium text-foreground mb-2">概況</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-3 rounded-lg text-center">
-                    <div className="text-lg font-bold text-blue-700">{kpi.totalDemands}</div>
-                    <div className="text-xs text-blue-600">總需求</div>
-                  </div>
-                  <div className="bg-gradient-to-r from-green-50 to-green-100 p-3 rounded-lg text-center">
-                    <div className="text-lg font-bold text-green-700">{kpi.completed}</div>
-                    <div className="text-xs text-green-600">已完成</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-3 rounded-lg text-center">
-                    <div className="text-lg font-bold text-orange-700">{kpi.inProgress}</div>
-                    <div className="text-xs text-orange-600">進行中</div>
-                  </div>
-                  <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-3 rounded-lg text-center">
-                    <div className="text-lg font-bold text-purple-700">{sp.availableSp}</div>
-                    <div className="text-xs text-purple-600">可用 SP</div>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
+
       </div>
     </AppLayout>
   )
