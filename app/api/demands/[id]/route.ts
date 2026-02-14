@@ -149,7 +149,12 @@ export async function PATCH(
     const updated = await prisma.$transaction(async (tx) => {
       const d = await tx.demand.update({
         where: { id },
-        data: { status: status as DemandStatus },
+        data: {
+          status: status as DemandStatus,
+          ...(status === "CLOSED" ? { completedDate: new Date() } : {}),
+          // Clear completedDate if moving back from CLOSED
+          ...(demand.status === "CLOSED" && status !== "CLOSED" ? { completedDate: null } : {}),
+        },
       })
       await tx.demandStatusHistory.create({
         data: {

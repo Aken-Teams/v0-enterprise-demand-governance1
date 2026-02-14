@@ -3,7 +3,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
-import { watermarkPdf, textToPdf, markdownToPdf, imageToPdf, coverPagePdf } from "@/lib/pdf-watermark"
+import { watermarkPdf, textToPdf, markdownToPdf, imageToPdf, officeToPdf, coverPagePdf } from "@/lib/pdf-watermark"
 
 function getFileExtension(fileName: string): string {
   return fileName.split(".").pop()?.toLowerCase() || ""
@@ -99,8 +99,19 @@ export async function GET(
         pdfBytes = await imageToPdf(fileBytes, "image/png", watermarkText)
         break
 
+      case "doc":
+      case "docx":
+      case "xls":
+      case "xlsx":
+      case "ppt":
+      case "pptx": {
+        const converted = await officeToPdf(fileBytes, doc.fileName, watermarkText)
+        pdfBytes = converted || (await coverPagePdf(doc.fileName, watermarkText))
+        break
+      }
+
       default:
-        // Office files and other formats: generate a cover page PDF
+        // Other formats: generate a cover page PDF
         pdfBytes = await coverPagePdf(doc.fileName, watermarkText)
         break
     }

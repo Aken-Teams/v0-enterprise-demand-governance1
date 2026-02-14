@@ -27,6 +27,7 @@ interface AnalyticsData {
   }
   statusCounts: Record<string, number>
   orgDemandCounts: Record<string, number>
+  devDemandCounts: Record<string, number>
   monthlyTrends: { month: string; submitted: number; completed: number }[]
   sp: {
     totalQuota: number
@@ -134,6 +135,13 @@ export default function GovernanceAnalyticsPage() {
     fill: ORG_COLORS[i % ORG_COLORS.length],
   }))
 
+  const DEV_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6", "#6366f1"]
+  const devChartData = Object.entries(d?.devDemandCounts ?? {}).map(([name, count], i) => ({
+    name,
+    value: count,
+    fill: DEV_COLORS[i % DEV_COLORS.length],
+  }))
+
   const phaseChartData = (d?.phaseAvgDays ?? [])
     .filter((p) => p.phase !== "CLOSED" && p.count > 0)
     .map((p) => ({
@@ -142,12 +150,15 @@ export default function GovernanceAnalyticsPage() {
       count: p.count,
     }))
 
-  const orgSpChartData = (d?.sp.byOrganization ?? []).map((o) => ({
-    name: o.name,
-    已使用: o.usedSp,
-    已承諾: o.committedSp,
-    可用: o.availableSp,
-  }))
+  const orgSpChartData = (d?.sp.byOrganization ?? [])
+    .map((o) => ({
+      name: o.name,
+      已使用: o.usedSp,
+      已承諾: o.committedSp,
+      可用: o.availableSp,
+      _total: o.totalQuota,
+    }))
+    .sort((a, b) => b._total - a._total)
 
   const spPieData = [
     { name: "已使用", value: d?.sp.totalUsedSp ?? 0, fill: "#8b5cf6" },
@@ -191,18 +202,15 @@ export default function GovernanceAnalyticsPage() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">總覽</TabsTrigger>
-            <TabsTrigger value="flow">需求流動</TabsTrigger>
             <TabsTrigger value="metrics">指標分析</TabsTrigger>
-            <TabsTrigger value="trends">趨勢分析</TabsTrigger>
-            <TabsTrigger value="risks">風險管理</TabsTrigger>
             <TabsTrigger value="sp-usage">SP 分析</TabsTrigger>
           </TabsList>
 
           {/* ====== 總覽 ====== */}
           <TabsContent value="overview">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">需求狀態分佈</CardTitle>
@@ -265,56 +273,33 @@ export default function GovernanceAnalyticsPage() {
                   )}
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
 
-          {/* ====== 需求流動 ====== */}
-          <TabsContent value="flow">
-            <div className="grid gap-4 md:grid-cols-1">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">各狀態需求數量</CardTitle>
-                  <CardDescription>顯示每個階段目前的需求數</CardDescription>
+                  <CardTitle className="text-base">開發者分佈</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {statusChartData.length > 0 ? (
-                    <ChartContainer config={statusChartConfig} className="h-[300px] w-full">
-                      <BarChart data={statusChartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" fontSize={12} />
-                        <YAxis allowDecimals={false} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="value" name="需求數" radius={[4, 4, 0, 0]}>
-                          {statusChartData.map((entry, i) => (
+                  {devChartData.length > 0 ? (
+                    <ChartContainer
+                      config={Object.fromEntries(devChartData.map((o) => [o.name, { label: o.name, color: o.fill }]))}
+                      className="h-[260px] w-full"
+                    >
+                      <PieChart>
+                        <Pie
+                          data={devChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={90}
+                          label={({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
+                        >
+                          {devChartData.map((entry, i) => (
                             <Cell key={i} fill={entry.fill} />
                           ))}
-                        </Bar>
-                      </BarChart>
-                    </ChartContainer>
-                  ) : (
-                    <EmptyState />
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">各階段平均停留天數</CardTitle>
-                  <CardDescription>根據狀態歷程計算</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {phaseChartData.length > 0 ? (
-                    <ChartContainer
-                      config={{ days: { label: "平均天數", color: "#8b5cf6" } }}
-                      className="h-[300px] w-full"
-                    >
-                      <BarChart data={phaseChartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" fontSize={12} />
-                        <YAxis />
+                        </Pie>
                         <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="days" name="平均天數" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
+                      </PieChart>
                     </ChartContainer>
                   ) : (
                     <EmptyState />
@@ -322,6 +307,29 @@ export default function GovernanceAnalyticsPage() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="text-base">月度需求趨勢</CardTitle>
+                <CardDescription>近 8 個月新增與完成需求數</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {d.monthlyTrends.some((m) => m.submitted > 0 || m.completed > 0) ? (
+                  <ChartContainer config={trendChartConfig} className="h-[300px] w-full">
+                    <LineChart data={d.monthlyTrends}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" fontSize={12} />
+                      <YAxis allowDecimals={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Line type="monotone" dataKey="submitted" name="新增需求" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="completed" name="完成結案" stroke="#22c55e" strokeWidth={2} dot={{ r: 4 }} />
+                    </LineChart>
+                  </ChartContainer>
+                ) : (
+                  <EmptyState />
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ====== 指標分析 ====== */}
@@ -392,51 +400,9 @@ export default function GovernanceAnalyticsPage() {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
 
-          {/* ====== 趨勢分析 ====== */}
-          <TabsContent value="trends">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">月度需求趨勢</CardTitle>
-                <CardDescription>近 8 個月新增與完成需求數</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {d.monthlyTrends.some((m) => m.submitted > 0 || m.completed > 0) ? (
-                  <ChartContainer config={trendChartConfig} className="h-[350px] w-full">
-                    <LineChart data={d.monthlyTrends}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" fontSize={12} />
-                      <YAxis allowDecimals={false} />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Line
-                        type="monotone"
-                        dataKey="submitted"
-                        name="新增需求"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="completed"
-                        name="完成結案"
-                        stroke="#22c55e"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                    </LineChart>
-                  </ChartContainer>
-                ) : (
-                  <EmptyState />
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ====== 風險管理 ====== */}
-          <TabsContent value="risks">
-            <div className="grid gap-4">
+            {/* Risk cards */}
+            <div className="grid gap-4 md:grid-cols-2 mt-4">
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
@@ -446,24 +412,16 @@ export default function GovernanceAnalyticsPage() {
                       <Badge variant="destructive">{d.risks.overdueDemands.length}</Badge>
                     )}
                   </CardTitle>
-                  <CardDescription>超過預期交付日期的進行中需求</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {d.risks.overdueDemands.length > 0 ? (
                     <div className="space-y-3">
                       {d.risks.overdueDemands.map((item) => (
-                        <div
-                          key={item.demandNumber}
-                          className="flex items-center justify-between rounded-lg border p-3"
-                        >
+                        <div key={item.demandNumber} className="flex items-center justify-between rounded-lg border p-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-sm text-muted-foreground">
-                                {item.demandNumber}
-                              </span>
-                              <span className={STATUS_MAP[item.status]?.color + " text-xs px-2 py-0.5 rounded-full"}>
-                                {STATUS_MAP[item.status]?.label}
-                              </span>
+                              <span className="font-mono text-sm text-muted-foreground">{item.demandNumber}</span>
+                              <span className={STATUS_MAP[item.status]?.color + " text-xs px-2 py-0.5 rounded-full"}>{STATUS_MAP[item.status]?.label}</span>
                             </div>
                             <p className="text-sm font-medium">{item.title}</p>
                             <p className="text-xs text-muted-foreground">{item.organization}</p>
@@ -487,24 +445,16 @@ export default function GovernanceAnalyticsPage() {
                       <Badge variant="secondary">{d.risks.staleDemands.length}</Badge>
                     )}
                   </CardTitle>
-                  <CardDescription>超過 14 天未更新的進行中需求</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {d.risks.staleDemands.length > 0 ? (
                     <div className="space-y-3">
                       {d.risks.staleDemands.map((item) => (
-                        <div
-                          key={item.demandNumber}
-                          className="flex items-center justify-between rounded-lg border p-3"
-                        >
+                        <div key={item.demandNumber} className="flex items-center justify-between rounded-lg border p-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-sm text-muted-foreground">
-                                {item.demandNumber}
-                              </span>
-                              <span className={STATUS_MAP[item.status]?.color + " text-xs px-2 py-0.5 rounded-full"}>
-                                {STATUS_MAP[item.status]?.label}
-                              </span>
+                              <span className="font-mono text-sm text-muted-foreground">{item.demandNumber}</span>
+                              <span className={STATUS_MAP[item.status]?.color + " text-xs px-2 py-0.5 rounded-full"}>{STATUS_MAP[item.status]?.label}</span>
                             </div>
                             <p className="text-sm font-medium">{item.title}</p>
                             <p className="text-xs text-muted-foreground">{item.organization}</p>
@@ -563,10 +513,10 @@ export default function GovernanceAnalyticsPage() {
                 </CardHeader>
                 <CardContent>
                   {orgSpChartData.length > 0 ? (
-                    <ChartContainer config={spAllocationConfig} className="h-[260px] w-full">
-                      <BarChart data={orgSpChartData}>
+                    <ChartContainer config={spAllocationConfig} className="h-[340px] w-full">
+                      <BarChart data={orgSpChartData} margin={{ bottom: 60 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" fontSize={12} />
+                        <XAxis dataKey="name" fontSize={12} angle={-35} textAnchor="end" interval={0} />
                         <YAxis />
                         <ChartTooltip content={<ChartTooltipContent />} />
                         <Bar dataKey="已使用" stackId="a" fill="#8b5cf6" />

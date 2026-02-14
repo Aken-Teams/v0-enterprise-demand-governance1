@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
     // Fetch all data in parallel
-    const [demands, wallets, statusHistories] = await Promise.all([
+    const [demands, wallets, statusHistories, allOrgs] = await Promise.all([
       prisma.demand.findMany({
         select: {
           id: true,
@@ -51,6 +51,11 @@ export async function GET(request: NextRequest) {
           createdAt: true,
         },
         orderBy: { createdAt: "desc" },
+      }),
+      prisma.organization.findMany({
+        where: { status: "active" },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
       }),
     ])
 
@@ -99,6 +104,13 @@ export async function GET(request: NextRequest) {
       orgDemandCounts[name] = (orgDemandCounts[name] || 0) + 1
     }
 
+    // --- Developer demand distribution ---
+    const devDemandCounts: Record<string, number> = {}
+    for (const d of demands) {
+      const name = d.developer?.name ?? "未指派"
+      devDemandCounts[name] = (devDemandCounts[name] || 0) + 1
+    }
+
     // --- Monthly trends (last 8 months) ---
     const monthlyTrends: { month: string; submitted: number; completed: number }[] = []
     for (let i = 7; i >= 0; i--) {
@@ -120,9 +132,11 @@ export async function GET(request: NextRequest) {
       monthlyTrends.push({ month: monthLabel, submitted, completed })
     }
 
-    // --- Organization SP breakdown ---
-    const orgSpData = wallets.map((w) => {
-      const orgDemands = demands.filter((d) => d.organizationId === w.organizationId)
+    // --- Organization SP breakdown (all orgs) ---
+    const walletMap = new Map(wallets.map((w) => [w.organizationId, w]))
+    const orgSpData = allOrgs.map((org) => {
+      const w = walletMap.get(org.id)
+      const orgDemands = demands.filter((d) => d.organizationId === org.id)
       let usedSp = 0
       let committedSp = 0
       for (const d of orgDemands) {
@@ -131,12 +145,13 @@ export async function GET(request: NextRequest) {
         if (d.status === "CLOSED") usedSp += sp
         else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") committedSp += sp
       }
+      const totalQuota = w?.totalQuota ?? 0
       return {
-        name: w.organization.name,
-        totalQuota: w.totalQuota,
+        name: org.name,
+        totalQuota,
         usedSp,
         committedSp,
-        availableSp: w.totalQuota - usedSp - committedSp,
+        availableSp: totalQuota - usedSp - committedSp,
         demandCount: orgDemands.length,
       }
     })
@@ -147,11 +162,12 @@ export async function GET(request: NextRequest) {
     const totalCommittedSp = orgSpData.reduce((s, o) => s + o.committedSp, 0)
 
     // --- On-time delivery rate ---
+    // Use expectedDate first, fall back to desiredDate
     const deliverableDemands = demands.filter(
-      (d) => d.status === "CLOSED" && d.completedDate && d.expectedDate
+      (d) => d.status === "CLOSED" && d.completedDate && (d.expectedDate || d.desiredDate)
     )
     const onTimeCount = deliverableDemands.filter(
-      (d) => new Date(d.completedDate!) <= new Date(d.expectedDate!)
+      (d) => new Date(d.completedDate!) <= new Date((d.expectedDate ?? d.desiredDate)!)
     ).length
     const onTimeRate = deliverableDemands.length > 0
       ? Math.round((onTimeCount / deliverableDemands.length) * 100)
@@ -170,19 +186,22 @@ export async function GET(request: NextRequest) {
       .filter(
         (d) =>
           activeStatuses.has(d.status) &&
-          d.expectedDate &&
-          new Date(d.expectedDate) < now
+          (d.expectedDate || d.desiredDate) &&
+          new Date((d.expectedDate ?? d.desiredDate)!) < now
       )
-      .map((d) => ({
-        demandNumber: d.demandNumber,
-        title: d.title,
-        status: d.status,
-        organization: d.organization.name,
-        expectedDate: d.expectedDate,
-        overdueDays: Math.ceil(
-          (now.getTime() - new Date(d.expectedDate!).getTime()) / (1000 * 60 * 60 * 24)
-        ),
-      }))
+      .map((d) => {
+        const dueDate = (d.expectedDate ?? d.desiredDate)!
+        return {
+          demandNumber: d.demandNumber,
+          title: d.title,
+          status: d.status,
+          organization: d.organization.name,
+          expectedDate: dueDate,
+          overdueDays: Math.ceil(
+            (now.getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24)
+          ),
+        }
+      })
       .sort((a, b) => b.overdueDays - a.overdueDays)
 
     // --- Risk: stale demands (no update in 14+ days) ---
@@ -259,6 +278,7 @@ export async function GET(request: NextRequest) {
       },
       statusCounts,
       orgDemandCounts,
+      devDemandCounts,
       monthlyTrends,
       sp: {
         totalQuota,

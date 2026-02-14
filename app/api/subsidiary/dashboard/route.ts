@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
           estimatedSp: true,
           confirmedSp: true,
           createdAt: true,
+          desiredDate: true,
           expectedDate: true,
           completedDate: true,
           updatedAt: true,
@@ -70,12 +71,12 @@ export async function GET(request: NextRequest) {
     const nonRejected = demands.filter((d) => d.status !== "REJECTED").length
     const completionRate = nonRejected > 0 ? Math.round((completed / nonRejected) * 100) : 0
 
-    // --- 交付率: CLOSED demands where completedDate <= expectedDate ---
+    // --- 交付率: CLOSED demands where completedDate <= expectedDate/desiredDate ---
     const deliverableDemands = demands.filter(
-      (d) => d.status === "CLOSED" && d.completedDate && d.expectedDate
+      (d) => d.status === "CLOSED" && d.completedDate && (d.expectedDate || d.desiredDate)
     )
     const onTimeDelivery = deliverableDemands.filter(
-      (d) => new Date(d.completedDate!) <= new Date(d.expectedDate!)
+      (d) => new Date(d.completedDate!) <= new Date((d.expectedDate ?? d.desiredDate)!)
     ).length
     const deliveryRate = deliverableDemands.length > 0
       ? Math.round((onTimeDelivery / deliverableDemands.length) * 100)

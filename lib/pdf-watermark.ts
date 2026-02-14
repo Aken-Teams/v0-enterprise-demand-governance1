@@ -1,7 +1,13 @@
 import { PDFDocument, rgb, StandardFonts, degrees, PDFFont, PDFPage } from "pdf-lib"
 import fontkit from "@pdf-lib/fontkit"
-import { readFile } from "fs/promises"
+import { readFile, writeFile, unlink, mkdtemp, rmdir } from "fs/promises"
+import { exec } from "child_process"
+import { promisify } from "util"
+import path from "path"
+import os from "os"
 import { marked, type Token, type Tokens } from "marked"
+
+const execAsync = promisify(exec)
 
 // System CJK font paths (tried in order)
 const CJK_FONT_PATHS = [
@@ -737,6 +743,63 @@ export async function imageToPdf(
 
   drawWatermarkOnPage(page, watermarkText, watermarkFont)
   return pdfDoc.save()
+}
+
+// LibreOffice paths to try (in order, use forward slashes for Windows compatibility)
+const SOFFICE_PATHS = [
+  "C:/Program Files/LibreOffice/program/soffice.exe",
+  "C:/Program Files (x86)/LibreOffice/program/soffice.exe",
+  "/usr/bin/soffice",
+  "/usr/bin/libreoffice",
+  "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+]
+
+/**
+ * Convert Office files (docx, xlsx, pptx, etc.) to PDF via LibreOffice headless,
+ * then apply watermark.
+ * Returns null if LibreOffice is not available.
+ */
+export async function officeToPdf(
+  fileBytes: Buffer | Uint8Array,
+  fileName: string,
+  watermarkText: string,
+): Promise<Uint8Array | null> {
+  const ext = fileName.split(".").pop()?.toLowerCase() || ""
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "pdf-convert-"))
+  const inputPath = path.join(tmpDir, `input.${ext}`)
+  const outputPath = path.join(tmpDir, "input.pdf")
+
+  try {
+    await writeFile(inputPath, fileBytes)
+
+    let converted = false
+    for (const soffice of SOFFICE_PATHS) {
+      try {
+        const cmd = `"${soffice}" --headless --norestore --convert-to pdf --outdir "${tmpDir}" "${inputPath}"`
+        await execAsync(cmd, { timeout: 60000 })
+        converted = true
+        break
+      } catch {
+        continue
+      }
+    }
+
+    if (!converted) {
+      console.warn("LibreOffice not found, cannot convert Office file to PDF")
+      return null
+    }
+
+    const pdfBytes = await readFile(outputPath)
+    return watermarkPdf(pdfBytes, watermarkText)
+  } catch (e) {
+    console.error("Office to PDF conversion error:", e)
+    return null
+  } finally {
+    // Cleanup temp files
+    await unlink(inputPath).catch(() => {})
+    await unlink(outputPath).catch(() => {})
+    await rmdir(tmpDir).catch(() => {})
+  }
 }
 
 /** Create a simple cover-page PDF for unsupported file types */
