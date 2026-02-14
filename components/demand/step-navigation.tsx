@@ -9,7 +9,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ChevronLeft, ChevronRight, Check, Circle, Info } from "lucide-react"
+import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle } from "lucide-react"
 import {
   PIPELINE_STEPS,
   STATUS_MAP,
@@ -97,25 +97,27 @@ export function StepNavigation({
           <span>請記得至下方基本資訊填寫<strong>實際結案日期</strong>，以確保交付率計算正確</span>
         </div>
       )}
-      <div className="flex items-center justify-between pt-3 border-t border-border/40">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!canGoPrev}
-          onClick={() => handleClick("prev")}
-        >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          上一步
-        </Button>
-        <Button
-          size="sm"
-          disabled={!canGoNext}
-          onClick={() => handleClick("next")}
-        >
-          下一步
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      </div>
+      {currentStatus !== "CLOSED" && (
+        <div className="flex items-center justify-between pt-3 border-t border-border/40">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!canGoPrev}
+            onClick={() => handleClick("prev")}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            上一步
+          </Button>
+          <Button
+            size="sm"
+            disabled={!canGoNext}
+            onClick={() => handleClick("next")}
+          >
+            下一步
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      )}
 
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent>
@@ -156,16 +158,30 @@ export function StepNavigation({
                   </div>
                 )}
               {isMovingToClosed && (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <Label htmlFor="completedDate" className="text-sm font-medium">實際結案日期</Label>
-                  <Input
-                    id="completedDate"
-                    type="date"
-                    value={inputCompletedDate}
-                    onChange={(e) => setInputCompletedDate(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">此日期將用於交付率計算，可稍後於基本資訊中補填</p>
-                </div>
+                <>
+                  <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                      <p className="text-xs font-semibold text-red-600">結案後注意事項</p>
+                    </div>
+                    <ul className="text-xs text-red-600 space-y-0.5 ml-6 list-disc">
+                      <li>結案後先前內容將不可再修改</li>
+                      <li>PM、工程師欄位與甘特圖將鎖定</li>
+                      <li>已上傳的文件將無法刪除或修改</li>
+                      <li>僅管理者可補充資料</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-lg border p-3 space-y-2">
+                    <Label htmlFor="completedDate" className="text-sm font-medium">實際結案日期</Label>
+                    <Input
+                      id="completedDate"
+                      type="date"
+                      value={inputCompletedDate}
+                      onChange={(e) => setInputCompletedDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">此日期將用於交付率計算，可稍後於基本資訊中補填</p>
+                  </div>
+                </>
               )}
               </div>
             </AlertDialogDescription>

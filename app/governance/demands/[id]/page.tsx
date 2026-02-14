@@ -394,6 +394,9 @@ export default function DemandDetailPage() {
   const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
+  const isClosed = demand.status === "CLOSED"
+  // When CLOSED, only admin retains modification rights
+  const effectiveCanManage = canManage && (!isClosed || user?.role === "admin")
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -411,7 +414,7 @@ export default function DemandDetailPage() {
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground ml-11">{demand.title}</h1>
           </div>
-          {user?.role === "admin" && (
+          {user?.role === "admin" && !isClosed && (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/governance/demands/${demand.id}/edit`}>
@@ -787,7 +790,7 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <User className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">PM</span>
-                      {user?.role === "admin" && staffUsers.length > 0 ? (
+                      {user?.role === "admin" && !isClosed && staffUsers.length > 0 ? (
                         <Select
                           value={demand.manager?.id || "none"}
                           onValueChange={(v) => handleAssign("managerId", v === "none" ? "" : v)}
@@ -816,7 +819,7 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <User className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">工程師</span>
-                      {user?.role === "admin" && staffUsers.length > 0 ? (
+                      {user?.role === "admin" && !isClosed && staffUsers.length > 0 ? (
                         <Select
                           value={demand.developer?.id || "none"}
                           onValueChange={(v) => handleAssign("developerId", v === "none" ? "" : v)}
@@ -930,7 +933,7 @@ export default function DemandDetailPage() {
                   currentStatus={demand.status}
                   subTasks={demand.subTasks}
                   demandId={demand.id}
-                  canEdit={canManage}
+                  canEdit={canManage && !isClosed}
                   token={token}
                   onRefresh={fetchDemand}
                 />
@@ -1123,7 +1126,7 @@ export default function DemandDetailPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">階段文件</CardTitle>
-                      {canManage && (
+                      {effectiveCanManage && (
                         <Button variant="outline" size="sm" id="doc-upload-trigger">
                           <Upload className="h-4 w-4 mr-1.5" />
                           上傳文件
@@ -1137,7 +1140,7 @@ export default function DemandDetailPage() {
                       documents={demand.documents}
                       currentPhase={demand.status}
                       demandId={demand.id}
-                      canUpload={canManage}
+                      canUpload={effectiveCanManage}
                       token={token}
                       onRefresh={fetchDemand}
                       uploadTriggerSelector="#doc-upload-trigger"
