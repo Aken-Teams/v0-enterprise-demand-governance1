@@ -123,6 +123,27 @@ export async function GET(request: NextRequest) {
       monthlyTrends.push({ month: monthLabel, submitted, completed: completedInMonth })
     }
 
+    // --- Recent 3 demand changes ---
+    const STATUS_LABELS: Record<string, string> = {
+      SUBMITTED: "需求提出",
+      PRD_REVIEW: "PRD 確認中",
+      SP_REVIEW: "SP 確認中",
+      DEVELOPING: "開發中",
+      ACCEPTANCE: "驗收中",
+      CLOSED: "已結案",
+      REJECTED: "已駁回",
+    }
+    const recentChanges = demands.slice(0, 3).map((d) => ({
+      demandNumber: d.demandNumber,
+      title: d.title,
+      status: d.status,
+      statusLabel: STATUS_LABELS[d.status] ?? d.status,
+      priority: d.priority,
+      sp: d.confirmedSp ?? d.estimatedSp,
+      updatedAt: d.updatedAt,
+      daysAgo: Math.max(0, Math.floor((now.getTime() - new Date(d.updatedAt).getTime()) / (1000 * 60 * 60 * 24))),
+    }))
+
     return NextResponse.json({
       kpi: {
         totalDemands,
@@ -147,6 +168,7 @@ export async function GET(request: NextRequest) {
         avgProcessingDays: avgDays,
       },
       monthlyTrends,
+      recentChanges,
     })
   } catch (error) {
     if (error instanceof AuthError) {

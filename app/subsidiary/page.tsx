@@ -12,6 +12,7 @@ import {
   PieChart,
   Gauge,
   Loader2,
+  Radio,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -130,6 +131,16 @@ interface DashboardData {
     avgProcessingDays: number
   }
   monthlyTrends: { month: string; submitted: number; completed: number }[]
+  recentChanges: {
+    demandNumber: string
+    title: string
+    status: string
+    statusLabel: string
+    priority: string
+    sp: number
+    updatedAt: string
+    daysAgo: number
+  }[]
 }
 
 export default function SubsidiaryDashboard() {
@@ -162,6 +173,7 @@ export default function SubsidiaryDashboard() {
   const sp = data?.sp ?? { totalQuota: 0, usedSp: 0, committedSp: 0, availableSp: 0, availablePercent: 0 }
   const perf = data?.performance ?? { deliveryRate: 0, deliveryOnTime: 0, deliveryTotal: 0, passRate: 0, passClosed: 0, passTotal: 0, avgProcessingDays: 0 }
   const monthlyTrends = data?.monthlyTrends ?? []
+  const recentChanges = data?.recentChanges ?? []
 
   // Only used & committed are colored segments; available = gray background
   const spSegments = [
@@ -400,6 +412,41 @@ export default function SubsidiaryDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Recent Demand Changes */}
+        {recentChanges.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Radio className="h-5 w-5" />
+                  最近需求動態
+                </CardTitle>
+                <Button variant="link" className="p-0 h-auto text-sm" asChild>
+                  <Link href="/subsidiary/demands">查看更多</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                {recentChanges.map((item, i) => (
+                  <div key={i} className="rounded-lg border p-4 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{item.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{item.demandNumber} · {item.statusLabel} · {item.sp} SP</div>
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <div className="text-sm font-medium tabular-nums">
+                        {new Date(item.updatedAt).toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">更新</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       </div>
     </AppLayout>
