@@ -1,18 +1,84 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { AppLayout } from "@/components/app-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Coins, TrendingUp, TrendingDown, Calendar } from "lucide-react"
+import { Loader2, Inbox } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
+import Link from "next/link"
+import { cn } from "@/lib/utils"
 
-const transactions = [
-  { date: "2024-01-22", type: "使用", description: "REQ-2024-002 報表匯出功能驗收", amount: -13, balance: 156 },
-  { date: "2024-01-20", type: "承諾", description: "REQ-2024-005 進入 Sprint 24-03", amount: -8, balance: 169 },
-  { date: "2024-01-15", type: "使用", description: "REQ-2023-045 使用者權限細分驗收", amount: -8, balance: 177 },
-  { date: "2024-01-10", type: "調整", description: "REQ-2024-003 SP 調整 (34→29)", amount: 5, balance: 185 },
-  { date: "2024-01-01", type: "配額", description: "2024 Q1 配額發放", amount: 125, balance: 180 },
-]
+const STATUS_LABEL: Record<string, { label: string; color: string; spCategory: string }> = {
+  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700", spCategory: "pending" },
+  PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-100 text-amber-700", spCategory: "pending" },
+  SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700", spCategory: "pending" },
+  DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700", spCategory: "committed" },
+  ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700", spCategory: "committed" },
+  CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700", spCategory: "used" },
+}
+
+interface WalletData {
+  year: number
+  totalQuota: number
+  usedSp: number
+  committedSp: number
+  availableSp: number
+  demands: {
+    id: string
+    demandNumber: string
+    title: string
+    status: string
+    sp: number
+    updatedAt: string
+  }[]
+}
 
 export default function WalletPage() {
+  const { token } = useAuth()
+  const [data, setData] = useState<WalletData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!token) return
+    fetch("/api/sp-wallet", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [token])
+
+  if (loading) {
+    return (
+      <AppLayout userRole="subsidiary">
+        <div className="flex items-center justify-center py-32">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    )
+  }
+
+  const totalQuota = data?.totalQuota ?? 0
+  const year = data?.year ?? new Date().getFullYear()
+  const demands = data?.demands ?? []
+
+  // Group demands by SP category
+  const committedDemands = demands.filter((d) => STATUS_LABEL[d.status]?.spCategory === "committed")
+  const usedDemands = demands.filter((d) => STATUS_LABEL[d.status]?.spCategory === "used")
+  const pendingDemands = demands.filter((d) => STATUS_LABEL[d.status]?.spCategory === "pending")
+
+  // Calculate from demands for guaranteed accuracy
+  const usedSp = usedDemands.reduce((sum, d) => sum + d.sp, 0)
+  const committedSp = committedDemands.reduce((sum, d) => sum + d.sp, 0)
+  const availableSp = totalQuota - usedSp - committedSp
+
+  const pctUsed = totalQuota > 0 ? (usedSp / totalQuota) * 100 : 0
+  const pctCommitted = totalQuota > 0 ? (committedSp / totalQuota) * 100 : 0
+  const pctAvailable = totalQuota > 0 ? (availableSp / totalQuota) * 100 : 0
+
   return (
     <AppLayout userRole="subsidiary">
       <div className="space-y-6">
@@ -21,163 +87,128 @@ export default function WalletPage() {
           <p className="text-muted-foreground">管理您的 Story Points 配額與使用記錄</p>
         </div>
 
-        {/* Balance Overview */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-primary/30 bg-primary/5">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">剩餘 SP</CardTitle>
-              <Coins className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-primary">156</div>
-              <p className="text-xs text-muted-foreground">可立即使用</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">年度配額</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">500</div>
-              <p className="text-xs text-muted-foreground">2024 年度總額</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">已使用</CardTitle>
-              <TrendingDown className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">244</div>
-              <p className="text-xs text-muted-foreground">48.8% 使用率</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">已承諾</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">100</div>
-              <p className="text-xs text-muted-foreground">進行中的 Sprint</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Usage Breakdown */}
+        {/* Compact summary */}
         <Card>
-          <CardHeader>
-            <CardTitle>使用率分析</CardTitle>
-            <CardDescription>Story Points 配額使用情況</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">已使用 (驗收完成)</span>
-                <span className="text-sm font-semibold text-foreground">244 SP</span>
+          <CardContent className="pt-4 space-y-3">
+            {/* Numbers row */}
+            <div className="flex items-baseline gap-6 flex-wrap">
+              <div>
+                <span className="text-3xl font-bold text-primary tabular-nums">{availableSp}</span>
+                <span className="text-sm text-muted-foreground ml-1.5">可用</span>
               </div>
-              <div className="h-3 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full bg-chart-1" style={{ width: "48.8%" }} />
+              <span className="text-muted-foreground/30">/</span>
+              <div>
+                <span className="text-xl font-semibold tabular-nums">{totalQuota}</span>
+                <span className="text-sm text-muted-foreground ml-1.5">配額</span>
               </div>
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">已承諾 (Sprint 中)</span>
-                <span className="text-sm font-semibold text-foreground">100 SP</span>
+              <span className="text-muted-foreground/30">/</span>
+              <div>
+                <span className="text-xl font-semibold tabular-nums">{usedSp}</span>
+                <span className="text-sm text-muted-foreground ml-1.5">已使用</span>
               </div>
-              <div className="h-3 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full bg-chart-4" style={{ width: "20%" }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-primary">剩餘可用</span>
-                <span className="text-sm font-semibold text-primary">156 SP</span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full bg-primary" style={{ width: "31.2%" }} />
+              <span className="text-muted-foreground/30">/</span>
+              <div>
+                <span className="text-xl font-semibold tabular-nums">{committedSp}</span>
+                <span className="text-sm text-muted-foreground ml-1.5">已承諾</span>
               </div>
             </div>
 
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <p className="text-sm text-muted-foreground">
-                預估可提交 <span className="font-semibold text-foreground">6-8</span> 個中等規模需求 (每個約 20 SP)
-              </p>
-            </div>
+            {/* Stacked bar */}
+            {totalQuota > 0 ? (
+              <div>
+                <div className="h-3 w-full overflow-hidden rounded-full bg-secondary flex">
+                  {pctUsed > 0 && (
+                    <div className="h-full bg-chart-1 transition-all" style={{ width: `${pctUsed}%` }} />
+                  )}
+                  {pctCommitted > 0 && (
+                    <div className="h-full bg-chart-4 transition-all" style={{ width: `${pctCommitted}%` }} />
+                  )}
+                </div>
+                <div className="flex items-center gap-5 mt-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-sm bg-chart-1" />已使用 {pctUsed.toFixed(0)}%
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-sm bg-chart-4" />已承諾 {pctCommitted.toFixed(0)}%
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">尚未分配年度配額</p>
+            )}
           </CardContent>
         </Card>
 
-        {/* Transaction History */}
+        {/* Demand SP Breakdown */}
         <Card>
           <CardHeader>
-            <CardTitle>使用記錄</CardTitle>
-            <CardDescription>最近的 Story Points 異動</CardDescription>
+            <CardTitle>需求 SP 明細</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>日期</TableHead>
-                    <TableHead>類型</TableHead>
-                    <TableHead>說明</TableHead>
-                    <TableHead className="text-right">變動</TableHead>
-                    <TableHead className="text-right">餘額</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((tx, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-sm text-muted-foreground">{tx.date}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={
-                            tx.type === "配額"
-                              ? "border-chart-3 text-chart-3"
-                              : tx.type === "使用"
-                                ? "border-chart-1 text-chart-1"
-                                : "border-muted-foreground text-muted-foreground"
-                          }
-                        >
-                          {tx.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{tx.description}</TableCell>
-                      <TableCell
-                        className={`text-right font-semibold ${tx.amount > 0 ? "text-chart-3" : "text-foreground"}`}
-                      >
-                        {tx.amount > 0 ? "+" : ""}
-                        {tx.amount}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">{tx.balance}</TableCell>
+            {demands.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+                <Inbox className="h-10 w-10" />
+                <p className="text-sm">尚無需求資料</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-center w-32">編號</TableHead>
+                      <TableHead className="text-center">需求名稱</TableHead>
+                      <TableHead className="text-center">狀態</TableHead>
+                      <TableHead className="text-center">SP</TableHead>
+                      <TableHead className="text-center">SP 狀態</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {[...committedDemands, ...usedDemands, ...pendingDemands].map((d) => {
+                      const si = STATUS_LABEL[d.status]
+                      const spCat = si?.spCategory
+                      return (
+                        <TableRow key={d.id}>
+                          <TableCell className="text-center">
+                            <Link
+                              href={`/subsidiary/demands/${d.id}`}
+                              className="text-sm font-mono text-primary hover:underline"
+                            >
+                              {d.demandNumber}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-center text-sm max-w-[200px] truncate">{d.title}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary" className={cn("text-[11px]", si?.color)}>
+                              {si?.label ?? d.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center font-semibold tabular-nums">{d.sp}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[11px]",
+                                spCat === "used" && "border-emerald-300 text-emerald-700 bg-emerald-50",
+                                spCat === "committed" && "border-violet-300 text-violet-700 bg-violet-50",
+                                spCat === "pending" && "border-muted-foreground/30 text-muted-foreground",
+                              )}
+                            >
+                              {spCat === "used" ? "已扣除" : spCat === "committed" ? "已承諾" : "未鎖定"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Info Card */}
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="text-base">Story Points 說明</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>• Story Points (SP) 是企業資源配額，代表可投入的開發容量</p>
-            <p>• 每年初會根據子公司規模與業務需求分配年度配額</p>
-            <p>• SP 會在需求進入 Sprint 時「承諾」，驗收完成後「使用」</p>
-            <p>• 如需額外 SP 配額，請聯繫治理團隊申請專案配額</p>
-            <p>• 未使用的 SP 可保留至次季，但不可跨年度使用</p>
-          </CardContent>
-        </Card>
       </div>
     </AppLayout>
   )
