@@ -40,6 +40,7 @@ interface PhaseDocumentsProps {
   currentPhase: string
   demandId: string
   canUpload: boolean
+  canDownload?: boolean
   token: string | null
   onRefresh: () => void
   uploadTriggerSelector?: string
@@ -82,6 +83,7 @@ export function PhaseDocuments({
   currentPhase,
   demandId,
   canUpload,
+  canDownload = true,
   token,
   onRefresh,
   uploadTriggerSelector,
@@ -313,12 +315,12 @@ export function PhaseDocuments({
                         </div>
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0">
-                        {doc.fileUrl && !isExternalLink && (
+                        {canDownload && doc.fileUrl && !isExternalLink && (
                           <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
                             <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>
                           </Button>
                         )}
-                        {isExternalLink && (
+                        {canDownload && isExternalLink && (
                           <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
                             <a href={doc.fileUrl!} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="h-4.5 w-4.5" />
@@ -366,7 +368,7 @@ export function PhaseDocuments({
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
-                    {doc.fileUrl && (
+                    {canDownload && doc.fileUrl && (
                       <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
                         <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>
                       </Button>
