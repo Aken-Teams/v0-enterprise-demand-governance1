@@ -70,12 +70,13 @@ const SpDonutChart = ({ total, segments, availableSp, size = 150 }: {
         {/* Colored segments on top */}
         {segMeta.map((seg, i) => {
           const pct = total > 0 ? (seg.value / total) * 100 : 0
-          const offset = circumference - (cumulativePercent / 100) * circumference
-          const dash = `${(pct / 100) * circumference} ${circumference}`
+          const dashLen = (pct / 100) * circumference
+          const dash = `${dashLen} ${circumference - dashLen}`
+          const dashOffset = -(cumulativePercent / 100) * circumference
           cumulativePercent += pct
           return (
             <circle key={i} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={seg.color} strokeWidth={sw}
-              strokeDasharray={dash} strokeDashoffset={-offset} strokeLinecap="round"
+              strokeDasharray={dash} strokeDashoffset={dashOffset} strokeLinecap="round"
               className="transition-all duration-1000 ease-out cursor-pointer"
               onMouseEnter={() => {
                 setTooltip({ label: seg.label, value: seg.value, pct: `${Math.round(seg.pct)}%`, x: seg.mx, y: seg.my })
@@ -343,11 +344,11 @@ export default function SubsidiaryDashboard() {
 
               <div className="border-t" />
 
-              {/* 平均處理時間 */}
+              {/* 平均開發天數 */}
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-medium">平均處理時間</div>
-                  <div className="text-xs text-muted-foreground">開發到交付</div>
+                  <div className="text-sm font-medium">平均開發天數</div>
+                  <div className="text-xs text-muted-foreground">開發實際開始到完成</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Timer className="h-4 w-4 text-muted-foreground" />

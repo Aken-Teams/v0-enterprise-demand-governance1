@@ -91,20 +91,23 @@ export async function GET(request: NextRequest) {
       historyByDemand.set(h.demandId, arr)
     }
 
-    // Delivery efficiency: avg days for closed demands
-    // Use Gantt chart phasePlan dates (DEVELOPING actualStart → completedDate / actualEnd)
-    const closedDemands = demands.filter((d) => d.status === "CLOSED")
+    // Avg dev days: non-rejected demands with DEVELOPING phase planned dates
+    // actualStart/actualEnd are status-transition timestamps (seconds apart), not real durations
+    // Use Gantt chart plannedStart as start; completedDate (if after start) or plannedEnd as end
+    const devsWithDates = demands.filter((d) => {
+      if (d.status === "REJECTED") return false
+      const dev = d.phasePlans.find((p) => p.phase === "DEVELOPING")
+      return dev?.plannedStart && (d.completedDate || dev.plannedEnd)
+    })
     let avgDays = 0
-    if (closedDemands.length > 0) {
+    if (devsWithDates.length > 0) {
       let validCount = 0
-      const totalDays = closedDemands.reduce((sum, d) => {
-        const devPhase = d.phasePlans.find((p) => p.phase === "DEVELOPING")
-        const startDate = devPhase?.actualStart ?? devPhase?.plannedStart
-        const endDate = d.completedDate
-          ?? devPhase?.actualEnd
-          ?? devPhase?.plannedEnd
-        if (!startDate || !endDate) return sum
-        const diff = new Date(endDate).getTime() - new Date(startDate).getTime()
+      const totalDays = devsWithDates.reduce((sum, d) => {
+        const dev = d.phasePlans.find((p) => p.phase === "DEVELOPING")!
+        const start = new Date(dev.plannedStart!).getTime()
+        const endRaw = d.completedDate ? new Date(d.completedDate).getTime() : null
+        const end = (endRaw && endRaw >= start) ? endRaw : new Date(dev.plannedEnd!).getTime()
+        const diff = end - start
         if (diff < 0) return sum
         validCount++
         return sum + diff / (1000 * 60 * 60 * 24)
@@ -305,6 +308,7 @@ export async function GET(request: NextRequest) {
         thisMonthClosed,
         ytdUsedSp,
         avgDays,
+        avgDaysCount: devsWithDates.length,
         totalDemands: demands.length,
       },
       statusCounts,

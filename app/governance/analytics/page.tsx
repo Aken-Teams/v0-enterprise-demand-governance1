@@ -23,6 +23,7 @@ interface AnalyticsData {
     thisMonthClosed: number
     ytdUsedSp: number
     avgDays: number
+    avgDaysCount: number
     totalDemands: number
   }
   statusCounts: Record<string, number>
@@ -363,14 +364,14 @@ export default function GovernanceAnalyticsPage() {
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">平均處理天數</CardTitle>
+                  <CardTitle className="text-base">平均開發天數</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-4xl font-bold text-foreground">
-                    {(d.statusCounts?.CLOSED ?? 0) > 0 ? `${d.kpi.avgDays} 天` : "—"}
+                    {d.kpi.avgDaysCount > 0 ? `${d.kpi.avgDays} 天` : "—"}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {(d.statusCounts?.CLOSED ?? 0) > 0 ? `${d.statusCounts.CLOSED} 筆結案需求` : "尚無結案需求"}
+                    {d.kpi.avgDaysCount > 0 ? `${d.kpi.avgDaysCount} 筆有實際開發日期` : "尚無工程師填寫實際日期"}
                   </p>
                 </CardContent>
               </Card>
