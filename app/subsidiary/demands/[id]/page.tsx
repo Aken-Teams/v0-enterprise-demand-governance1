@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState, useEffect, useCallback, useMemo } from "react"
+import React, { use, useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,6 +36,75 @@ import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import * as XLSX from "xlsx"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import mermaid from "mermaid"
+
+mermaid.initialize({
+  startOnLoad: false,
+  suppressErrorRendering: true,
+  securityLevel: "loose",
+  theme: "neutral",
+  themeVariables: { background: "transparent", primaryColor: "#dbeafe", primaryTextColor: "#1e3a5f", lineColor: "#94a3b8" },
+})
+
+function MermaidBlock({ code }: { code: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading")
+  useEffect(() => {
+    if (!ref.current) return
+    setStatus("loading")
+    const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
+
+    mermaid.render(id, code).then(({ svg }) => {
+      if (ref.current) {
+        ref.current.innerHTML = svg
+        ref.current.querySelectorAll("svg").forEach((s) => {
+          s.style.background = "transparent"
+          s.style.maxWidth = "100%"
+        })
+      }
+      setStatus("ok")
+    }).catch(() => {
+      if (!ref.current) return
+      const pre = document.createElement("pre")
+      pre.className = "mermaid"
+      pre.textContent = code
+      ref.current.innerHTML = ""
+      ref.current.appendChild(pre)
+      mermaid.run({ nodes: [pre], suppressErrors: true }).then(() => {
+        if (ref.current) {
+          ref.current.querySelectorAll("svg").forEach((s) => {
+            s.style.background = "transparent"
+            s.style.maxWidth = "100%"
+          })
+          if (ref.current.querySelector("svg")) {
+            setStatus("ok")
+          } else {
+            setStatus("error")
+          }
+        }
+      }).catch(() => {
+        setStatus("error")
+      })
+    })
+
+    return () => {
+      if (ref.current) ref.current.innerHTML = ""
+    }
+  }, [code])
+
+  if (status === "error") {
+    return (
+      <div className="w-full rounded-lg border border-amber-200 bg-amber-50/50 p-4 not-prose">
+        <p className="text-xs font-medium text-amber-700 mb-2">此圖表格式無法解析</p>
+        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-white/60 rounded p-3">{code}</pre>
+      </div>
+    )
+  }
+
+  return <div ref={ref} data-mermaid-container className="flex justify-center not-prose [&_svg]:!bg-transparent" />
+}
 
 // ── Pie chart colors (one per pipeline phase) ──
 const PIE_COLORS: Record<string, string> = {
@@ -777,6 +846,32 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                             if (["txt", "md"].includes(ext)) {
                               if (textLoading) {
                                 return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              }
+                              if (ext === "md") {
+                                return (
+                                  <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm]}
+                                      components={{
+                                        pre({ children }) {
+                                          if (React.isValidElement(children) && typeof children.type !== "string") {
+                                            return <>{children}</>
+                                          }
+                                          return <pre>{children}</pre>
+                                        },
+                                        code({ className, children, ...props }) {
+                                          const match = /language-(\w+)/.exec(className || "")
+                                          if (match?.[1] === "mermaid") {
+                                            return <MermaidBlock code={String(children).trim()} />
+                                          }
+                                          return <code className={className} {...props}>{children}</code>
+                                        },
+                                      }}
+                                    >
+                                      {textContent}
+                                    </ReactMarkdown>
+                                  </div>
+                                )
                               }
                               return (
                                 <pre className="text-sm whitespace-pre-wrap break-words w-full max-h-[520px] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">
