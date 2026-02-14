@@ -38,93 +38,38 @@ function SubsidiaryGuide() {
   return (
     <>
       <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
-        {/* 如何使用系統 */}
+        {/* 需求處理流程 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">如何使用系統</CardTitle>
+            <CardTitle className="text-base">需求處理流程</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="submit">
-                <AccordionTrigger>
-                  <span className="text-sm">提交新需求</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <ol className="space-y-1.5 text-sm text-muted-foreground list-decimal list-inside">
-                    <li>前往「需求列表」頁面</li>
-                    <li>點擊右上角「新增需求」</li>
-                    <li>填寫需求標題、詳細描述</li>
-                    <li>設定優先級與期望完成日期</li>
-                    <li>填寫預估 SP 點數</li>
-                    <li>送出後需求進入「需求確認」階段</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="track">
-                <AccordionTrigger>
-                  <span className="text-sm">追蹤需求進度</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>在「需求列表」中點擊任一需求可查看詳細資訊，包含：</p>
-                    <ul className="space-y-1">
-                      <li className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        目前所在階段與階段歷程
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        已上傳的相關文件
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        指派的團隊成員與時程
-                      </li>
-                    </ul>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              您提交的需求會依序經過以下階段，每個階段完成後自動推進至下一階段：
+            </p>
+            <div className="divide-y">
+              {PIPELINE_STEPS.map((step, idx) => {
+                const info = STATUS_MAP[step]
+                const desc: Record<string, string> = {
+                  SUBMITTED: "管理者與您面談確認需求內容",
+                  PRD_REVIEW: "PM 撰寫需求規格書，工程師進行架構設計",
+                  SP_REVIEW: "管理者確認 SP 點數與開發時程",
+                  DEVELOPING: "工程師進行開發，產出系統設計與成果",
+                  ACCEPTANCE: "您驗收開發成果，確認是否符合需求",
+                  CLOSED: "需求完成結案，SP 點數結算",
+                }
+                return (
+                  <div key={step} className={`flex items-center gap-3 ${idx === 0 ? "pb-3" : idx === PIPELINE_STEPS.length - 1 ? "pt-3" : "py-3"}`}>
+                    <span className="text-xs font-medium text-muted-foreground/60 w-4 shrink-0 text-center">{idx + 1}</span>
+                    <Badge className={`${info.color} shrink-0`}>{info.label}</Badge>
+                    <span className="text-sm text-muted-foreground">{desc[step]}</span>
                   </div>
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="wallet">
-                <AccordionTrigger>
-                  <span className="text-sm">查看 SP 錢包</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>前往「SP 錢包」頁面可查看：</p>
-                    <ul className="space-y-1">
-                      <li className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        年度 SP 配額與使用狀況
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        每筆需求的 SP 消耗明細
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        剩餘可用額度
-                      </li>
-                    </ul>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="acceptance">
-                <AccordionTrigger>
-                  <span className="text-sm">驗收需求</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>當需求進入「驗收中」階段，您需要：</p>
-                    <ol className="space-y-1 list-decimal list-inside">
-                      <li>查看工程師提供的 BDD / TDD 文件與測試報告</li>
-                      <li>確認開發成果是否符合需求</li>
-                      <li>通過驗收後需求進入「已結案」</li>
-                    </ol>
-                    <p className="text-xs">驗收不通過會退回開發階段重新修正。</p>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              ※ 需求在任何階段都可能被駁回。駁回後需重新建立新需求。
+            </p>
           </CardContent>
         </Card>
 
@@ -172,37 +117,78 @@ function SubsidiaryGuide() {
         </Card>
       </div>
 
-      {/* 需求流程簡介 */}
+      {/* 如何使用系統 */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">需求處理流程</CardTitle>
+          <CardTitle className="text-base">如何使用系統</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            您提交的需求會依序經過以下階段，每個階段完成後自動推進至下一階段：
-          </p>
-          <div className="space-y-2">
-            {PIPELINE_STEPS.map((step, i) => {
-              const info = STATUS_MAP[step]
-              const desc: Record<string, string> = {
-                SUBMITTED: "管理者與您面談確認需求內容",
-                PRD_REVIEW: "PM 撰寫需求規格書，工程師進行架構設計",
-                SP_REVIEW: "管理者確認 SP 點數與開發時程",
-                DEVELOPING: "工程師進行開發，產出系統設計與成果",
-                ACCEPTANCE: "您驗收開發成果，確認是否符合需求",
-                CLOSED: "需求完成結案，SP 點數結算",
-              }
-              return (
-                <div key={step} className="flex items-start gap-3 text-sm">
-                  <Badge className={`${info.color} shrink-0 mt-0.5`}>{info.label}</Badge>
-                  <span className="text-muted-foreground">{desc[step]}</span>
+        <CardContent>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="track">
+              <AccordionTrigger>
+                <span className="text-sm">追蹤需求進度</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p>在「需求列表」中點擊任一需求可查看詳細資訊，包含：</p>
+                  <ul className="space-y-1">
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                      目前所在階段與階段歷程
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                      已上傳的相關文件
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                      指派的團隊成員與時程
+                    </li>
+                  </ul>
                 </div>
-              )
-            })}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            ※ 需求在任何階段都可能被駁回。駁回後需重新建立新需求。
-          </p>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="wallet">
+              <AccordionTrigger>
+                <span className="text-sm">查看 SP 錢包</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p>前往「SP 錢包」頁面可查看：</p>
+                  <ul className="space-y-1">
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                      年度 SP 配額與使用狀況
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                      每筆需求的 SP 消耗明細
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                      剩餘可用額度
+                    </li>
+                  </ul>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="acceptance">
+              <AccordionTrigger>
+                <span className="text-sm">驗收需求</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p>當需求進入「驗收中」階段，您需要：</p>
+                  <ol className="space-y-1 list-decimal list-inside">
+                    <li>查看工程師提供測試報告和確認清單</li>
+                    <li>確認開發成果是否符合需求</li>
+                    <li>通過驗收後需求進入「已結案」</li>
+                  </ol>
+                  <p className="text-xs">驗收不通過會退回開發階段重新修正。</p>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </CardContent>
       </Card>
     </>
