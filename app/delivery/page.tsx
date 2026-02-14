@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -13,15 +13,20 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import {
   Loader2, Inbox, Code2, ClipboardCheck, CircleCheckBig,
-  Building2, Check, Circle, Play, Eye,
-  AlertTriangle, FileWarning, ChevronDown, Save,
+  Building2, Check, Circle, Play, Eye, CircleCheck,
+  AlertTriangle, FileWarning, ChevronDown, Save, Upload,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import {
   STATUS_MAP,
+  PIPELINE_STEPS,
   PHASE_DOCUMENT_MAP,
   DOCUMENT_TYPE_LABELS,
 } from "@/lib/constants/demand"
@@ -113,6 +118,14 @@ export default function DeliveryDashboardPage() {
   // { demandId: { taskId: { ...edits } } }
   const [pendingEdits, setPendingEdits] = useState<Record<string, Record<string, TaskEdit>>>({})
   const [savingDemand, setSavingDemand] = useState<string | null>(null)
+  // Upload state
+  const [uploadDemandId, setUploadDemandId] = useState<string | null>(null)
+  const [uploadPhase, setUploadPhase] = useState("")
+  const [uploadDocType, setUploadDocType] = useState("")
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const getCount = (status: string) => statusCounts[status] || 0
 
@@ -251,6 +264,67 @@ export default function DeliveryDashboardPage() {
     }
   }
 
+  const openUploadDialog = (demandId: string) => {
+    setUploadDemandId(demandId)
+    setUploadError("")
+    setSelectedFiles([])
+    setUploadPhase("")
+    setUploadDocType("")
+  }
+
+  const closeUploadDialog = () => {
+    setUploadDemandId(null)
+    setSelectedFiles([])
+    setUploadError("")
+    setUploadPhase("")
+    setUploadDocType("")
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  // When phase changes, reset doc type to first available for that phase
+  const handlePhaseChange = (phase: string) => {
+    setUploadPhase(phase)
+    const config = PHASE_DOCUMENT_MAP[phase]
+    const allTypes = [...(config?.required || []), ...(config?.optional || [])]
+    if (!allTypes.includes("ATTACHMENT")) allTypes.push("ATTACHMENT")
+    setUploadDocType(allTypes[0] || "ATTACHMENT")
+  }
+
+  const handleUpload = async () => {
+    if (!token || !uploadDemandId || !uploadPhase || !uploadDocType || selectedFiles.length === 0) return
+    setUploading(true)
+    setUploadError("")
+    try {
+      const formData = new FormData()
+      for (const file of selectedFiles) formData.append("files", file)
+      formData.append("type", uploadDocType)
+      formData.append("phase", uploadPhase)
+
+      const res = await fetch(`/api/demands/${uploadDemandId}/documents`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setUploadError(err.error || "上傳失敗")
+        return
+      }
+      const json = await res.json()
+      setActiveDemands((prev) =>
+        prev.map((d) => {
+          if (d.id !== uploadDemandId) return d
+          return { ...d, documents: [...d.documents, ...json.documents] }
+        })
+      )
+      closeUploadDialog()
+    } catch {
+      setUploadError("上傳失敗")
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const confirmStage =
     getCount("SUBMITTED") + getCount("PRD_REVIEW") + getCount("SP_REVIEW")
   const devStage = getCount("DEVELOPING") + getCount("ACCEPTANCE")
@@ -329,20 +403,25 @@ export default function DeliveryDashboardPage() {
                       <div className="px-3 pt-3 pb-2 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-[11px] font-mono text-muted-foreground">{demand.demandNumber}</span>
-                            <Badge variant="secondary" className={cn("text-[11px] px-1.5 py-0", statusInfo?.color)}>
+                            <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
+                            <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", statusInfo?.color)}>
                               {statusInfo?.label || demand.status}
                             </Badge>
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" asChild>
-                            <Link href={`/governance/demands/${demand.id}`}><Eye className="h-3 w-3" /></Link>
-                          </Button>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openUploadDialog(demand.id)}>
+                              <Upload className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
+                              <Link href={`/governance/demands/${demand.id}`}><Eye className="h-3 w-3" /></Link>
+                            </Button>
+                          </div>
                         </div>
 
                         <p className="font-semibold text-sm leading-snug truncate">{demand.title}</p>
 
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Building2 className="h-3 w-3" />{demand.organization.name}
                             </span>
@@ -351,7 +430,7 @@ export default function DeliveryDashboardPage() {
                             )}
                           </div>
                           {totalTasks > 0 && (
-                            <span className="text-[11px] text-muted-foreground tabular-nums">{completedTasks}/{totalTasks}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">{completedTasks}/{totalTasks}</span>
                           )}
                         </div>
 
@@ -480,6 +559,119 @@ export default function DeliveryDashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Upload Dialog */}
+      <Dialog open={!!uploadDemandId} onOpenChange={(open) => { if (!open) closeUploadDialog() }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>上傳文件</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const demand = activeDemands.find((d) => d.id === uploadDemandId)
+            if (!demand) return null
+            return (
+              <div className="space-y-4 py-2">
+                {/* Phase document checklist */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">各階段文件狀態</Label>
+                  <div className="border rounded-md divide-y max-h-56 overflow-y-auto">
+                    {PIPELINE_STEPS.map((phase) => {
+                      const config = PHASE_DOCUMENT_MAP[phase]
+                      if (!config || (config.required.length === 0 && config.optional.length === 0)) return null
+                      const phaseLabel = STATUS_MAP[phase]?.label || phase
+                      const isCurrent = phase === demand.status
+                      return (
+                        <div key={phase} className={cn("px-3 py-2.5", isCurrent && "bg-primary/5")}>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="text-sm font-medium">{phaseLabel}</span>
+                            {isCurrent && <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">目前</Badge>}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
+                            {config.required.map((docType) => {
+                              const hasDoc = demand.documents.some((d) => d.phase === phase && d.type === docType)
+                              return (
+                                <span key={docType} className={cn("text-sm flex items-center gap-1.5", hasDoc ? "text-emerald-600" : "text-muted-foreground")}>
+                                  {hasDoc ? <CircleCheck className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+                                  {DOCUMENT_TYPE_LABELS[docType] || docType}
+                                </span>
+                              )
+                            })}
+                            {config.optional.filter((t) => t !== "ATTACHMENT").map((docType) => {
+                              const hasDoc = demand.documents.some((d) => d.phase === phase && d.type === docType)
+                              return (
+                                <span key={docType} className={cn("text-sm flex items-center gap-1.5", hasDoc ? "text-emerald-600" : "text-muted-foreground/50")}>
+                                  {hasDoc ? <CircleCheck className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5 opacity-50" />}
+                                  {DOCUMENT_TYPE_LABELS[docType] || docType}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Upload form */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">上傳至階段</Label>
+                    <Select value={uploadPhase} onValueChange={handlePhaseChange}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="選擇階段" /></SelectTrigger>
+                      <SelectContent>
+                        {PIPELINE_STEPS.map((phase) => {
+                          const config = PHASE_DOCUMENT_MAP[phase]
+                          if (!config || (config.required.length === 0 && config.optional.length === 0)) return null
+                          return <SelectItem key={phase} value={phase} className="text-sm">{STATUS_MAP[phase]?.label || phase}</SelectItem>
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">文件類型</Label>
+                    <Select value={uploadDocType} onValueChange={setUploadDocType} disabled={!uploadPhase}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="選擇類型" /></SelectTrigger>
+                      <SelectContent>
+                        {(() => {
+                          if (!uploadPhase) return null
+                          const config = PHASE_DOCUMENT_MAP[uploadPhase]
+                          const types = [...(config?.required || []), ...(config?.optional || [])]
+                          if (!types.includes("ATTACHMENT")) types.push("ATTACHMENT")
+                          return types.map((t) => (
+                            <SelectItem key={t} value={t} className="text-sm">{DOCUMENT_TYPE_LABELS[t] || t}</SelectItem>
+                          ))
+                        })()}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">選擇檔案</Label>
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="cursor-pointer"
+                    disabled={!uploadPhase || !uploadDocType}
+                    onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                  />
+                  {selectedFiles.length > 0 && (
+                    <p className="text-sm text-muted-foreground">已選擇 {selectedFiles.length} 個檔案</p>
+                  )}
+                </div>
+                {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+              </div>
+            )
+          })()}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={closeUploadDialog} disabled={uploading}>取消</Button>
+            <Button size="sm" onClick={handleUpload} disabled={uploading || !uploadPhase || !uploadDocType || selectedFiles.length === 0}>
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+              上傳
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   )
 }
