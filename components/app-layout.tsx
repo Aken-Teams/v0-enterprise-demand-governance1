@@ -86,7 +86,7 @@ const navSections: NavSection[] = [
     roles: ["delivery"],
     items: [
       { title: "我的專案", href: "/delivery", icon: FolderKanban, roles: ["delivery"] },
-      { title: "交付歷史", href: "/delivery/history", icon: FileLineChart, roles: ["delivery"] },
+      { title: "需求列表", href: "/governance/inbox", icon: Inbox, roles: ["delivery"] },
     ],
   },
   {
@@ -138,14 +138,14 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   }, [])
 
   const detectedRole = React.useMemo((): UserRole => {
-    if (pathname.startsWith("/admin")) return "admin"
-    if (pathname.startsWith("/governance")) return "admin"
-    if (pathname.startsWith("/delivery")) return "delivery"
-    if (pathname.startsWith("/subsidiary")) return "subsidiary"
-    // Shared pages (/documents etc.): use actual user role
+    // Use actual user role when available (handles shared pages like /governance/inbox for delivery users)
     if (user?.role && ["admin", "delivery", "subsidiary"].includes(user.role)) {
       return user.role as UserRole
     }
+    // Fallback: detect from URL path before auth loads
+    if (pathname.startsWith("/admin") || pathname.startsWith("/governance")) return "admin"
+    if (pathname.startsWith("/delivery")) return "delivery"
+    if (pathname.startsWith("/subsidiary")) return "subsidiary"
     return userRole || "subsidiary"
   }, [pathname, userRole, user?.role])
 

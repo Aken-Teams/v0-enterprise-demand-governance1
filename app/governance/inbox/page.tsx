@@ -62,8 +62,9 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 }
 
 export default function InboxPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const router = useRouter()
+  const isAdmin = user?.role === "admin"
   const [demands, setDemands] = useState<Demand[]>([])
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
@@ -88,9 +89,10 @@ export default function InboxPage() {
     if (showLoading) setLoading(true)
     try {
       const params = new URLSearchParams()
+      if (!isAdmin && user?.id) params.set("developerId", user.id)
       if (filterStatus !== "all") params.set("status", filterStatus)
-      if (filterSubmitter !== "all") params.set("submitterId", filterSubmitter)
-      if (filterDeveloper !== "all") params.set("developerId", filterDeveloper)
+      if (isAdmin && filterSubmitter !== "all") params.set("submitterId", filterSubmitter)
+      if (isAdmin && filterDeveloper !== "all") params.set("developerId", filterDeveloper)
       if (debouncedSearch) params.set("search", debouncedSearch)
 
       const res = await fetch(`/api/demands?${params}`, {
@@ -111,7 +113,7 @@ export default function InboxPage() {
     } finally {
       setLoading(false)
     }
-  }, [token, filterStatus, filterSubmitter, filterDeveloper, debouncedSearch])
+  }, [token, isAdmin, user?.id, filterStatus, filterSubmitter, filterDeveloper, debouncedSearch])
 
   useEffect(() => {
     fetchDemands(true)
@@ -134,25 +136,31 @@ export default function InboxPage() {
   const hasActiveFilters = filterStatus !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all"
 
   return (
-    <AppLayout userRole="admin">
+    <AppLayout>
       <div className="space-y-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">需求管理</h1>
-            <p className="text-muted-foreground">建立與追蹤所有需求的開案流程</p>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              {isAdmin ? "需求管理" : "需求列表"}
+            </h1>
+            <p className="text-muted-foreground">
+              {isAdmin ? "建立與追蹤所有需求的開案流程" : "查看指派給您的需求與開發進度"}
+            </p>
           </div>
-          <Button asChild>
-            <Link href="/governance/create">
-              <Plus className="mr-2 h-4 w-4" />
-              建立需求
-            </Link>
-          </Button>
+          {isAdmin && (
+            <Button asChild>
+              <Link href="/governance/create">
+                <Plus className="mr-2 h-4 w-4" />
+                建立需求
+              </Link>
+            </Button>
+          )}
         </div>
 
         {/* Summary Cards */}
         <div className="grid gap-3 md:grid-cols-4">
           {[
-            { label: "全部需求", sub: "累計建立", value: total, color: "border-l-blue-500", icon: Inbox },
+            { label: "全部需求", sub: isAdmin ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
             { label: "確認階段", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
             { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
@@ -195,29 +203,33 @@ export default function InboxPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterSubmitter} onValueChange={setFilterSubmitter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="需求者" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部需求者</SelectItem>
-                {submitterOptions.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="開發者" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部開發者</SelectItem>
-                <SelectItem value="unassigned">尚未指派</SelectItem>
-                {developerOptions.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isAdmin && (
+              <Select value={filterSubmitter} onValueChange={setFilterSubmitter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="需求者" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部需求者</SelectItem>
+                  {submitterOptions.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {isAdmin && (
+              <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="開發者" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部開發者</SelectItem>
+                  <SelectItem value="unassigned">尚未指派</SelectItem>
+                  {developerOptions.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {hasActiveFilters && (
               <Button
                 variant="ghost"
@@ -247,8 +259,10 @@ export default function InboxPage() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Inbox className="h-12 w-12 text-muted-foreground/30 mb-4" />
-              <p className="text-muted-foreground">尚無資料</p>
-              {!debouncedSearch && !hasActiveFilters && (
+              <p className="text-muted-foreground">
+                {isAdmin ? "尚無資料" : "目前沒有指派給您的需求"}
+              </p>
+              {isAdmin && !debouncedSearch && !hasActiveFilters && (
                 <Button variant="outline" className="mt-4" asChild>
                   <Link href="/governance/create">
                     <Plus className="mr-2 h-4 w-4" />
@@ -303,27 +317,35 @@ export default function InboxPage() {
                         </span>
                       </div>
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="max-h-none overflow-visible">
-                          <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
-                            <Eye className="h-3.5 w-3.5 mr-2" />
-                            查看詳情
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => setDeleteTarget(demand)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 mr-2" />
-                            刪除需求
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {isAdmin ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="max-h-none overflow-visible">
+                            <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
+                              <Eye className="h-3.5 w-3.5 mr-2" />
+                              查看詳情
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeleteTarget(demand)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              刪除需求
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" asChild>
+                          <Link href={`/governance/demands/${demand.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

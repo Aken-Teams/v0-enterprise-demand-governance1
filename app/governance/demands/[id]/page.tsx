@@ -370,7 +370,7 @@ export default function DemandDetailPage() {
 
   if (loading) {
     return (
-      <AppLayout userRole="admin">
+      <AppLayout>
         <div className="flex items-center justify-center py-32">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -380,7 +380,7 @@ export default function DemandDetailPage() {
 
   if (!demand) {
     return (
-      <AppLayout userRole="admin">
+      <AppLayout>
         <div className="flex flex-col items-center justify-center py-32">
           <p className="text-muted-foreground mb-4">需求不存在或已被刪除</p>
           <Button variant="outline" asChild>
@@ -395,7 +395,7 @@ export default function DemandDetailPage() {
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
   return (
-    <AppLayout userRole="admin">
+    <AppLayout>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -411,36 +411,38 @@ export default function DemandDetailPage() {
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground ml-11">{demand.title}</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/governance/demands/${demand.id}/edit`}>
-                <Pencil className="mr-2 h-3.5 w-3.5" />
-                編輯
-              </Link>
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  刪除
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>確定要刪除此需求？</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    將永久刪除需求「{demand.title}」（{demand.demandNumber}）及其所有相關資料，包含文件、子任務、狀態紀錄等。此操作無法復原。
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    確定刪除
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+          {user?.role === "admin" && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/governance/demands/${demand.id}/edit`}>
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
+                  編輯
+                </Link>
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    刪除
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>確定要刪除此需求？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      將永久刪除需求「{demand.title}」（{demand.demandNumber}）及其所有相關資料，包含文件、子任務、狀態紀錄等。此操作無法復原。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      確定刪除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
         </div>
 
         {/* Status Pipeline */}
