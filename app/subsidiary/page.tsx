@@ -347,7 +347,7 @@ export default function SubsidiaryDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium">平均處理時間</div>
-                  <div className="text-xs text-muted-foreground">提出到結案</div>
+                  <div className="text-xs text-muted-foreground">開發到交付</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Timer className="h-4 w-4 text-muted-foreground" />

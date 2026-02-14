@@ -44,6 +44,9 @@ export async function GET(request: NextRequest) {
           expectedDate: true,
           completedDate: true,
           updatedAt: true,
+          phasePlans: {
+            select: { phase: true, plannedStart: true, plannedEnd: true, actualStart: true, actualEnd: true },
+          },
         },
         orderBy: { updatedAt: "desc" },
       }),
@@ -115,15 +118,24 @@ export async function GET(request: NextRequest) {
     const passClosed = passEligible.filter((d) => d.status === "CLOSED").length
     const passRate = passTotal > 0 ? Math.round((passClosed / passTotal) * 100) : 0
 
-    // Average processing time (days from createdAt to completedDate for CLOSED demands)
-    const closedDemands = demands.filter((d) => d.status === "CLOSED" && d.completedDate)
+    // Average processing time: DEVELOPING phase actualStart → completedDate/actualEnd
+    const closedDemands = demands.filter((d) => d.status === "CLOSED")
     let avgDays = 0
     if (closedDemands.length > 0) {
+      let validCount = 0
       const totalDays = closedDemands.reduce((sum, d) => {
-        const diff = new Date(d.completedDate!).getTime() - new Date(d.createdAt).getTime()
+        const devPhase = d.phasePlans.find((p) => p.phase === "DEVELOPING")
+        const startDate = devPhase?.actualStart ?? devPhase?.plannedStart
+        const endDate = d.completedDate
+          ?? devPhase?.actualEnd
+          ?? devPhase?.plannedEnd
+        if (!startDate || !endDate) return sum
+        const diff = new Date(endDate).getTime() - new Date(startDate).getTime()
+        if (diff < 0) return sum
+        validCount++
         return sum + diff / (1000 * 60 * 60 * 24)
       }, 0)
-      avgDays = Math.round((totalDays / closedDemands.length) * 10) / 10
+      avgDays = validCount > 0 ? Math.round((totalDays / validCount) * 10) / 10 : 0
     }
 
     // --- Monthly trends (last 12 months) ---
@@ -136,7 +148,11 @@ export async function GET(request: NextRequest) {
       const monthLabel = `${String(d.getFullYear()).slice(2)}/${String(d.getMonth() + 1).padStart(2, "0")}`
 
       const submitted = demands.filter(
-        (dem) => new Date(dem.createdAt) >= monthStart && new Date(dem.createdAt) < monthEnd
+        (dem) => {
+          const subPhase = dem.phasePlans.find((p) => p.phase === "SUBMITTED")
+          const openDate = new Date(subPhase?.plannedStart ?? dem.createdAt)
+          return openDate >= monthStart && openDate < monthEnd
+        }
       ).length
       const completedInMonth = demands.filter(
         (dem) =>

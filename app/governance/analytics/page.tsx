@@ -367,10 +367,10 @@ export default function GovernanceAnalyticsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-4xl font-bold text-foreground">
-                    {d.kpi.avgDays > 0 ? d.kpi.avgDays : "—"}
+                    {(d.statusCounts?.CLOSED ?? 0) > 0 ? `${d.kpi.avgDays} 天` : "—"}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    從建立到結案的平均天數
+                    {(d.statusCounts?.CLOSED ?? 0) > 0 ? `${d.statusCounts.CLOSED} 筆結案需求` : "尚無結案需求"}
                   </p>
                 </CardContent>
               </Card>

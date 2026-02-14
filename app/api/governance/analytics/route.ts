@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
           organizationId: true,
           organization: { select: { name: true } },
           developer: { select: { name: true } },
+          phasePlans: {
+            select: { phase: true, plannedStart: true, plannedEnd: true, actualStart: true, actualEnd: true },
+          },
         },
         orderBy: { updatedAt: "desc" },
       }),
@@ -80,15 +83,33 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // --- Build historyByDemand map (used by avgDays, delivery rate + phase duration) ---
+    const historyByDemand = new Map<string, typeof statusHistories>()
+    for (const h of statusHistories) {
+      const arr = historyByDemand.get(h.demandId) || []
+      arr.push(h)
+      historyByDemand.set(h.demandId, arr)
+    }
+
     // Delivery efficiency: avg days for closed demands
-    const closedDemands = demands.filter((d) => d.status === "CLOSED" && d.completedDate)
+    // Use Gantt chart phasePlan dates (DEVELOPING actualStart → completedDate / actualEnd)
+    const closedDemands = demands.filter((d) => d.status === "CLOSED")
     let avgDays = 0
     if (closedDemands.length > 0) {
+      let validCount = 0
       const totalDays = closedDemands.reduce((sum, d) => {
-        const diff = new Date(d.completedDate!).getTime() - new Date(d.createdAt).getTime()
+        const devPhase = d.phasePlans.find((p) => p.phase === "DEVELOPING")
+        const startDate = devPhase?.actualStart ?? devPhase?.plannedStart
+        const endDate = d.completedDate
+          ?? devPhase?.actualEnd
+          ?? devPhase?.plannedEnd
+        if (!startDate || !endDate) return sum
+        const diff = new Date(endDate).getTime() - new Date(startDate).getTime()
+        if (diff < 0) return sum
+        validCount++
         return sum + diff / (1000 * 60 * 60 * 24)
       }, 0)
-      avgDays = Math.round((totalDays / closedDemands.length) * 10) / 10
+      avgDays = validCount > 0 ? Math.round((totalDays / validCount) * 10) / 10 : 0
     }
 
     // --- Status distribution ---
@@ -120,7 +141,11 @@ export async function GET(request: NextRequest) {
       const monthLabel = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}`
 
       const submitted = demands.filter(
-        (dem) => new Date(dem.createdAt) >= mStart && new Date(dem.createdAt) < mEnd
+        (dem) => {
+          const subPhase = dem.phasePlans.find((p) => p.phase === "SUBMITTED")
+          const openDate = new Date(subPhase?.plannedStart ?? dem.createdAt)
+          return openDate >= mStart && openDate < mEnd
+        }
       ).length
       const completed = demands.filter(
         (dem) =>
@@ -160,14 +185,6 @@ export async function GET(request: NextRequest) {
     const totalQuota = wallets.reduce((s, w) => s + w.totalQuota, 0)
     const totalUsedSp = orgSpData.reduce((s, o) => s + o.usedSp, 0)
     const totalCommittedSp = orgSpData.reduce((s, o) => s + o.committedSp, 0)
-
-    // --- Build historyByDemand map (used by delivery rate + phase duration) ---
-    const historyByDemand = new Map<string, typeof statusHistories>()
-    for (const h of statusHistories) {
-      const arr = historyByDemand.get(h.demandId) || []
-      arr.push(h)
-      historyByDemand.set(h.demandId, arr)
-    }
 
     // --- On-time delivery rate ---
     // Include ACCEPTANCE + CLOSED (development is complete for both)
