@@ -44,6 +44,8 @@ interface PhaseDocumentsProps {
   token: string | null
   onRefresh: () => void
   uploadTriggerSelector?: string
+  onDocumentSelect?: (doc: Document) => void
+  selectedDocId?: string | null
 }
 
 function getFileIconAndColor(fileName: string): { icon: typeof File; color: string } {
@@ -87,6 +89,8 @@ export function PhaseDocuments({
   token,
   onRefresh,
   uploadTriggerSelector,
+  onDocumentSelect,
+  selectedDocId,
 }: PhaseDocumentsProps) {
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [uploadPhase, setUploadPhase] = useState(currentPhase)
@@ -215,7 +219,7 @@ export function PhaseDocuments({
   return (
     <div className="space-y-3">
       <Tabs defaultValue={defaultTab}>
-        <TabsList className="w-full h-auto p-1 bg-muted/50 justify-start gap-0">
+        <TabsList className="w-full h-auto p-1 bg-muted/50 justify-start gap-0 flex-wrap">
           {PIPELINE_STEPS.map((phase, idx) => {
             const count = getPhaseDocuments(phase).length
             const required = getRequiredStatus(phase)
@@ -226,9 +230,8 @@ export function PhaseDocuments({
                 key={phase}
                 value={phase}
                 className={cn(
-                  "text-sm px-2.5 py-1.5 gap-1 rounded-md transition-all",
+                  "text-xs px-2 py-1.5 gap-1 rounded-md transition-all",
                   "data-[state=active]:bg-background data-[state=active]:shadow-sm",
-                  idx > 0 && "border-l border-l-border/30",
                 )}
               >
                 <div
@@ -251,7 +254,7 @@ export function PhaseDocuments({
             )
           })}
           {getUnassignedDocuments().length > 0 && (
-            <TabsTrigger value="all" className="text-sm px-2.5 py-1.5 rounded-md border-l border-l-border/30">
+            <TabsTrigger value="all" className="text-xs px-2 py-1.5 rounded-md">
               其他
             </TabsTrigger>
           )}
@@ -291,7 +294,15 @@ export function PhaseDocuments({
                       ? { icon: ExternalLink, color: "text-blue-500" }
                       : getFileIconAndColor(doc.fileName)
                     return (
-                    <div key={doc.id} className="flex items-center justify-between rounded-lg border p-3.5">
+                    <div
+                      key={doc.id}
+                      className={cn(
+                        "flex items-center justify-between rounded-lg border p-3.5 transition-colors",
+                        onDocumentSelect && "cursor-pointer hover:bg-muted/50",
+                        selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
+                      )}
+                      onClick={() => onDocumentSelect?.(doc)}
+                    >
                       <div className="flex items-center gap-3 min-w-0">
                         <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
                         <div className="min-w-0">
@@ -301,6 +312,7 @@ export function PhaseDocuments({
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-medium text-blue-600 hover:underline truncate block"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               {doc.fileUrl}
                             </a>
@@ -314,7 +326,7 @@ export function PhaseDocuments({
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-0.5 shrink-0">
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         {canDownload && doc.fileUrl && !isExternalLink && (
                           <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
                             <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>
@@ -356,7 +368,15 @@ export function PhaseDocuments({
               {getUnassignedDocuments().map((doc) => {
                 const { icon: Icon, color: iconColor } = getFileIconAndColor(doc.fileName)
                 return (
-                <div key={doc.id} className="flex items-center justify-between rounded-lg border p-3.5">
+                <div
+                  key={doc.id}
+                  className={cn(
+                    "flex items-center justify-between rounded-lg border p-3.5 transition-colors",
+                    onDocumentSelect && "cursor-pointer hover:bg-muted/50",
+                    selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
+                  )}
+                  onClick={() => onDocumentSelect?.(doc)}
+                >
                   <div className="flex items-center gap-3 min-w-0">
                     <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
                     <div className="min-w-0">
@@ -367,7 +387,7 @@ export function PhaseDocuments({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
+                  <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                     {canDownload && doc.fileUrl && (
                       <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
                         <a href={doc.fileUrl} download><Download className="h-4.5 w-4.5" /></a>

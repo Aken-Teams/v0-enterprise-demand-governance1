@@ -13,11 +13,11 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
-import { Upload } from "lucide-react"
+import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
@@ -28,6 +28,9 @@ import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import mermaid from "mermaid"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -132,6 +135,37 @@ function formatDate(dateStr: string) {
   })
 }
 
+// Mermaid code block renderer
+mermaid.initialize({ startOnLoad: false, theme: "default", themeVariables: { pieSectionTextSize: "14px" }, flowchart: { htmlLabels: true }, pie: { useWidth: 600 } })
+
+// Override mermaid background to transparent after render
+function clearMermaidBg(container: HTMLElement) {
+  const svg = container.querySelector("svg")
+  if (svg) svg.style.backgroundColor = "transparent"
+  container.querySelectorAll("rect").forEach((rect) => {
+    if (rect.classList.contains("er") || rect.getAttribute("fill") === "#333" || rect.getAttribute("fill") === "black" || rect.getAttribute("fill") === "#191919") {
+      rect.setAttribute("fill", "transparent")
+    }
+  })
+}
+
+function MermaidBlock({ code }: { code: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!ref.current) return
+    const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
+    mermaid.render(id, code).then(({ svg }) => {
+      if (ref.current) {
+        ref.current.innerHTML = svg
+        clearMermaidBg(ref.current)
+      }
+    }).catch(() => {
+      if (ref.current) ref.current.textContent = code
+    })
+  }, [code])
+  return <div ref={ref} className="flex justify-center [&_svg]:!bg-transparent" />
+}
+
 export default function DemandDetailPage() {
   const { token, user } = useAuth()
   const params = useParams()
@@ -145,6 +179,10 @@ export default function DemandDetailPage() {
   const [docPhaseKey, setDocPhaseKey] = useState(0)
   const [spPlanOpen, setSpPlanOpen] = useState<boolean | null>(null)
   const [subTasksOpen, setSubTasksOpen] = useState<boolean | null>(null)
+  const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [textContent, setTextContent] = useState("")
+  const [textLoading, setTextLoading] = useState(false)
+  const [zoomedImg, setZoomedImg] = useState<string | null>(null)
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
 
@@ -195,6 +233,27 @@ export default function DemandDetailPage() {
       })
       .catch(() => {})
   }, [token, canManage])
+
+  // Fetch text content for preview
+  useEffect(() => {
+    if (!selectedDoc?.fileUrl) { setTextContent(""); return }
+    const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+    if (!["txt", "md"].includes(ext)) return
+    setTextLoading(true)
+    fetch(selectedDoc.fileUrl)
+      .then((res) => res.text())
+      .then((t) => setTextContent(t))
+      .catch(() => setTextContent("無法載入文件內容"))
+      .finally(() => setTextLoading(false))
+  }, [selectedDoc])
+
+  // Watermark SVG background
+  const watermarkBg = useMemo(() => {
+    const name = user?.name || "使用者"
+    const text = `${name}\u3000機密文件`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150"><text transform="rotate(-30 150 75)" x="150" y="85" font-size="14" fill="rgba(0,0,0,0.07)" text-anchor="middle" font-family="sans-serif">${text}</text></svg>`
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+  }, [user?.name])
 
   const handleAssign = async (field: "managerId" | "developerId", userId: string) => {
     if (!token || !demand) return
@@ -774,35 +833,205 @@ export default function DemandDetailPage() {
 
           {/* 文件 Tab */}
           <TabsContent value="documents" className="mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">階段文件</CardTitle>
-                  {canManage && (
-                    <Button variant="outline" size="sm" id="doc-upload-trigger">
-                      <Upload className="h-4 w-4 mr-1.5" />
-                      上傳文件
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <PhaseDocuments
-                  key={`${demand.status}-${docPhaseKey}`}
-                  documents={demand.documents}
-                  currentPhase={demand.status}
-                  demandId={demand.id}
-                  canUpload={canManage}
-                  token={token}
-                  onRefresh={fetchDemand}
-                  uploadTriggerSelector="#doc-upload-trigger"
-                />
-              </CardContent>
-            </Card>
+            <div className="grid gap-6 lg:grid-cols-5">
+              {/* Preview pane */}
+              <div className="lg:col-span-3">
+                <Card className="h-full">
+                  <CardContent className="p-0 h-full">
+                    {selectedDoc ? (
+                      <div className="relative min-h-[520px] h-full">
+                        <div className="h-full min-h-[520px] flex items-center justify-center p-4 overflow-hidden">
+                          {(() => {
+                            const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+                            const url = selectedDoc.fileUrl
+                            const isExternal = selectedDoc.type === "APP_RESULT" && url?.startsWith("http")
+
+                            if (isExternal) {
+                              return (
+                                <div className="w-full h-full min-h-[520px] flex flex-col">
+                                  <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
+                                    <p className="text-xs text-muted-foreground truncate flex-1">{url}</p>
+                                    <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" asChild>
+                                      <a href={url!} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-3 w-3 mr-1" />新分頁
+                                      </a>
+                                    </Button>
+                                  </div>
+                                  <iframe src={url!} className="flex-1 w-full border-0" title="APP 預覽" />
+                                </div>
+                              )
+                            }
+
+                            if (!url) {
+                              return <p className="text-sm text-muted-foreground">此文件無預覽連結</p>
+                            }
+
+                            if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
+                              return (
+                                <div className="relative group cursor-zoom-in" onClick={() => setZoomedImg(url)}>
+                                  <img src={url} alt={selectedDoc.fileName} className="max-w-full max-h-[480px] object-contain rounded" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors rounded">
+                                    <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-80 transition-opacity drop-shadow-lg" />
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            if (ext === "pdf") {
+                              return <iframe src={url} className="w-full h-full min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
+                            }
+
+                            if (["mp4", "webm"].includes(ext)) {
+                              return <video src={url} controls className="max-w-full max-h-[480px] rounded" />
+                            }
+
+                            if (["mp3", "wav", "ogg"].includes(ext)) {
+                              return (
+                                <div className="text-center space-y-4">
+                                  <FileAudio className="h-16 w-16 mx-auto text-sky-400" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <audio src={url} controls className="mx-auto" />
+                                </div>
+                              )
+                            }
+
+                            if (["txt", "md"].includes(ext)) {
+                              if (textLoading) {
+                                return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              }
+                              if (ext === "md") {
+                                return (
+                                  <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm]}
+                                      components={{
+                                        code({ className, children, ...props }) {
+                                          const match = /language-(\w+)/.exec(className || "")
+                                          if (match?.[1] === "mermaid") {
+                                            return <MermaidBlock code={String(children).trim()} />
+                                          }
+                                          return <code className={className} {...props}>{children}</code>
+                                        },
+                                      }}
+                                    >
+                                      {textContent}
+                                    </ReactMarkdown>
+                                  </div>
+                                )
+                              }
+                              return (
+                                <pre className="text-sm whitespace-pre-wrap break-words w-full max-h-[520px] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">
+                                  {textContent}
+                                </pre>
+                              )
+                            }
+
+                            if (["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext)) {
+                              return (
+                                <div className="text-center space-y-3">
+                                  <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">此格式不支援線上預覽</p>
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a href={url} download>
+                                      <Download className="h-3.5 w-3.5 mr-1.5" />下載檔案
+                                    </a>
+                                  </Button>
+                                </div>
+                              )
+                            }
+
+                            return (
+                              <div className="text-center space-y-3">
+                                <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
+                                <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={url} download>
+                                    <Download className="h-3.5 w-3.5 mr-1.5" />下載檔案
+                                  </a>
+                                </Button>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                        {/* Watermark overlay */}
+                        <div
+                          className="absolute inset-0 pointer-events-none z-10"
+                          style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center min-h-[520px] text-muted-foreground">
+                        <Eye className="h-12 w-12 mb-3 opacity-20" />
+                        <p className="text-sm">請選擇文件以預覽</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Document list */}
+              <div className="lg:col-span-2">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">階段文件</CardTitle>
+                      {canManage && (
+                        <Button variant="outline" size="sm" id="doc-upload-trigger">
+                          <Upload className="h-4 w-4 mr-1.5" />
+                          上傳文件
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <PhaseDocuments
+                      key={`${demand.status}-${docPhaseKey}`}
+                      documents={demand.documents}
+                      currentPhase={demand.status}
+                      demandId={demand.id}
+                      canUpload={canManage}
+                      token={token}
+                      onRefresh={fetchDemand}
+                      uploadTriggerSelector="#doc-upload-trigger"
+                      onDocumentSelect={setSelectedDoc}
+                      selectedDocId={selectedDoc?.id}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
 
+      {/* Image zoom overlay */}
+      {zoomedImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center cursor-zoom-out"
+          onClick={() => setZoomedImg(null)}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-4 right-4 text-white hover:bg-white/20 h-10 w-10"
+            onClick={() => setZoomedImg(null)}
+          >
+            <X className="h-6 w-6" />
+          </Button>
+          <img
+            src={zoomedImg}
+            alt="放大預覽"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {/* Watermark on zoomed image */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
+          />
+        </div>
+      )}
     </AppLayout>
   )
 }
