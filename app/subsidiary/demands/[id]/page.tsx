@@ -38,6 +38,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import * as XLSX from "xlsx"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import remarkBreaks from "remark-breaks"
 import mermaid from "mermaid"
 
 mermaid.initialize({
@@ -851,7 +852,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 return (
                                   <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                                     <ReactMarkdown
-                                      remarkPlugins={[remarkGfm]}
+                                      remarkPlugins={[remarkGfm, remarkBreaks]}
                                       components={{
                                         pre({ children }) {
                                           if (React.isValidElement(children) && typeof children.type !== "string") {

@@ -30,6 +30,7 @@ import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-edi
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import remarkBreaks from "remark-breaks"
 import mermaid from "mermaid"
 import * as XLSX from "xlsx"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -1020,7 +1021,7 @@ export default function DemandDetailPage() {
                                 return (
                                   <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                                     <ReactMarkdown
-                                      remarkPlugins={[remarkGfm]}
+                                      remarkPlugins={[remarkGfm, remarkBreaks]}
                                       components={{
                                         pre({ children }) {
                                           // Unwrap <pre> for mermaid blocks so they don't get dark code bg
