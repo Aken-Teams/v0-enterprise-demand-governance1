@@ -1,18 +1,179 @@
 "use client"
 
+import React, { useEffect, useState, useCallback } from "react"
 import { AppLayout } from "@/components/app-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { useAuth } from "@/hooks/use-auth"
+import { STATUS_MAP } from "@/lib/constants/demand"
 import {
-  BarChart3,
-  FileText,
-  Coins,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell,
+  LineChart, Line,
+} from "recharts"
+import {
+  BarChart3, FileText, Coins, TrendingUp, AlertTriangle,
+  CheckCircle, Clock, Loader2, Users,
 } from "lucide-react"
 
+interface AnalyticsData {
+  kpi: {
+    activeDemands: number
+    thisMonthClosed: number
+    ytdUsedSp: number
+    avgDays: number
+    totalDemands: number
+  }
+  statusCounts: Record<string, number>
+  orgDemandCounts: Record<string, number>
+  monthlyTrends: { month: string; submitted: number; completed: number }[]
+  sp: {
+    totalQuota: number
+    totalUsedSp: number
+    totalCommittedSp: number
+    totalAvailable: number
+    byOrganization: {
+      name: string
+      totalQuota: number
+      usedSp: number
+      committedSp: number
+      availableSp: number
+      demandCount: number
+    }[]
+  }
+  performance: {
+    onTimeRate: number
+    onTimeCount: number
+    deliverableTotal: number
+    passRate: number
+    passClosed: number
+    passTotal: number
+  }
+  risks: {
+    overdueDemands: {
+      demandNumber: string
+      title: string
+      status: string
+      organization: string
+      expectedDate: string
+      overdueDays: number
+    }[]
+    staleDemands: {
+      demandNumber: string
+      title: string
+      status: string
+      organization: string
+      lastUpdated: string
+      idleDays: number
+    }[]
+  }
+  phaseAvgDays: { phase: string; avgDays: number; count: number }[]
+  devWorkload: { name: string; count: number; sp: number }[]
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  SUBMITTED: "#3b82f6",
+  PRD_REVIEW: "#f59e0b",
+  SP_REVIEW: "#f97316",
+  DEVELOPING: "#8b5cf6",
+  ACCEPTANCE: "#a855f7",
+  CLOSED: "#22c55e",
+  REJECTED: "#ef4444",
+}
+
+const ORG_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"]
+
 export default function GovernanceAnalyticsPage() {
+  const { token } = useAuth()
+  const [data, setData] = useState<AnalyticsData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const fetchData = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetch("/api/governance/analytics", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        setData(await res.json())
+      }
+    } catch (e) {
+      console.error("Failed to fetch analytics:", e)
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  if (loading) {
+    return (
+      <AppLayout userRole="admin">
+        <div className="flex items-center justify-center py-32">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    )
+  }
+
+  const d = data!
+
+  // Prepare chart data
+  const statusChartData = Object.entries(d?.statusCounts ?? {}).map(([status, count]) => ({
+    name: STATUS_MAP[status]?.label ?? status,
+    value: count,
+    fill: STATUS_COLORS[status] ?? "#6b7280",
+  }))
+
+  const orgChartData = Object.entries(d?.orgDemandCounts ?? {}).map(([name, count], i) => ({
+    name,
+    value: count,
+    fill: ORG_COLORS[i % ORG_COLORS.length],
+  }))
+
+  const phaseChartData = (d?.phaseAvgDays ?? [])
+    .filter((p) => p.phase !== "CLOSED" && p.count > 0)
+    .map((p) => ({
+      name: STATUS_MAP[p.phase]?.label ?? p.phase,
+      days: p.avgDays,
+      count: p.count,
+    }))
+
+  const orgSpChartData = (d?.sp.byOrganization ?? []).map((o) => ({
+    name: o.name,
+    已使用: o.usedSp,
+    已承諾: o.committedSp,
+    可用: o.availableSp,
+  }))
+
+  const spPieData = [
+    { name: "已使用", value: d?.sp.totalUsedSp ?? 0, fill: "#8b5cf6" },
+    { name: "已承諾", value: d?.sp.totalCommittedSp ?? 0, fill: "#f59e0b" },
+    { name: "可用", value: d?.sp.totalAvailable ?? 0, fill: "#22c55e" },
+  ].filter((i) => i.value > 0)
+
+  const trendChartConfig = {
+    submitted: { label: "新增需求", color: "#3b82f6" },
+    completed: { label: "完成結案", color: "#22c55e" },
+  }
+
+  const statusChartConfig = Object.fromEntries(
+    statusChartData.map((s) => [s.name, { label: s.name, color: s.fill }])
+  )
+
+  const spAllocationConfig = {
+    已使用: { label: "已使用", color: "#8b5cf6" },
+    已承諾: { label: "已承諾", color: "#f59e0b" },
+    可用: { label: "可用", color: "#22c55e" },
+  }
+
+  const spPieConfig = Object.fromEntries(
+    spPieData.map((s) => [s.name, { label: s.name, color: s.fill }])
+  )
+
   return (
     <AppLayout userRole="admin">
       <div className="space-y-6">
@@ -23,46 +184,10 @@ export default function GovernanceAnalyticsPage() {
 
         {/* KPI Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">活躍需求</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">進行中的需求</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">本月交付</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">完成驗收需求數</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">SP 投入</CardTitle>
-              <Coins className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">YTD 累計使用</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">交付效率</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">—</div>
-              <p className="text-xs text-muted-foreground">尚無數據</p>
-            </CardContent>
-          </Card>
+          <KpiCard color="#6366f1" icon={FileText} title="活躍需求" value={d.kpi.activeDemands} sub={`共 ${d.kpi.totalDemands} 筆`} />
+          <KpiCard color="#f59e0b" icon={CheckCircle} title="本月交付" value={d.kpi.thisMonthClosed} sub="本月結案" />
+          <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.kpi.ytdUsedSp} / ${d.sp.totalQuota}`} sub={`已承諾 ${d.sp.totalCommittedSp}`} />
+          <KpiCard color="#10b981" icon={TrendingUp} title="交付效率" value={d.kpi.avgDays > 0 ? `${d.kpi.avgDays} 天` : "—"} sub={d.kpi.avgDays > 0 ? "平均處理天數" : "尚無結案數據"} />
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
@@ -75,19 +200,453 @@ export default function GovernanceAnalyticsPage() {
             <TabsTrigger value="sp-usage">SP 分析</TabsTrigger>
           </TabsList>
 
-          {["overview", "flow", "metrics", "trends", "risks", "sp-usage"].map((tab) => (
-            <TabsContent key={tab} value={tab}>
+          {/* ====== 總覽 ====== */}
+          <TabsContent value="overview">
+            <div className="grid gap-4 md:grid-cols-2">
               <Card>
-                <CardContent className="flex flex-col items-center justify-center py-16">
-                  <BarChart3 className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground">尚無資料</p>
-                  <p className="text-sm text-muted-foreground/60 mt-1">待有需求數據後將自動生成報表</p>
+                <CardHeader>
+                  <CardTitle className="text-base">需求狀態分佈</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {statusChartData.length > 0 ? (
+                    <ChartContainer config={statusChartConfig} className="h-[260px] w-full">
+                      <PieChart>
+                        <Pie
+                          data={statusChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={90}
+                          label={({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
+                        >
+                          {statusChartData.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                      </PieChart>
+                    </ChartContainer>
+                  ) : (
+                    <EmptyState />
+                  )}
                 </CardContent>
               </Card>
-            </TabsContent>
-          ))}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">需求者分佈</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {orgChartData.length > 0 ? (
+                    <ChartContainer
+                      config={Object.fromEntries(orgChartData.map((o) => [o.name, { label: o.name, color: o.fill }]))}
+                      className="h-[260px] w-full"
+                    >
+                      <PieChart>
+                        <Pie
+                          data={orgChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={90}
+                          label={({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
+                        >
+                          {orgChartData.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                      </PieChart>
+                    </ChartContainer>
+                  ) : (
+                    <EmptyState />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ====== 需求流動 ====== */}
+          <TabsContent value="flow">
+            <div className="grid gap-4 md:grid-cols-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">各狀態需求數量</CardTitle>
+                  <CardDescription>顯示每個階段目前的需求數</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {statusChartData.length > 0 ? (
+                    <ChartContainer config={statusChartConfig} className="h-[300px] w-full">
+                      <BarChart data={statusChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" fontSize={12} />
+                        <YAxis allowDecimals={false} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="value" name="需求數" radius={[4, 4, 0, 0]}>
+                          {statusChartData.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ChartContainer>
+                  ) : (
+                    <EmptyState />
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">各階段平均停留天數</CardTitle>
+                  <CardDescription>根據狀態歷程計算</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {phaseChartData.length > 0 ? (
+                    <ChartContainer
+                      config={{ days: { label: "平均天數", color: "#8b5cf6" } }}
+                      className="h-[300px] w-full"
+                    >
+                      <BarChart data={phaseChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" fontSize={12} />
+                        <YAxis />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="days" name="平均天數" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  ) : (
+                    <EmptyState />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ====== 指標分析 ====== */}
+          <TabsContent value="metrics">
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">準時交付率</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold text-foreground">
+                    {d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {d.performance.onTimeCount} / {d.performance.deliverableTotal} 筆準時交付
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">開案通過率</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold text-foreground">
+                    {d.performance.passTotal > 0 ? `${d.performance.passRate}%` : "—"}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {d.performance.passClosed} / {d.performance.passTotal} 筆完成結案
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">平均處理天數</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold text-foreground">
+                    {d.kpi.avgDays > 0 ? d.kpi.avgDays : "—"}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    從建立到結案的平均天數
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Developer workload */}
+            {d.devWorkload.length > 0 && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    開發人員負載
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {d.devWorkload.map((dev) => (
+                      <div key={dev.name} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{dev.name}</span>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="secondary">{dev.count} 筆需求</Badge>
+                          <Badge variant="outline">{dev.sp} SP</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ====== 趨勢分析 ====== */}
+          <TabsContent value="trends">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">月度需求趨勢</CardTitle>
+                <CardDescription>近 8 個月新增與完成需求數</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {d.monthlyTrends.some((m) => m.submitted > 0 || m.completed > 0) ? (
+                  <ChartContainer config={trendChartConfig} className="h-[350px] w-full">
+                    <LineChart data={d.monthlyTrends}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" fontSize={12} />
+                      <YAxis allowDecimals={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Line
+                        type="monotone"
+                        dataKey="submitted"
+                        name="新增需求"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="completed"
+                        name="完成結案"
+                        stroke="#22c55e"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                ) : (
+                  <EmptyState />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ====== 風險管理 ====== */}
+          <TabsContent value="risks">
+            <div className="grid gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    逾期需求
+                    {d.risks.overdueDemands.length > 0 && (
+                      <Badge variant="destructive">{d.risks.overdueDemands.length}</Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>超過預期交付日期的進行中需求</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {d.risks.overdueDemands.length > 0 ? (
+                    <div className="space-y-3">
+                      {d.risks.overdueDemands.map((item) => (
+                        <div
+                          key={item.demandNumber}
+                          className="flex items-center justify-between rounded-lg border p-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm text-muted-foreground">
+                                {item.demandNumber}
+                              </span>
+                              <span className={STATUS_MAP[item.status]?.color + " text-xs px-2 py-0.5 rounded-full"}>
+                                {STATUS_MAP[item.status]?.label}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">{item.organization}</p>
+                          </div>
+                          <Badge variant="destructive">逾期 {item.overdueDays} 天</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4 text-center">目前沒有逾期需求</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-amber-500" />
+                    停滯需求
+                    {d.risks.staleDemands.length > 0 && (
+                      <Badge variant="secondary">{d.risks.staleDemands.length}</Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>超過 14 天未更新的進行中需求</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {d.risks.staleDemands.length > 0 ? (
+                    <div className="space-y-3">
+                      {d.risks.staleDemands.map((item) => (
+                        <div
+                          key={item.demandNumber}
+                          className="flex items-center justify-between rounded-lg border p-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm text-muted-foreground">
+                                {item.demandNumber}
+                              </span>
+                              <span className={STATUS_MAP[item.status]?.color + " text-xs px-2 py-0.5 rounded-full"}>
+                                {STATUS_MAP[item.status]?.label}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">{item.organization}</p>
+                          </div>
+                          <Badge variant="outline">{item.idleDays} 天未更新</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4 text-center">目前沒有停滯需求</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ====== SP 分析 ====== */}
+          <TabsContent value="sp-usage">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">SP 配額使用總覽</CardTitle>
+                  <CardDescription>
+                    全組織合計配額 {d.sp.totalQuota} SP
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {spPieData.length > 0 ? (
+                    <ChartContainer config={spPieConfig} className="h-[260px] w-full">
+                      <PieChart>
+                        <Pie
+                          data={spPieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={90}
+                          label={({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
+                        >
+                          {spPieData.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                      </PieChart>
+                    </ChartContainer>
+                  ) : (
+                    <EmptyState message="尚未配置 SP 配額" />
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">各組織 SP 使用</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {orgSpChartData.length > 0 ? (
+                    <ChartContainer config={spAllocationConfig} className="h-[260px] w-full">
+                      <BarChart data={orgSpChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" fontSize={12} />
+                        <YAxis />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="已使用" stackId="a" fill="#8b5cf6" />
+                        <Bar dataKey="已承諾" stackId="a" fill="#f59e0b" />
+                        <Bar dataKey="可用" stackId="a" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  ) : (
+                    <EmptyState message="尚未配置 SP 配額" />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* SP detail table */}
+            {d.sp.byOrganization.length > 0 && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base">組織 SP 明細</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 font-medium">組織</th>
+                          <th className="pb-2 font-medium text-right">配額</th>
+                          <th className="pb-2 font-medium text-right">已使用</th>
+                          <th className="pb-2 font-medium text-right">已承諾</th>
+                          <th className="pb-2 font-medium text-right">可用</th>
+                          <th className="pb-2 font-medium text-right">需求數</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {d.sp.byOrganization.map((org) => (
+                          <tr key={org.name} className="border-b last:border-0">
+                            <td className="py-2 font-medium">{org.name}</td>
+                            <td className="py-2 text-right">{org.totalQuota}</td>
+                            <td className="py-2 text-right">{org.usedSp}</td>
+                            <td className="py-2 text-right">{org.committedSp}</td>
+                            <td className="py-2 text-right">{org.availableSp}</td>
+                            <td className="py-2 text-right">{org.demandCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
         </Tabs>
       </div>
     </AppLayout>
+  )
+}
+
+function KpiCard({ color, icon: Icon, title, value, sub }: { color: string; icon: React.ComponentType<{ className?: string }>; title: string; value: React.ReactNode; sub: string }) {
+  return (
+    <div className="flex gap-3 rounded-lg bg-card px-4 py-3">
+      <div className="w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: color }} />
+      <div className="flex flex-1 items-end justify-between">
+        <div>
+          <span className="text-2xl font-bold">{value}</span>
+          <p className="text-xs text-muted-foreground">{sub}</p>
+        </div>
+        <div className="flex items-center gap-1.5 self-start">
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-sm font-medium text-muted-foreground">{title}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ message = "尚無資料" }: { message?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12">
+      <BarChart3 className="h-10 w-10 text-muted-foreground/30 mb-3" />
+      <p className="text-sm text-muted-foreground">{message}</p>
+    </div>
   )
 }

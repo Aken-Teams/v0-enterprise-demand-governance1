@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -202,6 +202,30 @@ export function PhaseDocuments({
     }
   }
 
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+
+  const handleDownload = useCallback(async (doc: Document) => {
+    if (!token) return
+    setDownloadingId(doc.id)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/documents/${doc.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = doc.fileName.replace(/\.[^.]+$/, ".pdf")
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch { /* ignore */ } finally {
+      setDownloadingId(null)
+    }
+  }, [token, demandId])
+
   // Get available doc types for selected phase
   const availableTypes = () => {
     const config = PHASE_DOCUMENT_MAP[uploadPhase]
@@ -254,8 +278,16 @@ export function PhaseDocuments({
         </div>
         <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           {docCanDownload && doc.fileUrl && !isExternalLink && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-              <a href={doc.fileUrl} download><Download className="h-4 w-4" /></a>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => handleDownload(doc)}
+              disabled={downloadingId === doc.id}
+            >
+              {downloadingId === doc.id
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Download className="h-4 w-4" />}
             </Button>
           )}
           {docCanDownload && isExternalLink && (
