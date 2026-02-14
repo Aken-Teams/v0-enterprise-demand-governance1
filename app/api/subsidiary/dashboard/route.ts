@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const currentYear = new Date().getFullYear()
 
     // Fetch all data in parallel
-    const [wallet, demands] = await Promise.all([
+    const [wallet, demands, statusHistories] = await Promise.all([
       // SP wallet
       prisma.spWallet.findUnique({
         where: {
@@ -47,6 +47,11 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { updatedAt: "desc" },
       }),
+      // Status histories for delivery rate calculation
+      prisma.demandStatusHistory.findMany({
+        where: { demand: { organizationId: orgId } },
+        select: { demandId: true, toStatus: true, createdAt: true },
+      }),
     ])
 
     // --- KPI calculations ---
@@ -71,13 +76,32 @@ export async function GET(request: NextRequest) {
     const nonRejected = demands.filter((d) => d.status !== "REJECTED").length
     const completionRate = nonRejected > 0 ? Math.round((completed / nonRejected) * 100) : 0
 
-    // --- 交付率: CLOSED demands where completedDate <= expectedDate/desiredDate ---
+    // --- 交付率: ACCEPTANCE/CLOSED demands delivered on time ---
+    // Build history lookup for completion date
+    const historyByDemand = new Map<string, typeof statusHistories>()
+    for (const h of statusHistories) {
+      const arr = historyByDemand.get(h.demandId) || []
+      arr.push(h)
+      historyByDemand.set(h.demandId, arr)
+    }
+    const deliveredStatuses = new Set(["ACCEPTANCE", "CLOSED"])
     const deliverableDemands = demands.filter(
-      (d) => d.status === "CLOSED" && d.completedDate && (d.expectedDate || d.desiredDate)
+      (d) => deliveredStatuses.has(d.status) && (d.expectedDate || d.desiredDate)
     )
-    const onTimeDelivery = deliverableDemands.filter(
-      (d) => new Date(d.completedDate!) <= new Date((d.expectedDate ?? d.desiredDate)!)
-    ).length
+    const getCompletionDate = (demand: typeof demands[0]): Date | null => {
+      if (demand.completedDate) return new Date(demand.completedDate)
+      const history = historyByDemand.get(demand.id)
+      if (history) {
+        const entry = history.find((h) => h.toStatus === "ACCEPTANCE")
+        if (entry) return new Date(entry.createdAt)
+      }
+      return new Date(demand.updatedAt)
+    }
+    const onTimeDelivery = deliverableDemands.filter((d) => {
+      const completed = getCompletionDate(d)
+      if (!completed) return false
+      return completed <= new Date((d.expectedDate ?? d.desiredDate)!)
+    }).length
     const deliveryRate = deliverableDemands.length > 0
       ? Math.round((onTimeDelivery / deliverableDemands.length) * 100)
       : 0

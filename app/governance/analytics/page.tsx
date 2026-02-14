@@ -344,7 +344,7 @@ export default function GovernanceAnalyticsPage() {
                     {d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {d.performance.onTimeCount} / {d.performance.deliverableTotal} 筆準時交付
+                    {d.performance.onTimeCount} / {d.performance.deliverableTotal} 筆準時完成開發
                   </p>
                 </CardContent>
               </Card>

@@ -161,14 +161,35 @@ export async function GET(request: NextRequest) {
     const totalUsedSp = orgSpData.reduce((s, o) => s + o.usedSp, 0)
     const totalCommittedSp = orgSpData.reduce((s, o) => s + o.committedSp, 0)
 
+    // --- Build historyByDemand map (used by delivery rate + phase duration) ---
+    const historyByDemand = new Map<string, typeof statusHistories>()
+    for (const h of statusHistories) {
+      const arr = historyByDemand.get(h.demandId) || []
+      arr.push(h)
+      historyByDemand.set(h.demandId, arr)
+    }
+
     // --- On-time delivery rate ---
-    // Use expectedDate first, fall back to desiredDate
+    // Include ACCEPTANCE + CLOSED (development is complete for both)
+    const deliveredStatuses = new Set(["ACCEPTANCE", "CLOSED"])
     const deliverableDemands = demands.filter(
-      (d) => d.status === "CLOSED" && d.completedDate && (d.expectedDate || d.desiredDate)
+      (d) => deliveredStatuses.has(d.status) && (d.expectedDate || d.desiredDate)
     )
-    const onTimeCount = deliverableDemands.filter(
-      (d) => new Date(d.completedDate!) <= new Date((d.expectedDate ?? d.desiredDate)!)
-    ).length
+    // For completion date: CLOSED uses completedDate, ACCEPTANCE uses status history transition date
+    const getCompletionDate = (demand: typeof demands[0]): Date | null => {
+      if (demand.completedDate) return new Date(demand.completedDate)
+      const history = historyByDemand.get(demand.id)
+      if (history) {
+        const entry = history.find((h) => h.toStatus === "ACCEPTANCE")
+        if (entry) return new Date(entry.createdAt)
+      }
+      return new Date(demand.updatedAt) // fallback
+    }
+    const onTimeCount = deliverableDemands.filter((d) => {
+      const completed = getCompletionDate(d)
+      if (!completed) return false
+      return completed <= new Date((d.expectedDate ?? d.desiredDate)!)
+    }).length
     const onTimeRate = deliverableDemands.length > 0
       ? Math.round((onTimeCount / deliverableDemands.length) * 100)
       : 0
@@ -230,13 +251,6 @@ export async function GET(request: NextRequest) {
     const phaseDurations: Record<string, number[]> = {}
     for (const phase of phaseOrder) phaseDurations[phase] = []
 
-    // Group histories by demand
-    const historyByDemand = new Map<string, typeof statusHistories>()
-    for (const h of statusHistories) {
-      const arr = historyByDemand.get(h.demandId) || []
-      arr.push(h)
-      historyByDemand.set(h.demandId, arr)
-    }
     for (const [, entries] of historyByDemand) {
       const sorted = entries.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       for (let i = 0; i < sorted.length - 1; i++) {

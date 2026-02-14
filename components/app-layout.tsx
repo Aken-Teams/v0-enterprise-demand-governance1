@@ -106,13 +106,7 @@ interface NotificationItem {
   read: boolean
 }
 
-const MOCK_NOTIFICATIONS: NotificationItem[] = [
-  { id: "1", title: "需求狀態更新", description: "「CRM 系統優化」已進入開發中階段", time: "5 分鐘前", read: false },
-  { id: "2", title: "新需求已提交", description: "子公司 B 提交了「行動端報表功能」", time: "30 分鐘前", read: false },
-  { id: "3", title: "驗收提醒", description: "「ERP 資料整合」待驗收確認", time: "1 小時前", read: false },
-  { id: "4", title: "SP 額度提醒", description: "子公司 A 本年度 SP 使用率已達 80%", time: "2 小時前", read: true },
-  { id: "5", title: "需求已結案", description: "「供應鏈管理模組」已完成驗收結案", time: "昨天", read: true },
-]
+const MOCK_NOTIFICATIONS: NotificationItem[] = []
 
 export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps) {
   const pathname = usePathname()
