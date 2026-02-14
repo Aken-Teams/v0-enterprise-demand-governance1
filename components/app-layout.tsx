@@ -93,7 +93,7 @@ const navSections: NavSection[] = [
     title: "共用",
     roles: ["subsidiary", "admin", "delivery"],
     items: [
-      { title: "文件管理", href: "/documents", icon: BookOpen, roles: ["subsidiary", "admin", "delivery"] },
+      { title: "使用指南", href: "/documents", icon: BookOpen, roles: ["subsidiary", "admin", "delivery"] },
     ],
   },
 ]
