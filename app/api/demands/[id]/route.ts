@@ -136,6 +136,15 @@ export async function PATCH(
       return NextResponse.json({ demand: { id: updated.id } })
     }
 
+    // Handle completedDate-only update (no status change)
+    if (!body.status && body.completedDate !== undefined) {
+      const updated = await prisma.demand.update({
+        where: { id },
+        data: { completedDate: body.completedDate ? new Date(body.completedDate) : null },
+      })
+      return NextResponse.json({ demand: { id: updated.id } })
+    }
+
     // Handle status update
     const { status } = body
     if (!status || !VALID_STATUSES.has(status)) {
@@ -146,12 +155,17 @@ export async function PATCH(
       return NextResponse.json({ error: "狀態未變更" }, { status: 400 })
     }
 
+    // For CLOSED: only set completedDate if explicitly provided (default stays null)
+    const closedDate = status === "CLOSED" && body.completedDate
+      ? new Date(body.completedDate)
+      : null
+
     const updated = await prisma.$transaction(async (tx) => {
       const d = await tx.demand.update({
         where: { id },
         data: {
           status: status as DemandStatus,
-          ...(status === "CLOSED" ? { completedDate: new Date() } : {}),
+          ...(status === "CLOSED" && closedDate ? { completedDate: closedDate } : {}),
           // Clear completedDate if moving back from CLOSED
           ...(demand.status === "CLOSED" && status !== "CLOSED" ? { completedDate: null } : {}),
         },

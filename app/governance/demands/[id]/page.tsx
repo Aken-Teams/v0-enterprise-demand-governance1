@@ -591,6 +591,7 @@ export default function DemandDetailPage() {
                 demandId={demand.id}
                 documents={demand.documents}
                 token={token}
+                completedDate={demand.completedDate}
                 onStatusChange={() => { setActiveTab("overview"); setDocPhaseKey((k) => k + 1); fetchDemand() }}
               />
             )}
@@ -869,11 +870,30 @@ export default function DemandDetailPage() {
                         </div>
                       )}
                     </div>
-                    {demand.completedDate && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="text-muted-foreground w-16 shrink-0">完成時間</span>
-                        <span className="font-medium">{formatDate(demand.completedDate)}</span>
+                    {demand.status === "CLOSED" && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground shrink-0">實際結案日期</span>
+                        </div>
+                        <input
+                          type="date"
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                          value={demand.completedDate ? new Date(demand.completedDate).toISOString().slice(0, 10) : ""}
+                          onChange={async (e) => {
+                            const val = e.target.value
+                            if (!token) return
+                            const res = await fetch(`/api/demands/${demand.id}`, {
+                              method: "PATCH",
+                              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                              body: JSON.stringify({ completedDate: val || null }),
+                            })
+                            if (res.ok) {
+                              setDemand((prev) => prev ? { ...prev, completedDate: val || null } : prev)
+                            }
+                          }}
+                        />
+                        <p className="text-[11px] text-muted-foreground">此日期用於交付率計算</p>
                       </div>
                     )}
                   </CardContent>
