@@ -624,7 +624,7 @@ export default function DemandDetailPage() {
               {/* Left column */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Phase-specific action cards */}
-                {canManage && demand.status === "SP_REVIEW" && (
+                {user?.role === "admin" && demand.status === "SP_REVIEW" && (
                   <Collapsible open={spPlanOpen ?? false} onOpenChange={setSpPlanOpen}>
                     <Card className="border-orange-200">
                       <CardHeader className="pb-3">
@@ -657,7 +657,7 @@ export default function DemandDetailPage() {
                   </Collapsible>
                 )}
 
-                {canManage && demand.status === "PRD_REVIEW" && (!demand.manager || !demand.developer) && (
+                {user?.role === "admin" && demand.status === "PRD_REVIEW" && (!demand.manager || !demand.developer) && (
                   <Card className="border-amber-200">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -687,7 +687,7 @@ export default function DemandDetailPage() {
                   </Card>
                 )}
 
-                {canManage && demand.status === "DEVELOPING" && (() => {
+                {user?.role === "admin" && demand.status === "DEVELOPING" && (() => {
                   const devPlan = demand.phasePlans.find((p) => p.phase === "DEVELOPING")
                   return (
                     <Collapsible open={subTasksOpen ?? false} onOpenChange={setSubTasksOpen}>
@@ -785,13 +785,8 @@ export default function DemandDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground w-16 shrink-0">建立者</span>
-                      <span className="font-medium">{demand.creator.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <User className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">PM</span>
-                      {canManage && staffUsers.length > 0 ? (
+                      {user?.role === "admin" && staffUsers.length > 0 ? (
                         <Select
                           value={demand.manager?.id || "none"}
                           onValueChange={(v) => handleAssign("managerId", v === "none" ? "" : v)}
@@ -820,7 +815,7 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <User className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">工程師</span>
-                      {canManage && staffUsers.length > 0 ? (
+                      {user?.role === "admin" && staffUsers.length > 0 ? (
                         <Select
                           value={demand.developer?.id || "none"}
                           onValueChange={(v) => handleAssign("developerId", v === "none" ? "" : v)}

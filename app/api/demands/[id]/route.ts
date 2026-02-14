@@ -69,7 +69,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin", "delivery"])
     const { id } = await params
     const body = await request.json()
 
@@ -78,8 +78,11 @@ export async function PATCH(
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
 
-    // Handle assignment update (managerId / developerId)
+    // Handle assignment update (managerId / developerId) — admin only
     if (body.managerId !== undefined || body.developerId !== undefined) {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可指派人員" }, { status: 403 })
+      }
       const data: Record<string, string | null> = {}
       if (body.managerId !== undefined) data.managerId = body.managerId || null
       if (body.developerId !== undefined) data.developerId = body.developerId || null
@@ -103,8 +106,11 @@ export async function PATCH(
       })
     }
 
-    // Handle field editing (title, description, etc.)
+    // Handle field editing (title, description, etc.) — admin only
     if (body.title !== undefined) {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可編輯需求" }, { status: 403 })
+      }
       const parseResult = updateDemandSchema.safeParse(body)
       if (!parseResult.success) {
         return NextResponse.json(
