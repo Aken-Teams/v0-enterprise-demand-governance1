@@ -17,7 +17,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
-import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
+import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn, ChevronLeft, ChevronRight, Presentation } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
@@ -31,6 +31,8 @@ import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import mermaid from "mermaid"
+import * as XLSX from "xlsx"
+import JSZip from "jszip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -221,6 +223,11 @@ export default function DemandDetailPage() {
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
+  const [excelHtml, setExcelHtml] = useState("")
+  const [excelLoading, setExcelLoading] = useState(false)
+  const [pptxSlides, setPptxSlides] = useState<{ texts: string[]; imageUrls: string[] }[]>([])
+  const [pptxLoading, setPptxLoading] = useState(false)
+  const [pptxSlideIdx, setPptxSlideIdx] = useState(0)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
@@ -292,6 +299,83 @@ export default function DemandDetailPage() {
       .then((t) => setTextContent(t))
       .catch(() => setTextContent("無法載入文件內容"))
       .finally(() => setTextLoading(false))
+  }, [selectedDoc])
+
+  // Fetch & parse Excel for preview
+  useEffect(() => {
+    if (!selectedDoc?.fileUrl) { setExcelHtml(""); return }
+    const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+    if (!["xls", "xlsx"].includes(ext)) return
+    setExcelLoading(true)
+    fetch(selectedDoc.fileUrl)
+      .then((res) => res.arrayBuffer())
+      .then((buf) => {
+        const wb = XLSX.read(buf, { type: "array" })
+        // Render all sheets as HTML tables
+        const html = wb.SheetNames.map((name) => {
+          const ws = wb.Sheets[name]
+          const table = XLSX.utils.sheet_to_html(ws, { id: `sheet-${name}` })
+          return `<div class="mb-4"><p class="text-xs font-semibold text-muted-foreground mb-2">${wb.SheetNames.length > 1 ? name : ""}</p>${table}</div>`
+        }).join("")
+        setExcelHtml(html)
+      })
+      .catch(() => setExcelHtml(""))
+      .finally(() => setExcelLoading(false))
+  }, [selectedDoc])
+
+  // Fetch & parse PPTX for preview
+  useEffect(() => {
+    if (!selectedDoc?.fileUrl) { setPptxSlides([]); setPptxSlideIdx(0); return }
+    const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+    if (!["ppt", "pptx"].includes(ext)) return
+    setPptxLoading(true)
+    setPptxSlideIdx(0)
+    let blobUrls: string[] = []
+    fetch(selectedDoc.fileUrl)
+      .then((res) => res.arrayBuffer())
+      .then(async (buf) => {
+        const zip = await JSZip.loadAsync(buf)
+        const slideFiles = Object.keys(zip.files)
+          .filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f))
+          .sort((a, b) => {
+            const nA = parseInt(a.match(/slide(\d+)/)?.[1] || "0")
+            const nB = parseInt(b.match(/slide(\d+)/)?.[1] || "0")
+            return nA - nB
+          })
+        const slides = await Promise.all(slideFiles.map(async (f) => {
+          const xml = await zip.file(f)!.async("string")
+          // Extract text from <a:t> tags
+          const texts: string[] = []
+          for (const m of xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)) {
+            if (m[1].trim()) texts.push(m[1])
+          }
+          // Find image references via relationships
+          const imageUrls: string[] = []
+          const relPath = f.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels"
+          const relFile = zip.file(relPath)
+          if (relFile) {
+            const relXml = await relFile.async("string")
+            const imgRefs = [...relXml.matchAll(/Target="([^"]*\.(png|jpg|jpeg|gif|webp|bmp|svg))"/gi)]
+            for (const ref of imgRefs) {
+              let target = ref[1]
+              if (target.startsWith("../")) target = "ppt/" + target.slice(3)
+              else if (!target.startsWith("ppt/")) target = "ppt/slides/" + target
+              const imgFile = zip.file(target)
+              if (imgFile) {
+                const blob = await imgFile.async("blob")
+                const u = URL.createObjectURL(blob)
+                blobUrls.push(u)
+                imageUrls.push(u)
+              }
+            }
+          }
+          return { texts, imageUrls }
+        }))
+        setPptxSlides(slides)
+      })
+      .catch(() => setPptxSlides([]))
+      .finally(() => setPptxLoading(false))
+    return () => { blobUrls.forEach((u) => URL.revokeObjectURL(u)) }
   }, [selectedDoc])
 
   // Watermark SVG background
@@ -925,7 +1009,7 @@ export default function DemandDetailPage() {
                             }
 
                             if (ext === "pdf") {
-                              return <iframe src={url} className="w-full h-full min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
+                              return <iframe src={`${url}#toolbar=0&navpanes=0`} className="w-full h-full min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
                             }
 
                             if (["mp4", "webm"].includes(ext)) {
@@ -980,16 +1064,132 @@ export default function DemandDetailPage() {
                               )
                             }
 
-                            if (["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext)) {
+                            if (["xls", "xlsx"].includes(ext)) {
+                              if (excelLoading) {
+                                return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              }
+                              if (excelHtml) {
+                                return (
+                                  <div
+                                    className="w-full max-h-[520px] overflow-auto p-4 text-sm [&_table]:border-collapse [&_table]:min-w-max [&_td]:border [&_td]:border-border [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-xs [&_td]:whitespace-nowrap [&_th]:border [&_th]:border-border [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-xs [&_th]:bg-muted/50 [&_th]:font-medium [&_th]:whitespace-nowrap"
+                                    dangerouslySetInnerHTML={{ __html: excelHtml }}
+                                  />
+                                )
+                              }
+                              return (
+                                <div className="text-center space-y-3">
+                                  <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">無法解析此 Excel 檔案</p>
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a href={url} download><Download className="h-3.5 w-3.5 mr-1.5" />下載檔案</a>
+                                  </Button>
+                                </div>
+                              )
+                            }
+
+                            if (["ppt", "pptx"].includes(ext)) {
+                              if (pptxLoading) {
+                                return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              }
+                              if (pptxSlides.length > 0) {
+                                const slide = pptxSlides[pptxSlideIdx]
+                                return (
+                                  <div className="w-full h-full flex flex-col">
+                                    {/* Slide navigation header */}
+                                    <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+                                      <div className="flex items-center gap-2">
+                                        <Presentation className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-xs font-medium">{selectedDoc.fileName}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          variant="ghost" size="icon" className="h-7 w-7"
+                                          disabled={pptxSlideIdx === 0}
+                                          onClick={() => setPptxSlideIdx((i) => i - 1)}
+                                        >
+                                          <ChevronLeft className="h-4 w-4" />
+                                        </Button>
+                                        <span className="text-xs text-muted-foreground min-w-[60px] text-center">
+                                          {pptxSlideIdx + 1} / {pptxSlides.length}
+                                        </span>
+                                        <Button
+                                          variant="ghost" size="icon" className="h-7 w-7"
+                                          disabled={pptxSlideIdx === pptxSlides.length - 1}
+                                          onClick={() => setPptxSlideIdx((i) => i + 1)}
+                                        >
+                                          <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    {/* Slide content */}
+                                    <div className="flex-1 overflow-auto p-6">
+                                      <div className="w-full aspect-[16/9] bg-white border rounded-lg shadow-sm p-8 flex flex-col">
+                                        {/* Images from this slide */}
+                                        {slide.imageUrls.length > 0 && (
+                                          <div className="flex flex-wrap gap-3 mb-4 justify-center">
+                                            {slide.imageUrls.map((imgUrl, i) => (
+                                              <img key={i} src={imgUrl} alt="" className="max-h-48 max-w-full object-contain rounded" />
+                                            ))}
+                                          </div>
+                                        )}
+                                        {/* Text content */}
+                                        {slide.texts.length > 0 ? (
+                                          <div className="space-y-2 flex-1">
+                                            {slide.texts.map((t, i) => (
+                                              <p key={i} className={cn(
+                                                "text-gray-800",
+                                                i === 0 ? "text-lg font-semibold" : "text-sm"
+                                              )}>{t}</p>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="flex-1 flex items-center justify-center">
+                                            <p className="text-sm text-muted-foreground">（此投影片無文字內容）</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {/* Slide thumbnails */}
+                                    <div className="border-t px-4 py-2 flex gap-2 overflow-x-auto bg-muted/20">
+                                      {pptxSlides.map((_, i) => (
+                                        <button
+                                          key={i}
+                                          onClick={() => setPptxSlideIdx(i)}
+                                          className={cn(
+                                            "shrink-0 w-16 h-10 rounded border text-[10px] font-medium flex items-center justify-center transition-colors",
+                                            i === pptxSlideIdx
+                                              ? "border-primary bg-primary/10 text-primary"
+                                              : "border-border bg-white text-muted-foreground hover:border-primary/40"
+                                          )}
+                                        >
+                                          {i + 1}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )
+                              }
+                              return (
+                                <div className="text-center space-y-3">
+                                  <Presentation className="h-16 w-16 mx-auto text-muted-foreground/40" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">無法解析此簡報檔案</p>
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a href={url} download><Download className="h-3.5 w-3.5 mr-1.5" />下載檔案</a>
+                                  </Button>
+                                </div>
+                              )
+                            }
+
+                            if (["doc", "docx"].includes(ext)) {
                               return (
                                 <div className="text-center space-y-3">
                                   <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
                                   <p className="text-sm font-medium">{selectedDoc.fileName}</p>
                                   <p className="text-xs text-muted-foreground">此格式不支援線上預覽</p>
                                   <Button variant="outline" size="sm" asChild>
-                                    <a href={url} download>
-                                      <Download className="h-3.5 w-3.5 mr-1.5" />下載檔案
-                                    </a>
+                                    <a href={url} download><Download className="h-3.5 w-3.5 mr-1.5" />下載檔案</a>
                                   </Button>
                                 </div>
                               )
