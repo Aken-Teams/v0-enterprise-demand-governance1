@@ -320,24 +320,24 @@ export default function DemandDetailPage() {
                     <div key={step} className="flex items-center flex-1 last:flex-none">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex flex-col items-center gap-1.5 cursor-default">
+                          <div className="flex flex-col items-center gap-2 cursor-default">
                             <div className="relative">
                               <div className={cn(
-                                "h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors",
+                                "h-9 w-9 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors",
                                 isCurrent && "border-primary bg-primary text-primary-foreground",
                                 isPast && "border-primary bg-primary/10 text-primary",
                                 isFuture && "border-muted-foreground/30 bg-background text-muted-foreground/50",
                               )}>
-                                {isPast ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                                {isPast ? <Check className="h-4 w-4" /> : i + 1}
                               </div>
                               {showWarning && (
-                                <div className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-amber-500 flex items-center justify-center">
-                                  <AlertCircle className="h-2.5 w-2.5 text-white" />
+                                <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-500 flex items-center justify-center">
+                                  <AlertCircle className="h-3 w-3 text-white" />
                                 </div>
                               )}
                             </div>
                             <span className={cn(
-                              "text-xs whitespace-nowrap",
+                              "text-sm whitespace-nowrap",
                               isCurrent && "font-semibold text-foreground",
                               isPast && "text-primary",
                               isFuture && "text-muted-foreground/50",
@@ -372,7 +372,7 @@ export default function DemandDetailPage() {
                       </Tooltip>
                       {i < PIPELINE_STEPS.length - 1 && (
                         <div className={cn(
-                          "flex-1 h-px mx-2 mt-[-1.25rem]",
+                          "flex-1 h-px mx-2 mt-[-1.5rem]",
                           isPast ? "bg-primary" : "bg-muted-foreground/20",
                         )} />
                       )}
