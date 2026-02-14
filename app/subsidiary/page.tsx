@@ -138,8 +138,7 @@ interface DashboardData {
     statusLabel: string
     priority: string
     sp: number
-    updatedAt: string
-    daysAgo: number
+    statusChangedAt: string
   }[]
 }
 
@@ -437,9 +436,9 @@ export default function SubsidiaryDashboard() {
                     </div>
                     <div className="text-right shrink-0 ml-4">
                       <div className="text-sm font-medium tabular-nums">
-                        {new Date(item.updatedAt).toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })}
+                        {new Date(item.statusChangedAt).toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">更新</div>
+                      <div className="text-[10px] text-muted-foreground">狀態更新</div>
                     </div>
                   </div>
                 ))}

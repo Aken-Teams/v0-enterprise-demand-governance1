@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
       monthlyTrends.push({ month: monthLabel, submitted, completed: completedInMonth })
     }
 
-    // --- Recent 3 demand changes ---
+    // --- Recent 3 demand changes (by latest status change) ---
     const STATUS_LABELS: Record<string, string> = {
       SUBMITTED: "需求提出",
       PRD_REVIEW: "PRD 確認中",
@@ -133,6 +133,17 @@ export async function GET(request: NextRequest) {
       CLOSED: "已結案",
       REJECTED: "已駁回",
     }
+    const top3Ids = demands.slice(0, 3).map((d) => d.id)
+    const latestStatusChanges = top3Ids.length > 0
+      ? await prisma.demandStatusHistory.findMany({
+          where: { demandId: { in: top3Ids } },
+          orderBy: { createdAt: "desc" },
+          distinct: ["demandId"],
+          select: { demandId: true, createdAt: true },
+        })
+      : []
+    const statusDateMap = new Map(latestStatusChanges.map((h) => [h.demandId, h.createdAt]))
+
     const recentChanges = demands.slice(0, 3).map((d) => ({
       demandNumber: d.demandNumber,
       title: d.title,
@@ -140,8 +151,7 @@ export async function GET(request: NextRequest) {
       statusLabel: STATUS_LABELS[d.status] ?? d.status,
       priority: d.priority,
       sp: d.confirmedSp ?? d.estimatedSp,
-      updatedAt: d.updatedAt,
-      daysAgo: Math.max(0, Math.floor((now.getTime() - new Date(d.updatedAt).getTime()) / (1000 * 60 * 60 * 24))),
+      statusChangedAt: statusDateMap.get(d.id) ?? d.updatedAt,
     }))
 
     return NextResponse.json({
