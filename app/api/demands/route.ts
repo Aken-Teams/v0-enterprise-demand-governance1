@@ -214,11 +214,15 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")?.trim()
     const submitterId = searchParams.get("submitterId")
     const developerId = searchParams.get("developerId")
+    const organizationId = searchParams.get("organizationId")
 
     // Build where clause
     const where: Record<string, unknown> = {}
     if (status && VALID_STATUSES.has(status)) {
       where.status = status
+    }
+    if (organizationId) {
+      where.organizationId = organizationId
     }
     if (submitterId) {
       where.submitterId = submitterId
@@ -242,14 +246,16 @@ export async function GET(request: NextRequest) {
           organization: { select: { name: true } },
           submitter: { select: { name: true } },
           creator: { select: { name: true } },
+          manager: { select: { name: true } },
           developer: { select: { name: true } },
           _count: { select: { documents: true, comments: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.demand.count(),
+      prisma.demand.count({ where: organizationId ? { organizationId } : undefined }),
       prisma.demand.groupBy({
         by: ["status"],
+        ...(organizationId ? { where: { organizationId } } : {}),
         _count: { _all: true },
       }),
       prisma.user.findMany({
@@ -270,11 +276,31 @@ export async function GET(request: NextRequest) {
       statusCounts[c.status] = c._count._all
     }
 
+    // SP wallet summary for organization-scoped queries
+    let spSummary: { totalQuota: number; committedSp: number; usedSp: number } | undefined
+    if (organizationId) {
+      const currentYear = new Date().getFullYear()
+      const wallet = await prisma.spWallet.findFirst({
+        where: { organizationId, year: currentYear },
+        select: { totalQuota: true },
+      })
+      const totalQuota = wallet?.totalQuota ?? 0
+      let committedSp = 0
+      let usedSp = 0
+      for (const d of demands) {
+        const sp = d.confirmedSp ?? d.estimatedSp
+        if (d.status === "CLOSED") usedSp += sp
+        else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") committedSp += sp
+      }
+      spSummary = { totalQuota, committedSp, usedSp }
+    }
+
     return NextResponse.json({
       demands: demands.map((d) => ({
         id: d.id,
         demandNumber: d.demandNumber,
         title: d.title,
+        description: d.description,
         status: d.status,
         priority: d.priority,
         estimatedSp: d.estimatedSp,
@@ -284,12 +310,14 @@ export async function GET(request: NextRequest) {
         organization: d.organization.name,
         submitter: d.submitter.name,
         creator: d.creator.name,
+        manager: d.manager?.name || null,
         developer: d.developer?.name || null,
         documentCount: d._count.documents,
         commentCount: d._count.comments,
       })),
       total,
       statusCounts,
+      ...(spSummary ? { spSummary } : {}),
       filters: {
         submitters: submitters.map((u) => ({ id: u.id, name: u.name })),
         developers: developers.map((u) => ({ id: u.id, name: u.name, role: u.role })),
