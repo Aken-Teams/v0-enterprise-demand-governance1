@@ -201,7 +201,11 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                     <div className="space-y-0.5">
                       {visibleItems.map((item) => {
                         const Icon = item.icon
-                        const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                        const matches = pathname === item.href || pathname.startsWith(item.href + "/")
+                        const hasMoreSpecific = matches && navSections.some((s) =>
+                          s.items.some((o: NavItem) => o.href !== item.href && o.href.startsWith(item.href + "/") && (pathname === o.href || pathname.startsWith(o.href + "/")))
+                        )
+                        const isActive = matches && !hasMoreSpecific
                         const linkEl = (
                           <Link
                             key={item.href}

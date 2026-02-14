@@ -20,6 +20,13 @@ import {
   BarChart3,
   Hash,
   Layers,
+  Eye,
+  Download,
+  ExternalLink,
+  ZoomIn,
+  X,
+  FileAudio,
+  ShieldAlert,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -28,6 +35,7 @@ import { STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+import * as XLSX from "xlsx"
 
 // ── Pie chart colors (one per pipeline phase) ──
 const PIE_COLORS: Record<string, string> = {
@@ -38,6 +46,9 @@ const PIE_COLORS: Record<string, string> = {
   ACCEPTANCE: "#06b6d4",
   CLOSED: "#10b981",
 }
+
+// Confidential document types that subsidiary users cannot preview
+const CONFIDENTIAL_DOC_TYPES = new Set(["SDD", "BDD", "TDD"])
 
 interface DemandDetail {
   id: string
@@ -121,10 +132,20 @@ function fmtDateFull(dateStr: string) {
 
 export default function DemandDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+
+  // Document preview states
+  const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [textContent, setTextContent] = useState("")
+  const [textLoading, setTextLoading] = useState(false)
+  const [excelHtml, setExcelHtml] = useState("")
+  const [excelLoading, setExcelLoading] = useState(false)
+  const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
+  const [officeLoading, setOfficeLoading] = useState(false)
+  const [zoomedImg, setZoomedImg] = useState<string | null>(null)
 
   const fetchDemand = useCallback(async () => {
     if (!token) return
@@ -149,6 +170,67 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     fetchDemand()
   }, [fetchDemand])
+
+  // Check if selected document is confidential
+  const isConfidential = selectedDoc ? CONFIDENTIAL_DOC_TYPES.has(selectedDoc.type) : false
+
+  // Fetch text content for txt/md files
+  useEffect(() => {
+    if (!selectedDoc?.fileUrl || isConfidential) return
+    const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+    if (!["txt", "md"].includes(ext)) return
+    setTextLoading(true)
+    fetch(selectedDoc.fileUrl)
+      .then((r) => r.text())
+      .then(setTextContent)
+      .catch(() => setTextContent(""))
+      .finally(() => setTextLoading(false))
+  }, [selectedDoc, isConfidential])
+
+  // Fetch and parse Excel files
+  useEffect(() => {
+    if (!selectedDoc?.fileUrl || isConfidential) return
+    const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+    if (!["xls", "xlsx"].includes(ext)) return
+    setExcelLoading(true)
+    fetch(selectedDoc.fileUrl)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        const wb = XLSX.read(buf, { type: "array" })
+        const html = wb.SheetNames.map((name) => {
+          const ws = wb.Sheets[name]
+          const table = XLSX.utils.sheet_to_html(ws, { editable: false })
+          return `<div class="mb-4"><p class="text-xs font-semibold text-muted-foreground mb-2">${wb.SheetNames.length > 1 ? name : ""}</p>${table}</div>`
+        }).join("")
+        setExcelHtml(html)
+      })
+      .catch(() => setExcelHtml(""))
+      .finally(() => setExcelLoading(false))
+  }, [selectedDoc, isConfidential])
+
+  // Trigger LibreOffice conversion for Office files
+  useEffect(() => {
+    if (!selectedDoc?.fileUrl || isConfidential) { setOfficePreviewUrl(null); return }
+    const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+    if (!["ppt", "pptx", "doc", "docx"].includes(ext)) { setOfficePreviewUrl(null); return }
+    setOfficeLoading(true)
+    setOfficePreviewUrl(null)
+    const previewUrl = `${selectedDoc.fileUrl}/preview`
+    fetch(previewUrl, { method: "HEAD" })
+      .then((res) => {
+        if (res.ok) setOfficePreviewUrl(previewUrl)
+      })
+      .catch(() => {})
+      .finally(() => setOfficeLoading(false))
+  }, [selectedDoc, isConfidential])
+
+  // Watermark SVG background
+  const watermarkBg = useMemo(() => {
+    const name = user?.name || "使用者"
+    const text = `${name}\u3000機密文件`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150"><text transform="rotate(-30 150 75)" x="150" y="85" font-size="14" fill="rgba(0,0,0,0.07)" text-anchor="middle" font-family="sans-serif">${text}</text></svg>`
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+  }, [user?.name])
 
   if (loading) {
     return (
@@ -183,7 +265,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const currentStepIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
 
-  // Project start date: earliest plannedStart or actualStart from phase plans
+  // Project start date
   const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {
     const d = p.plannedStart || p.actualStart
     if (!d) return earliest
@@ -345,7 +427,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
               {/* Right */}
               <div className="space-y-5">
-                {/* Basic info + Team (merged) */}
+                {/* Basic info + Team */}
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">基本資訊</CardTitle>
@@ -478,7 +560,6 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                   boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
                                 }}
                               />
-                              {/* Center label */}
                               <text x="50%" y="48%" textAnchor="middle" dominantBaseline="central" className="fill-foreground text-lg font-bold">
                                 {sp}
                               </text>
@@ -488,7 +569,6 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                             </PieChart>
                           </ResponsiveContainer>
                         </div>
-                        {/* Legend */}
                         <div className="space-y-1.5 mt-2">
                           {spPieData.map((entry) => (
                             <div key={entry.phase} className="flex items-center justify-between text-sm">
@@ -621,28 +701,204 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
           {/* ══════ Tab: 文件 ══════ */}
           <TabsContent value="documents" className="mt-5">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  專案文件
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PhaseDocuments
-                  documents={demand.documents}
-                  currentPhase={demand.status}
-                  demandId={demand.id}
-                  canUpload={false}
-                  canDownload={false}
-                  token={token}
-                  onRefresh={fetchDemand}
-                />
-              </CardContent>
-            </Card>
+            <div className="grid gap-6 lg:grid-cols-5">
+              {/* Preview pane */}
+              <div className="lg:col-span-3">
+                <Card className="h-full">
+                  <CardContent className="p-0 h-full">
+                    {selectedDoc ? (
+                      <div className="relative min-h-[520px] h-full">
+                        <div className="h-full min-h-[520px] flex items-center justify-center p-4 overflow-hidden">
+                          {(() => {
+                            // Block confidential documents
+                            if (isConfidential) {
+                              return (
+                                <div className="text-center space-y-3">
+                                  <ShieldAlert className="h-16 w-16 mx-auto text-amber-400" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">此為機密文件，僅限內部團隊檢視</p>
+                                </div>
+                              )
+                            }
+
+                            const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
+                            const url = selectedDoc.fileUrl
+                            const isExternal = selectedDoc.type === "APP_RESULT" && url?.startsWith("http")
+
+                            if (isExternal) {
+                              return (
+                                <div className="w-full h-full min-h-[520px] flex flex-col">
+                                  <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
+                                    <p className="text-xs text-muted-foreground truncate flex-1">{url}</p>
+                                    <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" asChild>
+                                      <a href={url!} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-3 w-3 mr-1" />新分頁
+                                      </a>
+                                    </Button>
+                                  </div>
+                                  <iframe src={url!} className="flex-1 w-full border-0" title="APP 預覽" />
+                                </div>
+                              )
+                            }
+
+                            if (!url) {
+                              return <p className="text-sm text-muted-foreground">此文件無預覽連結</p>
+                            }
+
+                            if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
+                              return (
+                                <div className="relative group cursor-zoom-in" onClick={() => setZoomedImg(url)}>
+                                  <img src={url} alt={selectedDoc.fileName} className="max-w-full max-h-[480px] object-contain rounded" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors rounded">
+                                    <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-80 transition-opacity drop-shadow-lg" />
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            if (ext === "pdf") {
+                              return <iframe src={`${url}#toolbar=0&navpanes=0`} className="w-full h-full min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
+                            }
+
+                            if (["mp4", "webm"].includes(ext)) {
+                              return <video src={url} controls className="max-w-full max-h-[480px] rounded" />
+                            }
+
+                            if (["mp3", "wav", "ogg"].includes(ext)) {
+                              return (
+                                <div className="text-center space-y-4">
+                                  <FileAudio className="h-16 w-16 mx-auto text-sky-400" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <audio src={url} controls className="mx-auto" />
+                                </div>
+                              )
+                            }
+
+                            if (["txt", "md"].includes(ext)) {
+                              if (textLoading) {
+                                return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              }
+                              return (
+                                <pre className="text-sm whitespace-pre-wrap break-words w-full max-h-[520px] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">
+                                  {textContent}
+                                </pre>
+                              )
+                            }
+
+                            if (["xls", "xlsx"].includes(ext)) {
+                              if (excelLoading) {
+                                return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              }
+                              if (excelHtml) {
+                                return (
+                                  <div
+                                    className="w-full max-h-[520px] overflow-auto p-4 text-sm [&_table]:border-collapse [&_table]:min-w-max [&_td]:border [&_td]:border-border [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-xs [&_td]:whitespace-nowrap [&_th]:border [&_th]:border-border [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-xs [&_th]:bg-muted/50 [&_th]:font-medium [&_th]:whitespace-nowrap"
+                                    dangerouslySetInnerHTML={{ __html: excelHtml }}
+                                  />
+                                )
+                              }
+                              return (
+                                <div className="text-center space-y-3">
+                                  <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">無法解析此 Excel 檔案</p>
+                                </div>
+                              )
+                            }
+
+                            if (["ppt", "pptx", "doc", "docx"].includes(ext)) {
+                              if (officeLoading) {
+                                return (
+                                  <div className="flex flex-col items-center gap-3">
+                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                    <p className="text-xs text-muted-foreground">正在轉換預覽…</p>
+                                  </div>
+                                )
+                              }
+                              if (officePreviewUrl) {
+                                return <iframe src={`${officePreviewUrl}#toolbar=0&navpanes=0`} className="w-full h-full min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
+                              }
+                              return (
+                                <div className="text-center space-y-3">
+                                  <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
+                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">無法轉換預覽，請確認伺服器已安裝 LibreOffice</p>
+                                </div>
+                              )
+                            }
+
+                            return (
+                              <div className="text-center space-y-3">
+                                <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
+                                <p className="text-sm font-medium">{selectedDoc.fileName}</p>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                        {/* Watermark overlay */}
+                        <div
+                          className="absolute inset-0 pointer-events-none z-10"
+                          style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center min-h-[520px] text-muted-foreground">
+                        <Eye className="h-12 w-12 mb-3 opacity-20" />
+                        <p className="text-sm">請選擇文件以預覽</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Document list */}
+              <div className="lg:col-span-2">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">階段文件</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PhaseDocuments
+                      documents={demand.documents}
+                      currentPhase={demand.status}
+                      demandId={demand.id}
+                      canUpload={false}
+                      canDownload={false}
+                      token={token}
+                      onRefresh={fetchDemand}
+                      onDocumentSelect={setSelectedDoc}
+                      selectedDocId={selectedDoc?.id}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Image zoom overlay */}
+      {zoomedImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center cursor-zoom-out"
+          onClick={() => setZoomedImg(null)}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-4 right-4 text-white hover:bg-white/20 h-10 w-10"
+            onClick={() => setZoomedImg(null)}
+          >
+            <X className="h-6 w-6" />
+          </Button>
+          <img
+            src={zoomedImg}
+            alt="放大預覽"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </AppLayout>
   )
 }
