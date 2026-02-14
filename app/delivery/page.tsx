@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import {
-  Loader2, Inbox, Code2, ClipboardCheck, CircleCheckBig,
+  Loader2, Code2, Search,
   Building2, Check, Circle, Play, Eye, CircleCheck,
   AlertTriangle, FileWarning, ChevronDown, Save, Upload,
 } from "lucide-react"
@@ -111,10 +111,12 @@ function getTaskWarnings(tasks: SubTask[]): { noStart: number; noEnd: number } {
 export default function DeliveryDashboardPage() {
   const { token, user } = useAuth()
   const [loading, setLoading] = useState(true)
-  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
-  const [total, setTotal] = useState(0)
-  const [activeDemands, setActiveDemands] = useState<DemandDetail[]>([])
+  const [allDemands, setAllDemands] = useState<DemandDetail[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [orgFilter, setOrgFilter] = useState("all")
   // { demandId: { taskId: { ...edits } } }
   const [pendingEdits, setPendingEdits] = useState<Record<string, Record<string, TaskEdit>>>({})
   const [savingDemand, setSavingDemand] = useState<string | null>(null)
@@ -127,8 +129,6 @@ export default function DeliveryDashboardPage() {
   const [uploadError, setUploadError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const getCount = (status: string) => statusCounts[status] || 0
-
   const fetchData = useCallback(async () => {
     if (!token || !user?.id) return
     setLoading(true)
@@ -139,16 +139,12 @@ export default function DeliveryDashboardPage() {
       })
       if (!res.ok) return
       const data = await res.json()
-      setTotal(data.total)
-      setStatusCounts(data.statusCounts || {})
 
-      const activeIds: string[] = data.demands
-        .filter((d: { status: string }) => d.status === "DEVELOPING" || d.status === "ACCEPTANCE")
-        .map((d: { id: string }) => d.id)
+      const allIds: string[] = data.demands.map((d: { id: string }) => d.id)
 
       const details: DemandDetail[] = (
         await Promise.all(
-          activeIds.map(async (id) => {
+          allIds.map(async (id) => {
             try {
               const r = await fetch(`/api/demands/${id}`, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -163,7 +159,7 @@ export default function DeliveryDashboardPage() {
         )
       ).filter(Boolean) as DemandDetail[]
 
-      setActiveDemands(details)
+      setAllDemands(details)
     } catch {
       // ignore
     } finally {
@@ -239,7 +235,7 @@ export default function DeliveryDashboardPage() {
       )
 
       // Apply successful updates to local state
-      setActiveDemands((prev) =>
+      setAllDemands((prev) =>
         prev.map((d) => {
           if (d.id !== demandId) return d
           return {
@@ -311,7 +307,7 @@ export default function DeliveryDashboardPage() {
         return
       }
       const json = await res.json()
-      setActiveDemands((prev) =>
+      setAllDemands((prev) =>
         prev.map((d) => {
           if (d.id !== uploadDemandId) return d
           return { ...d, documents: [...d.documents, ...json.documents] }
@@ -325,13 +321,33 @@ export default function DeliveryDashboardPage() {
     }
   }
 
-  const confirmStage =
-    getCount("SUBMITTED") + getCount("PRD_REVIEW") + getCount("SP_REVIEW")
-  const devStage = getCount("DEVELOPING") + getCount("ACCEPTANCE")
+  // Client-side filtering
+  const filteredDemands = allDemands.filter((d) => {
+    if (statusFilter !== "all" && d.status !== statusFilter) return false
+    if (orgFilter !== "all" && d.organization.id !== orgFilter) return false
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      if (!d.title.toLowerCase().includes(q) && !d.demandNumber.toLowerCase().includes(q) && !d.organization.name.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  // Compute status counts for filter badges
+  const statusCountMap: Record<string, number> = {}
+  for (const d of allDemands) {
+    statusCountMap[d.status] = (statusCountMap[d.status] || 0) + 1
+  }
+
+  // Unique organizations for filter
+  const orgMap = new Map<string, string>()
+  for (const d of allDemands) {
+    if (!orgMap.has(d.organization.id)) orgMap.set(d.organization.id, d.organization.name)
+  }
+  const uniqueOrgs = Array.from(orgMap.entries()).sort((a, b) => a[1].localeCompare(b[1]))
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             我的專案
@@ -341,33 +357,45 @@ export default function DeliveryDashboardPage() {
           </p>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid gap-3 md:grid-cols-4">
-          {[
-            { label: "全部指派", sub: "累計需求", value: total, color: "border-l-blue-500", icon: Inbox },
-            { label: "確認中", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardCheck },
-            { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
-            { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}
-            >
-              <span className="text-3xl font-bold">{loading ? "-" : item.value}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <p className="font-medium text-sm">{item.label}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">{item.sub}</p>
-              </div>
-            </div>
-          ))}
+        {/* Search & Filter */}
+        <div className="flex flex-col sm:flex-row gap-2 bg-muted/50 rounded-lg p-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜尋需求編號、名稱或子公司..."
+              className="pl-9 h-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-full sm:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部狀態 ({allDemands.length})</SelectItem>
+              {PIPELINE_STEPS.map((s) => {
+                const count = statusCountMap[s] || 0
+                if (count === 0) return null
+                return <SelectItem key={s} value={s}>{STATUS_MAP[s]?.label || s} ({count})</SelectItem>
+              })}
+            </SelectContent>
+          </Select>
+          <Select value={orgFilter} onValueChange={setOrgFilter}>
+            <SelectTrigger className="h-9 w-full sm:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部需求者</SelectItem>
+              {uniqueOrgs.map(([id, name]) => (
+                <SelectItem key={id} value={id}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Active Demands (DEVELOPING + ACCEPTANCE) */}
+        {/* Demand Cards */}
         <div>
-          <h2 className="text-lg font-semibold mb-3">進行中的需求</h2>
           {loading ? (
             <Card>
               <CardContent className="flex items-center justify-center py-16">
@@ -375,16 +403,18 @@ export default function DeliveryDashboardPage() {
                 <span className="ml-2 text-muted-foreground">載入中...</span>
               </CardContent>
             </Card>
-          ) : activeDemands.length === 0 ? (
+          ) : filteredDemands.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <Code2 className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground">目前沒有進行中的需求</p>
+                <p className="text-muted-foreground">
+                  {allDemands.length === 0 ? "目前沒有指派的需求" : "沒有符合條件的需求"}
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {activeDemands.map((demand) => {
+              {filteredDemands.map((demand) => {
                 const totalTasks = demand.subTasks.length
                 const completedTasks = demand.subTasks.filter(
                   (t) => t.status === "completed"
@@ -567,7 +597,7 @@ export default function DeliveryDashboardPage() {
             <DialogTitle>上傳文件</DialogTitle>
           </DialogHeader>
           {(() => {
-            const demand = activeDemands.find((d) => d.id === uploadDemandId)
+            const demand = allDemands.find((d) => d.id === uploadDemandId)
             if (!demand) return null
             return (
               <div className="space-y-4 py-2">

@@ -318,10 +318,10 @@ export function ProjectGantt({
   const handleStatusToggle = async (task: SubTask) => {
     if (!token || !canEdit || !demandId) return
     const nextStatus = task.status === "pending" ? "in_progress" : task.status === "in_progress" ? "completed" : "pending"
-    const now = new Date().toISOString()
+    const today = new Date(new Date().toISOString().slice(0, 10)).toISOString()
     const body: Record<string, unknown> = { status: nextStatus }
-    if (nextStatus === "in_progress" && !task.actualStart) body.actualStart = now
-    if (nextStatus === "completed") body.actualEnd = now
+    if (nextStatus === "in_progress" && !task.actualStart) body.actualStart = today
+    if (nextStatus === "completed") body.actualEnd = today
     try {
       const res = await fetch(`/api/demands/${demandId}/sub-tasks/${task.id}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) })
       if (res.ok) onRefresh?.()

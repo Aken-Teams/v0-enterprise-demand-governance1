@@ -152,10 +152,10 @@ export function DevGantt({ subTasks, demandId, canEdit, token, onRefresh }: DevG
     if (!token || !canEdit) return
     const nextStatus =
       task.status === "pending" ? "in_progress" : task.status === "in_progress" ? "completed" : "pending"
-    const now = new Date().toISOString()
+    const today = new Date(new Date().toISOString().slice(0, 10)).toISOString()
     const body: Record<string, unknown> = { status: nextStatus }
-    if (nextStatus === "in_progress" && !task.actualStart) body.actualStart = now
-    if (nextStatus === "completed") body.actualEnd = now
+    if (nextStatus === "in_progress" && !task.actualStart) body.actualStart = today
+    if (nextStatus === "completed") body.actualEnd = today
 
     try {
       const res = await fetch(`/api/demands/${demandId}/sub-tasks/${task.id}`, {
