@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
@@ -136,34 +136,45 @@ function formatDate(dateStr: string) {
 }
 
 // Mermaid code block renderer
-mermaid.initialize({ startOnLoad: false, theme: "default", themeVariables: { pieSectionTextSize: "14px" }, flowchart: { htmlLabels: true }, pie: { useWidth: 600 } })
-
-// Override mermaid background to transparent after render
-function clearMermaidBg(container: HTMLElement) {
-  const svg = container.querySelector("svg")
-  if (svg) svg.style.backgroundColor = "transparent"
-  container.querySelectorAll("rect").forEach((rect) => {
-    if (rect.classList.contains("er") || rect.getAttribute("fill") === "#333" || rect.getAttribute("fill") === "black" || rect.getAttribute("fill") === "#191919") {
-      rect.setAttribute("fill", "transparent")
-    }
-  })
-}
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "neutral",
+  themeVariables: { background: "transparent", primaryColor: "#dbeafe", primaryTextColor: "#1e3a5f", lineColor: "#94a3b8" },
+})
 
 function MermaidBlock({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [error, setError] = useState(false)
   useEffect(() => {
     if (!ref.current) return
+    setError(false)
     const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
     mermaid.render(id, code).then(({ svg }) => {
       if (ref.current) {
         ref.current.innerHTML = svg
-        clearMermaidBg(ref.current)
+        // Force transparent background on all SVGs
+        const svgEl = ref.current.querySelector("svg")
+        if (svgEl) {
+          svgEl.style.backgroundColor = "transparent"
+          svgEl.removeAttribute("style")
+          svgEl.setAttribute("style", "background: transparent; max-width: 100%;")
+        }
       }
     }).catch(() => {
-      if (ref.current) ref.current.textContent = code
+      setError(true)
     })
   }, [code])
-  return <div ref={ref} className="flex justify-center [&_svg]:!bg-transparent" />
+
+  if (error) {
+    return (
+      <div className="w-full rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+        <p className="text-xs font-medium text-amber-700 mb-2">此圖表格式無法解析</p>
+        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-white/60 rounded p-3">{code}</pre>
+      </div>
+    )
+  }
+
+  return <div ref={ref} className="flex justify-center not-prose [&_svg]:!bg-transparent" />
 }
 
 export default function DemandDetailPage() {
@@ -905,6 +916,13 @@ export default function DemandDetailPage() {
                                     <ReactMarkdown
                                       remarkPlugins={[remarkGfm]}
                                       components={{
+                                        pre({ children }) {
+                                          // Unwrap <pre> for mermaid blocks so they don't get dark code bg
+                                          if (React.isValidElement(children) && typeof children.type !== "string") {
+                                            return <>{children}</>
+                                          }
+                                          return <pre>{children}</pre>
+                                        },
                                         code({ className, children, ...props }) {
                                           const match = /language-(\w+)/.exec(className || "")
                                           if (match?.[1] === "mermaid") {
