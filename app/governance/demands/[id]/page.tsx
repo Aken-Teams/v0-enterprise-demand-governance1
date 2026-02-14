@@ -446,32 +446,32 @@ export default function DemandDetailPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content - Left 2 cols */}
-          <div className="lg:col-span-2 space-y-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="h-10 p-1 bg-muted/60">
-                <TabsTrigger value="overview" className="gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  概覽
-                </TabsTrigger>
-                <TabsTrigger value="gantt" className="gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                  <GanttChart className="h-3.5 w-3.5" />
-                  甘特圖
-                </TabsTrigger>
-                <TabsTrigger value="documents" className="gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  文件
-                  {demand.documents.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
-                      {demand.documents.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full justify-start h-10 p-1 bg-muted/60">
+            <TabsTrigger value="overview" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <BarChart3 className="h-3.5 w-3.5" />
+              概覽
+            </TabsTrigger>
+            <TabsTrigger value="gantt" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <GanttChart className="h-3.5 w-3.5" />
+              甘特圖
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <FolderOpen className="h-3.5 w-3.5" />
+              文件
+              {demand.documents.length > 0 && (
+                <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
+                  {demand.documents.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-              {/* 概覽 Tab */}
-              <TabsContent value="overview" className="space-y-6 mt-4">
+          {/* 概覽 Tab */}
+          <TabsContent value="overview" className="mt-4">
+            <div className="grid gap-6 lg:grid-cols-3">
+              {/* Left column */}
+              <div className="lg:col-span-2 space-y-6">
                 {/* Phase-specific action cards */}
                 {canManage && demand.status === "SP_REVIEW" && (
                   <Collapsible open={spPlanOpen ?? false} onOpenChange={setSpPlanOpen}>
@@ -617,192 +617,190 @@ export default function DemandDetailPage() {
                     )}
                   </CardContent>
                 </Card>
+              </div>
 
-              </TabsContent>
-
-              {/* 甘特圖 Tab */}
-              <TabsContent value="gantt" className="mt-4">
+              {/* Right column */}
+              <div className="space-y-6">
+                {/* 基本資訊 */}
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <GanttChart className="h-4 w-4" />
-                      甘特圖
-                    </CardTitle>
+                    <CardTitle className="text-base">基本資訊</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <ProjectGantt
-                      phasePlans={demand.phasePlans}
-                      currentStatus={demand.status}
-                      subTasks={demand.subTasks}
-                      demandId={demand.id}
-                      canEdit={canManage}
-                      token={token}
-                      onRefresh={fetchDemand}
-                    />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* 文件 Tab */}
-              <TabsContent value="documents" className="mt-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">階段文件</CardTitle>
-                      {canManage && (
-                        <Button variant="outline" size="sm" id="doc-upload-trigger">
-                          <Upload className="h-4 w-4 mr-1.5" />
-                          上傳文件
-                        </Button>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-16 shrink-0">子公司</span>
+                      <span className="font-medium">{demand.organization.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-16 shrink-0">建立者</span>
+                      <span className="font-medium">{demand.creator.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-16 shrink-0">PM</span>
+                      {canManage && staffUsers.length > 0 ? (
+                        <Select
+                          value={demand.manager?.id || "none"}
+                          onValueChange={(v) => handleAssign("managerId", v === "none" ? "" : v)}
+                        >
+                          <SelectTrigger className="h-7 text-xs flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">尚未指派</SelectItem>
+                            {groupUsersByRole(staffUsers).map((g) => (
+                              <SelectGroup key={g.role}>
+                                <SelectLabel className={cn("text-xs font-semibold", g.color)}>{g.label}</SelectLabel>
+                                {g.users.map((u) => (
+                                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className={cn("font-medium", !demand.manager && "text-muted-foreground")}>
+                          {demand.manager?.name || "尚未指派"}
+                        </span>
                       )}
                     </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-16 shrink-0">工程師</span>
+                      {canManage && staffUsers.length > 0 ? (
+                        <Select
+                          value={demand.developer?.id || "none"}
+                          onValueChange={(v) => handleAssign("developerId", v === "none" ? "" : v)}
+                        >
+                          <SelectTrigger className="h-7 text-xs flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">尚未指派</SelectItem>
+                            {groupUsersByRole(staffUsers).map((g) => (
+                              <SelectGroup key={g.role}>
+                                <SelectLabel className={cn("text-xs font-semibold", g.color)}>{g.label}</SelectLabel>
+                                {g.users.map((u) => (
+                                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className={cn("font-medium", !demand.developer && "text-muted-foreground")}>
+                          {demand.developer?.name || "尚未指派"}
+                        </span>
+                      )}
+                    </div>
+                    <hr className="border-border/60" />
+                    <div className="flex items-center gap-2 text-sm">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-16 shrink-0">估計 SP</span>
+                      <span className="font-medium">{demand.estimatedSp} SP</span>
+                    </div>
+                    {demand.confirmedSp !== null && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground w-16 shrink-0">確認 SP</span>
+                        <span className="font-medium">{demand.confirmedSp} SP</span>
+                      </div>
+                    )}
+                    <hr className="border-border/60" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground shrink-0">開案時間</span>
+                        <span className="font-medium">{formatDate(demand.phasePlans.find(p => p.phase === "SUBMITTED")?.plannedStart ?? demand.createdAt)}</span>
+                      </div>
+                      {demand.desiredDate && (
+                        <div className="flex items-center gap-1.5 text-sm">
+                          <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground shrink-0">希望完成</span>
+                          <span className="font-medium">{formatDate(demand.desiredDate)}</span>
+                        </div>
+                      )}
+                    </div>
+                    {demand.completedDate && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground w-16 shrink-0">完成時間</span>
+                        <span className="font-medium">{formatDate(demand.completedDate)}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* SP 分配 */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">SP 分配</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <PhaseDocuments
-                      key={`${demand.status}-${docPhaseKey}`}
-                      documents={demand.documents}
-                      currentPhase={demand.status}
-                      demandId={demand.id}
-                      canUpload={canManage}
-                      token={token}
-                      onRefresh={fetchDemand}
-                      uploadTriggerSelector="#doc-upload-trigger"
+                    <SpAllocationChart
+                      phasePlans={demand.phasePlans}
+                      totalSp={demand.estimatedSp}
                     />
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </div>
+            </div>
+          </TabsContent>
 
-            </Tabs>
-          </div>
-
-          {/* Sidebar - Right 1 col */}
-          <div className="space-y-6">
-            {/* 基本資訊 */}
+          {/* 甘特圖 Tab */}
+          <TabsContent value="gantt" className="mt-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">基本資訊</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground w-16 shrink-0">子公司</span>
-                  <span className="font-medium">{demand.organization.name}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground w-16 shrink-0">建立者</span>
-                  <span className="font-medium">{demand.creator.name}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground w-16 shrink-0">PM</span>
-                  {canManage && staffUsers.length > 0 ? (
-                    <Select
-                      value={demand.manager?.id || "none"}
-                      onValueChange={(v) => handleAssign("managerId", v === "none" ? "" : v)}
-                    >
-                      <SelectTrigger className="h-7 text-xs flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">尚未指派</SelectItem>
-                        {groupUsersByRole(staffUsers).map((g) => (
-                          <SelectGroup key={g.role}>
-                            <SelectLabel className={cn("text-xs font-semibold", g.color)}>{g.label}</SelectLabel>
-                            {g.users.map((u) => (
-                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                            ))}
-                          </SelectGroup>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className={cn("font-medium", !demand.manager && "text-muted-foreground")}>
-                      {demand.manager?.name || "尚未指派"}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground w-16 shrink-0">工程師</span>
-                  {canManage && staffUsers.length > 0 ? (
-                    <Select
-                      value={demand.developer?.id || "none"}
-                      onValueChange={(v) => handleAssign("developerId", v === "none" ? "" : v)}
-                    >
-                      <SelectTrigger className="h-7 text-xs flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">尚未指派</SelectItem>
-                        {groupUsersByRole(staffUsers).map((g) => (
-                          <SelectGroup key={g.role}>
-                            <SelectLabel className={cn("text-xs font-semibold", g.color)}>{g.label}</SelectLabel>
-                            {g.users.map((u) => (
-                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                            ))}
-                          </SelectGroup>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className={cn("font-medium", !demand.developer && "text-muted-foreground")}>
-                      {demand.developer?.name || "尚未指派"}
-                    </span>
-                  )}
-                </div>
-                <hr className="border-border/60" />
-                <div className="flex items-center gap-2 text-sm">
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground w-16 shrink-0">估計 SP</span>
-                  <span className="font-medium">{demand.estimatedSp} SP</span>
-                </div>
-                {demand.confirmedSp !== null && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground w-16 shrink-0">確認 SP</span>
-                    <span className="font-medium">{demand.confirmedSp} SP</span>
-                  </div>
-                )}
-                <hr className="border-border/60" />
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground shrink-0">開案時間</span>
-                    <span className="font-medium">{formatDate(demand.phasePlans.find(p => p.phase === "SUBMITTED")?.plannedStart ?? demand.createdAt)}</span>
-                  </div>
-                  {demand.desiredDate && (
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground shrink-0">希望完成</span>
-                      <span className="font-medium">{formatDate(demand.desiredDate)}</span>
-                    </div>
-                  )}
-                </div>
-                {demand.completedDate && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground w-16 shrink-0">完成時間</span>
-                    <span className="font-medium">{formatDate(demand.completedDate)}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* SP 分配 */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">SP 分配</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <GanttChart className="h-4 w-4" />
+                  甘特圖
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <SpAllocationChart
+                <ProjectGantt
                   phasePlans={demand.phasePlans}
-                  totalSp={demand.estimatedSp}
+                  currentStatus={demand.status}
+                  subTasks={demand.subTasks}
+                  demandId={demand.id}
+                  canEdit={canManage}
+                  token={token}
+                  onRefresh={fetchDemand}
                 />
               </CardContent>
             </Card>
-          </div>
-        </div>
+          </TabsContent>
+
+          {/* 文件 Tab */}
+          <TabsContent value="documents" className="mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">階段文件</CardTitle>
+                  {canManage && (
+                    <Button variant="outline" size="sm" id="doc-upload-trigger">
+                      <Upload className="h-4 w-4 mr-1.5" />
+                      上傳文件
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <PhaseDocuments
+                  key={`${demand.status}-${docPhaseKey}`}
+                  documents={demand.documents}
+                  currentPhase={demand.status}
+                  demandId={demand.id}
+                  canUpload={canManage}
+                  token={token}
+                  onRefresh={fetchDemand}
+                  uploadTriggerSelector="#doc-upload-trigger"
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
     </AppLayout>
