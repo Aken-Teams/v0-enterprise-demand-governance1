@@ -873,7 +873,7 @@ export default function DemandDetailPage() {
                         </div>
                       )}
                     </div>
-                    {demand.status === "CLOSED" && (
+                    {demand.status === "CLOSED" && user?.role === "admin" && (
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2 text-sm">
                           <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -897,6 +897,13 @@ export default function DemandDetailPage() {
                           }}
                         />
                         <p className="text-[11px] text-muted-foreground">此日期用於交付率計算</p>
+                      </div>
+                    )}
+                    {demand.status === "CLOSED" && user?.role !== "admin" && demand.completedDate && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground shrink-0">實際結案</span>
+                        <span className="font-medium">{formatDate(demand.completedDate)}</span>
                       </div>
                     )}
                   </CardContent>

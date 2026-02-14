@@ -136,8 +136,11 @@ export async function PATCH(
       return NextResponse.json({ demand: { id: updated.id } })
     }
 
-    // Handle completedDate-only update (no status change)
+    // Handle completedDate-only update (admin only)
     if (!body.status && body.completedDate !== undefined) {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可修改結案日期" }, { status: 403 })
+      }
       const updated = await prisma.demand.update({
         where: { id },
         data: { completedDate: body.completedDate ? new Date(body.completedDate) : null },

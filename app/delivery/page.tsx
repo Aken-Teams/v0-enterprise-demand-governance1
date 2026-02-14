@@ -140,7 +140,9 @@ export default function DeliveryDashboardPage() {
       if (!res.ok) return
       const data = await res.json()
 
-      const allIds: string[] = data.demands.map((d: { id: string }) => d.id)
+      const allIds: string[] = data.demands
+        .filter((d: { id: string; status: string }) => d.status !== "CLOSED")
+        .map((d: { id: string }) => d.id)
 
       const details: DemandDetail[] = (
         await Promise.all(
