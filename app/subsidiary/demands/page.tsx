@@ -58,33 +58,38 @@ function DemandCard({ demand }: { demand: Demand }) {
       href={`/subsidiary/demands/${demand.id}`}
       className="group block rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:border-primary/30"
     >
-      <div className={cn("inline-block px-2 py-0.5 rounded text-[11px] font-medium mb-2", statusInfo.color)}>
-        {statusInfo.label}
+      {/* Row 1: status + demand number */}
+      <div className="flex items-center justify-between mb-1.5">
+        <div className={cn("inline-block px-2 py-0.5 rounded text-[11px] font-medium", statusInfo.color)}>
+          {statusInfo.label}
+        </div>
+        <span className="text-[11px] font-mono text-muted-foreground">{demand.demandNumber}</span>
       </div>
 
-      <div className="text-[11px] text-muted-foreground mb-1">{demand.demandNumber}</div>
-
-      <h3 className="font-semibold text-foreground text-sm leading-snug mb-1.5 group-hover:text-primary transition-colors">
+      {/* Title */}
+      <h3 className="font-semibold text-foreground text-sm leading-snug mb-1 group-hover:text-primary transition-colors">
         {demand.title}
       </h3>
 
-      <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+      {/* Description */}
+      <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
         {demand.description}
       </p>
 
-      {ownerInfo && (
-        <div className="text-[11px] text-muted-foreground mb-2">{ownerInfo}</div>
-      )}
-
-      <div className="flex items-end justify-between pt-2 border-t border-border/60">
-        <div className="text-[11px] text-muted-foreground">
-          {demand.desiredDate
-            ? `預計 ${formatDateReadable(demand.desiredDate)} 完成`
-            : `${formatDateReadable(demand.createdAt)} 提交`}
+      {/* Bottom: owner + date + SP */}
+      <div className="flex items-center justify-between pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 min-w-0">
+          {ownerInfo && <span className="truncate">{ownerInfo}</span>}
+          {ownerInfo && <span>·</span>}
+          <span className="shrink-0">
+            {demand.desiredDate
+              ? `預計 ${formatDateReadable(demand.desiredDate)}`
+              : `${formatDateReadable(demand.createdAt)} 提交`}
+          </span>
         </div>
-        <div className="text-lg font-bold text-foreground">
+        <span className="text-base font-bold text-foreground ml-3 shrink-0">
           {sp} <span className="text-xs font-normal text-muted-foreground">SP</span>
-        </div>
+        </span>
       </div>
     </Link>
   )
@@ -173,19 +178,19 @@ export default function MyDemandsPage() {
             <p className="text-sm text-muted-foreground mt-0.5">追蹤您提交的所有需求狀態</p>
           </div>
           <div className="flex items-center gap-6">
-            <div className="text-right">
+            <div className="text-center">
               <div className="text-2xl font-bold text-emerald-600">{remainingSp}</div>
               <div className="text-xs text-muted-foreground">可用 SP</div>
             </div>
-            <div className="text-right">
+            <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{spSummary.committedSp}</div>
               <div className="text-xs text-muted-foreground">已承諾 SP</div>
             </div>
-            <div className="text-right">
+            <div className="text-center">
               <div className="text-2xl font-bold text-primary">{spSummary.usedSp}</div>
               <div className="text-xs text-muted-foreground">已使用 SP</div>
             </div>
-            <div className="text-right">
+            <div className="text-center">
               <div className="text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
               <div className="text-xs text-muted-foreground">年度配額</div>
             </div>
