@@ -9,6 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { useAuth } from "@/hooks/use-auth"
 import {
   STATUS_MAP,
   PIPELINE_STEPS,
@@ -32,169 +33,360 @@ const DOC_DESCRIPTIONS: Record<string, string> = {
   VIDEO: "影片檔案",
 }
 
-export default function DocumentsPage() {
+/* ─── 需求者（subsidiary）看到的內容 ─── */
+function SubsidiaryGuide() {
   return (
-    <AppLayout userRole="subsidiary">
+    <>
+      <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
+        {/* 如何使用系統 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">如何使用系統</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="submit">
+                <AccordionTrigger>
+                  <span className="text-sm">提交新需求</span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <ol className="space-y-1.5 text-sm text-muted-foreground list-decimal list-inside">
+                    <li>前往「需求列表」頁面</li>
+                    <li>點擊右上角「新增需求」</li>
+                    <li>填寫需求標題、詳細描述</li>
+                    <li>設定優先級與期望完成日期</li>
+                    <li>填寫預估 SP 點數</li>
+                    <li>送出後需求進入「需求確認」階段</li>
+                  </ol>
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="track">
+                <AccordionTrigger>
+                  <span className="text-sm">追蹤需求進度</span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>在「需求列表」中點擊任一需求可查看詳細資訊，包含：</p>
+                    <ul className="space-y-1">
+                      <li className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                        目前所在階段與階段歷程
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                        已上傳的相關文件
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                        指派的團隊成員與時程
+                      </li>
+                    </ul>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="wallet">
+                <AccordionTrigger>
+                  <span className="text-sm">查看 SP 錢包</span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>前往「SP 錢包」頁面可查看：</p>
+                    <ul className="space-y-1">
+                      <li className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                        年度 SP 配額與使用狀況
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                        每筆需求的 SP 消耗明細
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                        剩餘可用額度
+                      </li>
+                    </ul>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="acceptance">
+                <AccordionTrigger>
+                  <span className="text-sm">驗收需求</span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>當需求進入「驗收中」階段，您需要：</p>
+                    <ol className="space-y-1 list-decimal list-inside">
+                      <li>查看工程師提供的 BDD / TDD 文件與測試報告</li>
+                      <li>確認開發成果是否符合需求</li>
+                      <li>通過驗收後需求進入「已結案」</li>
+                    </ol>
+                    <p className="text-xs">驗收不通過會退回開發階段重新修正。</p>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
+
+        {/* SP 點數（需求者版） */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">SP 點數</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground divide-y">
+            <div className="pb-4">
+              <p className="font-medium text-foreground mb-1">什麼是 SP？</p>
+              <p>
+                SP（Story Points）代表需求的開發工作量。點數越高，代表需求越複雜、所需時間越長。
+              </p>
+            </div>
+            <div className="py-4">
+              <p className="font-medium text-foreground mb-1">SP 錢包</p>
+              <p>您的子公司每年有固定的 SP 配額，所有需求共用此額度。</p>
+              <ul className="mt-2 space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">年度配額</span> — 今年可使用的 SP 總量</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">已使用</span> — 已結案需求消耗的 SP</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">已承諾</span> — 進行中需求佔用的 SP</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">可用餘額</span> — 還能用於新需求的 SP</span>
+                </li>
+              </ul>
+            </div>
+            <div className="pt-4">
+              <p className="font-medium text-foreground mb-1">SP 不夠用怎麼辦？</p>
+              <p>
+                可聯繫管理者申請追加配額、將低優先級需求延後至下一年度，或與內部討論改由公司 IT 團隊自行開發。
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 需求流程簡介 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">需求處理流程</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            您提交的需求會依序經過以下階段，每個階段完成後自動推進至下一階段：
+          </p>
+          <div className="space-y-2">
+            {PIPELINE_STEPS.map((step, i) => {
+              const info = STATUS_MAP[step]
+              const desc: Record<string, string> = {
+                SUBMITTED: "管理者與您面談確認需求內容",
+                PRD_REVIEW: "PM 撰寫需求規格書，工程師進行架構設計",
+                SP_REVIEW: "管理者確認 SP 點數與開發時程",
+                DEVELOPING: "工程師進行開發，產出系統設計與成果",
+                ACCEPTANCE: "您驗收開發成果，確認是否符合需求",
+                CLOSED: "需求完成結案，SP 點數結算",
+              }
+              return (
+                <div key={step} className="flex items-start gap-3 text-sm">
+                  <Badge className={`${info.color} shrink-0 mt-0.5`}>{info.label}</Badge>
+                  <span className="text-muted-foreground">{desc[step]}</span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            ※ 需求在任何階段都可能被駁回。駁回後需重新建立新需求。
+          </p>
+        </CardContent>
+      </Card>
+    </>
+  )
+}
+
+/* ─── 管理者 / 交付團隊看到的內容 ─── */
+function AdminDeliveryGuide() {
+  return (
+    <>
+      <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
+        {/* 各階段說明 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">各階段說明</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {PIPELINE_STEPS.map((step) => {
+                const info = STATUS_MAP[step]
+                const actions = PHASE_ACTIONS[step]
+                const docs = PHASE_DOCUMENT_MAP[step]
+                const allDocs = [...docs.required, ...docs.optional]
+                return (
+                  <AccordionItem key={step} value={step}>
+                    <AccordionTrigger>
+                      <div className="flex items-center gap-3">
+                        <Badge className={info.color}>{info.label}</Badge>
+                        <span className="text-sm text-muted-foreground font-normal">
+                          {PHASE_DESCRIPTIONS[step]}
+                        </span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-4 pl-2">
+                        {actions.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-foreground mb-2">關鍵動作</p>
+                            <ul className="space-y-1 text-sm text-muted-foreground">
+                              {actions.map((a, i) => (
+                                <li key={i} className="flex items-center gap-2">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                                  {a}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {allDocs.length > 0 && (
+                          <div className="border-t pt-3">
+                            <p className="text-sm font-medium text-foreground mb-2">相關文件</p>
+                            <div className="space-y-2">
+                              {allDocs.map((d) => (
+                                <div key={d} className="flex items-baseline gap-2 text-sm">
+                                  <span className="font-medium text-foreground shrink-0">
+                                    {DOCUMENT_TYPE_LABELS[d] ?? d}
+                                  </span>
+                                  {docs.required.includes(d) ? (
+                                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0">必填</Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">選填</Badge>
+                                  )}
+                                  {DOC_DESCRIPTIONS[d] && (
+                                    <span className="text-muted-foreground">{DOC_DESCRIPTIONS[d]}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {actions.length === 0 && allDocs.length === 0 && (
+                          <p className="text-sm text-muted-foreground">此階段為結案狀態，無需額外操作。</p>
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                )
+              })}
+            </Accordion>
+          </CardContent>
+        </Card>
+
+        {/* SP 點數 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">SP 點數</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground divide-y">
+            <div className="pb-4">
+              <p className="font-medium text-foreground mb-1">什麼是 SP？</p>
+              <p>
+                SP（Story Points）是衡量需求開發工作量的單位，綜合考量複雜度、工時與風險。點數越高代表工作量越大。
+              </p>
+            </div>
+            <div className="py-4">
+              <p className="font-medium text-foreground mb-1">SP 錢包</p>
+              <p>每個子公司每年有固定的 SP 配額，所有需求共用此額度。</p>
+              <ul className="mt-2 space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">年度配額</span> — 管理者每年分配的 SP 總量</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">已使用</span> — 已結案需求消耗的 SP</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">已承諾</span> — 開發中與驗收中需求佔用的 SP</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
+                  <span><span className="font-medium text-foreground">可用餘額</span> — 配額 − 已使用 − 已承諾</span>
+                </li>
+              </ul>
+            </div>
+            <div className="pt-4">
+              <p className="font-medium text-foreground mb-1">預估 vs 確認</p>
+              <p>
+                提交需求時填寫「預估 SP」，進入開案確認階段後由管理者審核並確認為「確認 SP」，作為實際扣款依據。
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 常見問題 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">常見問題</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="q1">
+              <AccordionTrigger>如何推進需求階段？</AccordionTrigger>
+              <AccordionContent>
+                <p className="text-sm text-muted-foreground">
+                  在需求詳情頁確認該階段所有必要文件已上傳且關鍵動作已完成後，點擊「推進階段」按鈕即可將需求推進至下一階段。
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q2">
+              <AccordionTrigger>如何調整子公司的 SP 配額？</AccordionTrigger>
+              <AccordionContent>
+                <p className="text-sm text-muted-foreground">
+                  前往「管理設定」中的 SP 錢包管理功能，可為各子公司設定年度配額或進行追加。
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q3">
+              <AccordionTrigger>需求被駁回後會怎樣？</AccordionTrigger>
+              <AccordionContent>
+                <p className="text-sm text-muted-foreground">
+                  駁回後需求不再進入流程，佔用的 SP 會釋放。需求者需根據駁回原因重新建立新需求。
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
+      </Card>
+    </>
+  )
+}
+
+export default function DocumentsPage() {
+  const { user } = useAuth()
+  const role = user?.role ?? "subsidiary"
+  const isSubsidiary = role === "subsidiary"
+
+  return (
+    <AppLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             使用指南
           </h1>
           <p className="text-muted-foreground">
-            了解需求流程、SP 點數與各階段操作方式
+            {isSubsidiary
+              ? "了解如何提交需求、追蹤進度與管理 SP 點數"
+              : "了解需求流程、SP 點數與各階段操作方式"}
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
-          {/* 各階段說明 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">各階段說明</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="single" collapsible className="w-full">
-                {PIPELINE_STEPS.map((step) => {
-                  const info = STATUS_MAP[step]
-                  const actions = PHASE_ACTIONS[step]
-                  const docs = PHASE_DOCUMENT_MAP[step]
-                  const allDocs = [...docs.required, ...docs.optional]
-                  return (
-                    <AccordionItem key={step} value={step}>
-                      <AccordionTrigger>
-                        <div className="flex items-center gap-3">
-                          <Badge className={info.color}>{info.label}</Badge>
-                          <span className="text-sm text-muted-foreground font-normal">
-                            {PHASE_DESCRIPTIONS[step]}
-                          </span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-4 pl-2">
-                          {actions.length > 0 && (
-                            <div>
-                              <p className="text-sm font-medium text-foreground mb-2">關鍵動作</p>
-                              <ul className="space-y-1 text-sm text-muted-foreground">
-                                {actions.map((a, i) => (
-                                  <li key={i} className="flex items-center gap-2">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                                    {a}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {allDocs.length > 0 && (
-                            <div>
-                              <p className="text-sm font-medium text-foreground mb-2">相關文件</p>
-                              <div className="space-y-2">
-                                {allDocs.map((d) => (
-                                  <div key={d} className="flex items-baseline gap-2 text-sm">
-                                    <span className="font-medium text-foreground shrink-0">
-                                      {DOCUMENT_TYPE_LABELS[d] ?? d}
-                                    </span>
-                                    {docs.required.includes(d) ? (
-                                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0">必填</Badge>
-                                    ) : (
-                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">選填</Badge>
-                                    )}
-                                    {DOC_DESCRIPTIONS[d] && (
-                                      <span className="text-muted-foreground">{DOC_DESCRIPTIONS[d]}</span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {actions.length === 0 && allDocs.length === 0 && (
-                            <p className="text-sm text-muted-foreground">此階段為結案狀態，無需額外操作。</p>
-                          )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )
-                })}
-              </Accordion>
-            </CardContent>
-          </Card>
-
-          {/* SP 點數 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">SP 點數</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-4">
-              <div>
-                <p className="font-medium text-foreground mb-1">什麼是 SP？</p>
-                <p>
-                  SP（Story Points）是衡量需求開發工作量的單位，綜合考量複雜度、工時與風險。點數越高代表工作量越大。
-                </p>
-              </div>
-              <div>
-                <p className="font-medium text-foreground mb-1">SP 錢包</p>
-                <p>每個子公司每年有固定的 SP 配額，所有需求共用此額度。</p>
-                <ul className="mt-2 space-y-1.5">
-                  <li className="flex items-start gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
-                    <span><span className="font-medium text-foreground">年度配額</span> — 管理者每年分配的 SP 總量</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                    <span><span className="font-medium text-foreground">已使用</span> — 已結案需求消耗的 SP</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
-                    <span><span className="font-medium text-foreground">已承諾</span> — 開發中與驗收中需求佔用的 SP</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
-                    <span><span className="font-medium text-foreground">可用餘額</span> — 配額 − 已使用 − 已承諾</span>
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium text-foreground mb-1">預估 vs 確認</p>
-                <p>
-                  提交需求時填寫「預估 SP」，進入開案確認階段後由管理者審核並確認為「確認 SP」，作為實際扣款依據。
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* 常見問題 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">常見問題</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="q1">
-                <AccordionTrigger>如何提交新需求？</AccordionTrigger>
-                <AccordionContent>
-                  <p className="text-sm text-muted-foreground">
-                    前往「需求列表」，點擊「新增需求」，填寫標題、描述、預估 SP 與期望完成日期後送出。
-                  </p>
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="q2">
-                <AccordionTrigger>SP 不夠用怎麼辦？</AccordionTrigger>
-                <AccordionContent>
-                  <p className="text-sm text-muted-foreground">
-                    聯繫管理者申請追加配額，或將低優先級需求延後至下一年度。
-                  </p>
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="q3">
-                <AccordionTrigger>需求被駁回後可以重新提交嗎？</AccordionTrigger>
-                <AccordionContent>
-                  <p className="text-sm text-muted-foreground">
-                    駁回後無法直接恢復，請根據駁回原因修改後重新建立一筆新需求。
-                  </p>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
-        </Card>
+        {isSubsidiary ? <SubsidiaryGuide /> : <AdminDeliveryGuide />}
       </div>
     </AppLayout>
   )
