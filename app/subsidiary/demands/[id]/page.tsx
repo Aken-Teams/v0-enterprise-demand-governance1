@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState, useEffect, useCallback } from "react"
+import { use, useState, useEffect, useCallback, useMemo } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,17 +11,14 @@ import {
   ArrowLeft,
   User,
   FileText,
-  Clock,
   CheckCircle,
   Paperclip,
   Loader2,
   AlertTriangle,
   CalendarDays,
-  Users,
   Circle,
   BarChart3,
   Hash,
-  Building2,
   Layers,
 } from "lucide-react"
 import Link from "next/link"
@@ -30,6 +27,17 @@ import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { ProjectGantt } from "@/components/demand/project-gantt"
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+
+// ── Pie chart colors (one per pipeline phase) ──
+const PIE_COLORS: Record<string, string> = {
+  SUBMITTED: "#3b82f6",
+  PRD_REVIEW: "#f59e0b",
+  SP_REVIEW: "#ef4444",
+  DEVELOPING: "#8b5cf6",
+  ACCEPTANCE: "#06b6d4",
+  CLOSED: "#10b981",
+}
 
 interface DemandDetail {
   id: string
@@ -175,13 +183,22 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const currentStepIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
 
-  // Build timeline (oldest first)
-  const timeline = [...demand.statusHistory].reverse().map((h) => ({
-    date: h.createdAt,
-    fromLabel: STATUS_MAP[h.fromStatus]?.label || h.fromStatus,
-    toLabel: STATUS_MAP[h.toStatus]?.label || h.toStatus,
-    comment: h.comment,
-  }))
+  // Project start date: earliest plannedStart or actualStart from phase plans
+  const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {
+    const d = p.plannedStart || p.actualStart
+    if (!d) return earliest
+    if (!earliest) return d
+    return new Date(d) < new Date(earliest) ? d : earliest
+  }, null)
+
+  // Pie chart data
+  const spPieData = demand.phasePlans
+    .filter((p) => p.plannedSp && p.plannedSp > 0)
+    .map((p) => ({
+      name: STATUS_MAP[p.phase]?.label || p.phase,
+      value: p.plannedSp!,
+      phase: p.phase,
+    }))
 
   return (
     <AppLayout userRole="subsidiary">
@@ -212,7 +229,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        {/* ── Alert banners (rejection / closed only) ── */}
+        {/* ── Alert banners ── */}
         {isRejected && demand.rejectReason && (
           <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
             <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
@@ -254,12 +271,11 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             </TabsTrigger>
           </TabsList>
 
-          {/* ── Tab: 概覽 ── */}
+          {/* ══════ Tab: 概覽 ══════ */}
           <TabsContent value="overview" className="mt-5">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               {/* Left */}
               <div className="lg:col-span-2 space-y-5">
-                {/* Description content */}
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">需求內容</CardTitle>
@@ -302,6 +318,198 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                   </CardContent>
                 </Card>
 
+                {/* Comments */}
+                {demand.comments.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        留言
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{demand.comments.length}</Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {demand.comments.map((c) => (
+                        <div key={c.id} className="rounded-lg bg-muted/50 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium">{c.user.name}</span>
+                            <span className="text-[11px] text-muted-foreground">{fmtDate(c.createdAt)}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground whitespace-pre-line">{c.content}</p>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Right */}
+              <div className="space-y-5">
+                {/* Basic info + Team (merged) */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">基本資訊</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Hash className="h-3.5 w-3.5" />
+                        編號
+                      </span>
+                      <span className="font-mono font-medium">{demand.demandNumber}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <User className="h-3.5 w-3.5" />
+                        提交者
+                      </span>
+                      <span className="font-medium">{demand.submitter.name}</span>
+                    </div>
+                    <Separator />
+                    {projectStartDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground flex items-center gap-1.5">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          專案開始日期
+                        </span>
+                        <span className="font-medium">{fmtDate(projectStartDate)}</span>
+                      </div>
+                    )}
+                    {demand.desiredDate && (
+                      <>
+                        <Separator />
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1.5">
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            希望完成日期
+                          </span>
+                          <span className="font-medium">{fmtDate(demand.desiredDate)}</span>
+                        </div>
+                      </>
+                    )}
+                    {demand.expectedDate && (
+                      <>
+                        <Separator />
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">預計完成</span>
+                          <span className="font-medium">{fmtDate(demand.expectedDate)}</span>
+                        </div>
+                      </>
+                    )}
+                    {demand.completedDate && (
+                      <>
+                        <Separator />
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">實際完成</span>
+                          <span className="font-medium text-emerald-600">{fmtDate(demand.completedDate)}</span>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Team section */}
+                    <Separator />
+                    <p className="text-xs font-medium text-muted-foreground pt-1">負責人</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <span className="text-[11px] font-medium text-primary">
+                            {demand.manager ? demand.manager.name[0] : "?"}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate leading-tight">
+                            {demand.manager?.name || "未指派"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">PM</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                          <span className="text-[11px] font-medium text-violet-600">
+                            {demand.developer ? demand.developer.name[0] : "?"}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate leading-tight">
+                            {demand.developer?.name || "未指派"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">開發</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* SP Pie Chart */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      SP 分配
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {spPieData.length > 0 ? (
+                      <div>
+                        <div className="h-[160px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={spPieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={40}
+                                outerRadius={65}
+                                paddingAngle={3}
+                                dataKey="value"
+                                stroke="none"
+                              >
+                                {spPieData.map((entry) => (
+                                  <Cell key={entry.phase} fill={PIE_COLORS[entry.phase] || "#94a3b8"} />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(value: number) => [`${value} SP`, ""]}
+                                contentStyle={{
+                                  fontSize: "12px",
+                                  borderRadius: "8px",
+                                  border: "1px solid var(--border)",
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                                }}
+                              />
+                              {/* Center label */}
+                              <text x="50%" y="48%" textAnchor="middle" dominantBaseline="central" className="fill-foreground text-lg font-bold">
+                                {sp}
+                              </text>
+                              <text x="50%" y="62%" textAnchor="middle" dominantBaseline="central" className="fill-muted-foreground text-[10px]">
+                                SP
+                              </text>
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {/* Legend */}
+                        <div className="space-y-1.5 mt-2">
+                          {spPieData.map((entry) => (
+                            <div key={entry.phase} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[entry.phase] || "#94a3b8" }} />
+                                <span className="text-muted-foreground">{entry.name}</span>
+                              </div>
+                              <span className="font-medium">{entry.value} SP</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-3xl font-bold text-primary">{sp}</p>
+                        <p className="text-xs text-muted-foreground mt-1">總 Story Points</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Phase progress */}
                 <Card>
                   <CardHeader className="pb-3">
@@ -330,7 +538,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                           <div
                             key={phase}
                             className={cn(
-                              "flex items-center gap-3 px-5 py-3",
+                              "flex items-center gap-3 px-5 py-2.5",
                               isCurrent && "bg-primary/[0.04]",
                             )}
                           >
@@ -356,27 +564,25 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
                             {dateRange && (
                               <span className={cn(
-                                "text-xs shrink-0",
+                                "text-[11px] shrink-0 hidden xl:inline",
                                 isCurrent ? "text-muted-foreground" : "text-muted-foreground/60",
                               )}>
                                 {dateRange}
                               </span>
                             )}
 
-                            {plan?.plannedSp != null && plan.plannedSp > 0 && (
-                              <Badge variant="secondary" className={cn(
-                                "text-[10px] h-5 px-1.5 rounded shrink-0",
-                                isFuture && "opacity-50",
-                              )}>
-                                {plan.plannedSp} SP
-                              </Badge>
-                            )}
+                            <Badge variant="secondary" className={cn(
+                              "text-[10px] h-5 px-1.5 rounded shrink-0",
+                              isFuture && "opacity-50",
+                            )}>
+                              {plan?.plannedSp ?? 0}
+                            </Badge>
                           </div>
                         )
                       })}
 
                       {isRejected && (
-                        <div className="flex items-center gap-3 px-5 py-3 bg-red-50/50">
+                        <div className="flex items-center gap-3 px-5 py-2.5 bg-red-50/50">
                           <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
                           <span className="text-sm font-medium text-red-700">已駁回</span>
                         </div>
@@ -384,259 +590,36 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* History */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      歷程紀錄
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="relative pl-5">
-                        {timeline.length > 0 && (
-                          <div className="absolute left-[7px] top-5 bottom-0 w-px bg-border" />
-                        )}
-                        <div className="absolute left-0 top-1 h-[14px] w-[14px] rounded-full border-2 border-blue-500 bg-white" />
-                        <p className="text-sm font-medium">需求提交</p>
-                        <p className="text-xs text-muted-foreground">{fmtDate(demand.createdAt)}</p>
-                      </div>
-
-                      {timeline.map((event, i) => (
-                        <div key={i} className="relative pl-5">
-                          {i < timeline.length - 1 && (
-                            <div className="absolute left-[7px] top-5 bottom-0 w-px bg-border" />
-                          )}
-                          <div className="absolute left-0 top-1 h-[14px] w-[14px] rounded-full border-2 border-primary bg-white" />
-                          <p className="text-sm">
-                            <span className="text-muted-foreground">{event.fromLabel}</span>
-                            <span className="mx-1">→</span>
-                            <span className="font-medium">{event.toLabel}</span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">{fmtDate(event.date)}</p>
-                          {event.comment && event.comment !== "狀態變更" && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{event.comment}</p>
-                          )}
-                        </div>
-                      ))}
-
-                      {timeline.length === 0 && (
-                        <p className="text-xs text-muted-foreground pl-5">尚無狀態變更紀錄</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Right */}
-              <div className="space-y-5">
-                {/* Basic info */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">基本資訊</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Hash className="h-3.5 w-3.5" />
-                        編號
-                      </span>
-                      <span className="font-mono font-medium">{demand.demandNumber}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Building2 className="h-3.5 w-3.5" />
-                        組織
-                      </span>
-                      <span className="font-medium">{demand.organization.name}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <User className="h-3.5 w-3.5" />
-                        提交者
-                      </span>
-                      <span className="font-medium">{demand.submitter.name}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        提交日期
-                      </span>
-                      <span className="font-medium">{fmtDate(demand.createdAt)}</span>
-                    </div>
-                    {demand.desiredDate && (
-                      <>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">希望完成</span>
-                          <span className="font-medium">{fmtDate(demand.desiredDate)}</span>
-                        </div>
-                      </>
-                    )}
-                    {demand.expectedDate && (
-                      <>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">預計完成</span>
-                          <span className="font-medium">{fmtDate(demand.expectedDate)}</span>
-                        </div>
-                      </>
-                    )}
-                    {demand.completedDate && (
-                      <>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">實際完成</span>
-                          <span className="font-medium text-emerald-600">{fmtDate(demand.completedDate)}</span>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Team */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      負責人
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {demand.manager ? (
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <span className="text-xs font-medium text-primary">{demand.manager.name[0]}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{demand.manager.name}</p>
-                          <p className="text-xs text-muted-foreground">PM</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                          <User className="h-3.5 w-3.5 text-muted-foreground/40" />
-                        </div>
-                        <p className="text-sm text-muted-foreground">PM 尚未指派</p>
-                      </div>
-                    )}
-                    {demand.developer ? (
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                          <span className="text-xs font-medium text-violet-600">{demand.developer.name[0]}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{demand.developer.name}</p>
-                          <p className="text-xs text-muted-foreground">開發</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                          <User className="h-3.5 w-3.5 text-muted-foreground/40" />
-                        </div>
-                        <p className="text-sm text-muted-foreground">開發人員尚未指派</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* SP Info */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <BarChart3 className="h-4 w-4" />
-                      SP 資訊
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">預估 SP</span>
-                      <span className="font-medium">{demand.estimatedSp} SP</span>
-                    </div>
-                    {demand.confirmedSp != null && (
-                      <>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">確認 SP</span>
-                          <span className="font-bold text-primary">{demand.confirmedSp} SP</span>
-                        </div>
-                      </>
-                    )}
-                    {demand.phasePlans.some((p) => p.plannedSp) && (
-                      <>
-                        <Separator />
-                        <p className="text-xs font-medium text-muted-foreground pt-1">各階段分配</p>
-                        {demand.phasePlans
-                          .filter((p) => p.plannedSp)
-                          .map((p) => (
-                            <div key={p.phase} className="flex justify-between">
-                              <span className="text-muted-foreground">{STATUS_MAP[p.phase]?.label || p.phase}</span>
-                              <span>{p.plannedSp} SP</span>
-                            </div>
-                          ))}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Comments */}
-                {demand.comments.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        留言
-                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{demand.comments.length}</Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {demand.comments.map((c) => (
-                        <div key={c.id} className="rounded-lg bg-muted/50 p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium">{c.user.name}</span>
-                            <span className="text-[11px] text-muted-foreground">{fmtDate(c.createdAt)}</span>
-                          </div>
-                          <p className="text-sm text-muted-foreground whitespace-pre-line">{c.content}</p>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
               </div>
             </div>
           </TabsContent>
 
-          {/* ── Tab: 甘特圖 ── */}
+          {/* ══════ Tab: 甘特圖 ══════ */}
           <TabsContent value="gantt" className="mt-5">
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <BarChart3 className="h-4 w-4" />
                   專案時程
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <ProjectGantt
-                  phasePlans={demand.phasePlans}
-                  currentStatus={demand.status}
-                  subTasks={demand.subTasks}
-                  demandId={demand.id}
-                  canEdit={false}
-                  token={token}
-                  onRefresh={fetchDemand}
-                />
+              <CardContent className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <ProjectGantt
+                    phasePlans={demand.phasePlans}
+                    currentStatus={demand.status}
+                    subTasks={demand.subTasks}
+                    demandId={demand.id}
+                    canEdit={false}
+                    token={token}
+                    onRefresh={fetchDemand}
+                  />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* ── Tab: 文件 ── */}
+          {/* ══════ Tab: 文件 ══════ */}
           <TabsContent value="documents" className="mt-5">
             <Card>
               <CardHeader className="pb-3">
