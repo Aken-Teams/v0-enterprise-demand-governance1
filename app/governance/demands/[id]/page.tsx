@@ -138,43 +138,47 @@ function formatDate(dateStr: string) {
 // Mermaid code block renderer
 mermaid.initialize({
   startOnLoad: false,
+  suppressErrorRendering: true,
   theme: "neutral",
   themeVariables: { background: "transparent", primaryColor: "#dbeafe", primaryTextColor: "#1e3a5f", lineColor: "#94a3b8" },
 })
 
 function MermaidBlock({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [error, setError] = useState(false)
+  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading")
   useEffect(() => {
     if (!ref.current) return
-    setError(false)
+    setStatus("loading")
     const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
+
     mermaid.render(id, code).then(({ svg }) => {
       if (ref.current) {
         ref.current.innerHTML = svg
-        // Force transparent background on all SVGs
-        const svgEl = ref.current.querySelector("svg")
-        if (svgEl) {
-          svgEl.style.backgroundColor = "transparent"
-          svgEl.removeAttribute("style")
-          svgEl.setAttribute("style", "background: transparent; max-width: 100%;")
-        }
+        ref.current.querySelectorAll("svg").forEach((s) => {
+          s.style.background = "transparent"
+          s.style.maxWidth = "100%"
+        })
       }
+      setStatus("ok")
     }).catch(() => {
-      setError(true)
+      setStatus("error")
     })
+
+    return () => {
+      if (ref.current) ref.current.innerHTML = ""
+    }
   }, [code])
 
-  if (error) {
+  if (status === "error") {
     return (
-      <div className="w-full rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+      <div className="w-full rounded-lg border border-amber-200 bg-amber-50/50 p-4 not-prose">
         <p className="text-xs font-medium text-amber-700 mb-2">此圖表格式無法解析</p>
         <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-white/60 rounded p-3">{code}</pre>
       </div>
     )
   }
 
-  return <div ref={ref} className="flex justify-center not-prose [&_svg]:!bg-transparent" />
+  return <div ref={ref} data-mermaid-container className="flex justify-center not-prose [&_svg]:!bg-transparent" />
 }
 
 export default function DemandDetailPage() {
@@ -196,6 +200,14 @@ export default function DemandDetailPage() {
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
 
   const canManage = user?.role === "admin" || user?.role === "delivery"
+
+  // Periodically clean up stray mermaid error SVGs from the DOM
+  useEffect(() => {
+    const timer = setInterval(() => {
+      document.querySelectorAll("svg[aria-roledescription='error']").forEach((el) => el.remove())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Auto-collapse SP plan if already has content
   useEffect(() => {
