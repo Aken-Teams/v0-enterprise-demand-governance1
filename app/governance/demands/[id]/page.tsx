@@ -1123,6 +1123,8 @@ export default function DemandDetailPage() {
                       uploadTriggerSelector="#doc-upload-trigger"
                       onDocumentSelect={setSelectedDoc}
                       selectedDocId={selectedDoc?.id}
+                      userId={user?.id}
+                      userRole={user?.role}
                     />
                   </CardContent>
                 </Card>

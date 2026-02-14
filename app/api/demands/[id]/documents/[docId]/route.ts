@@ -10,7 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; docId: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery"])
+    const auth = verifyRole(request, ["admin", "delivery"])
     const { id, docId } = await params
 
     const doc = await prisma.demandDocument.findFirst({
@@ -18,6 +18,11 @@ export async function DELETE(
     })
     if (!doc) {
       return NextResponse.json({ error: "文件不存在" }, { status: 404 })
+    }
+
+    // Delivery users can only delete documents they uploaded
+    if (auth.role === "delivery" && doc.uploadedBy !== auth.userId) {
+      return NextResponse.json({ error: "僅能刪除自己上傳的文件" }, { status: 403 })
     }
 
     // Delete physical file if it's a local upload (not an external URL)

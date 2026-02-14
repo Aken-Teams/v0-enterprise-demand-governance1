@@ -47,6 +47,8 @@ interface PhaseDocumentsProps {
   uploadTriggerSelector?: string
   onDocumentSelect?: (doc: Document) => void
   selectedDocId?: string | null
+  userId?: string
+  userRole?: string
 }
 
 function getFileIconAndColor(fileName: string): { icon: typeof File; color: string } {
@@ -86,6 +88,8 @@ export function PhaseDocuments({
   uploadTriggerSelector,
   onDocumentSelect,
   selectedDocId,
+  userId,
+  userRole,
 }: PhaseDocumentsProps) {
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [uploadPhase, setUploadPhase] = useState(currentPhase)
@@ -212,6 +216,10 @@ export function PhaseDocuments({
     const { icon: Icon, color: iconColor } = isExternalLink
       ? { icon: ExternalLink, color: "text-blue-500" }
       : getFileIconAndColor(doc.fileName)
+    const isOwnDoc = userId && doc.uploadedBy === userId
+    const isAdmin = userRole === "admin"
+    const docCanDownload = canDownload && (isAdmin || isOwnDoc)
+    const docCanDelete = canUpload && (isAdmin || isOwnDoc)
     return (
       <div
         key={doc.id}
@@ -245,19 +253,19 @@ export function PhaseDocuments({
           </div>
         </div>
         <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {canDownload && doc.fileUrl && !isExternalLink && (
+          {docCanDownload && doc.fileUrl && !isExternalLink && (
             <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
               <a href={doc.fileUrl} download><Download className="h-4 w-4" /></a>
             </Button>
           )}
-          {canDownload && isExternalLink && (
+          {docCanDownload && isExternalLink && (
             <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
               <a href={doc.fileUrl!} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4" />
               </a>
             </Button>
           )}
-          {canUpload && (
+          {docCanDelete && (
             <Button
               variant="ghost"
               size="icon"

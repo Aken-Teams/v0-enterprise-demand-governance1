@@ -238,6 +238,12 @@ export async function GET(request: NextRequest) {
       ]
     }
 
+    // Build base filter for counts (same scope as list, minus search/status)
+    const countWhere: Record<string, unknown> = {}
+    if (organizationId) countWhere.organizationId = organizationId
+    if (developerId) countWhere.developerId = developerId === "unassigned" ? null : developerId
+    if (submitterId) countWhere.submitterId = submitterId
+
     // Fetch demands, counts, and filter options in parallel
     const [demands, total, counts, submitters, developers] = await Promise.all([
       prisma.demand.findMany({
@@ -252,10 +258,10 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.demand.count({ where: organizationId ? { organizationId } : undefined }),
+      prisma.demand.count({ where: countWhere }),
       prisma.demand.groupBy({
         by: ["status"],
-        ...(organizationId ? { where: { organizationId } } : {}),
+        where: countWhere,
         _count: { _all: true },
       }),
       prisma.user.findMany({
