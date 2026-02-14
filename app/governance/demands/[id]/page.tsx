@@ -139,6 +139,7 @@ function formatDate(dateStr: string) {
 mermaid.initialize({
   startOnLoad: false,
   suppressErrorRendering: true,
+  securityLevel: "loose",
   theme: "neutral",
   themeVariables: { background: "transparent", primaryColor: "#dbeafe", primaryTextColor: "#1e3a5f", lineColor: "#94a3b8" },
 })
@@ -161,7 +162,30 @@ function MermaidBlock({ code }: { code: string }) {
       }
       setStatus("ok")
     }).catch(() => {
-      setStatus("error")
+      // Fallback: use mermaid.run() which renders in the visible DOM
+      // (needed for block-beta which requires getBBox on visible elements)
+      if (!ref.current) return
+      const pre = document.createElement("pre")
+      pre.className = "mermaid"
+      pre.textContent = code
+      ref.current.innerHTML = ""
+      ref.current.appendChild(pre)
+      mermaid.run({ nodes: [pre], suppressErrors: true }).then(() => {
+        if (ref.current) {
+          ref.current.querySelectorAll("svg").forEach((s) => {
+            s.style.background = "transparent"
+            s.style.maxWidth = "100%"
+          })
+          // Check if rendering actually produced an SVG
+          if (ref.current.querySelector("svg")) {
+            setStatus("ok")
+          } else {
+            setStatus("error")
+          }
+        }
+      }).catch(() => {
+        setStatus("error")
+      })
     })
 
     return () => {
