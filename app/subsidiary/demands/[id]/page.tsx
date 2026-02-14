@@ -282,7 +282,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                   </CardHeader>
                   <CardContent className="space-y-0">
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-1.5">需求說明</p>
+                      <p className="text-xs font-semibold text-blue-600 mb-1.5">需求說明</p>
                       <p className="text-sm leading-relaxed whitespace-pre-line">{demand.description}</p>
                     </div>
 
@@ -290,7 +290,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       <>
                         <Separator className="my-4" />
                         <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1.5">痛點說明</p>
+                          <p className="text-xs font-semibold text-amber-600 mb-1.5">痛點說明</p>
                           <p className="text-sm leading-relaxed whitespace-pre-line">{demand.painPoint}</p>
                         </div>
                       </>
@@ -300,7 +300,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       <>
                         <Separator className="my-4" />
                         <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1.5">預期效益</p>
+                          <p className="text-xs font-semibold text-emerald-600 mb-1.5">預期效益</p>
                           <p className="text-sm leading-relaxed whitespace-pre-line">{demand.expectedBenefit}</p>
                         </div>
                       </>
@@ -310,7 +310,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       <>
                         <Separator className="my-4" />
                         <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1.5">管理者備註</p>
+                          <p className="text-xs font-semibold text-violet-600 mb-1.5">管理者備註</p>
                           <p className="text-sm leading-relaxed whitespace-pre-line text-muted-foreground">{demand.adminNotes}</p>
                         </div>
                       </>

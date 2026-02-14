@@ -270,7 +270,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
 
       {/* Main content */}
       <div
-        className={cn("flex flex-1 flex-col transition-all duration-300", sidebarCollapsed ? "lg:pl-16" : "lg:pl-56")}
+        className={cn("flex flex-1 flex-col transition-all duration-300 min-w-0", sidebarCollapsed ? "lg:pl-16" : "lg:pl-56")}
       >
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-6">
@@ -356,7 +356,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6 min-w-0">{children}</main>
       </div>
     </div>
   )
