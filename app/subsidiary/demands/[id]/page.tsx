@@ -52,15 +52,13 @@ mermaid.initialize({
 /** Pre-process raw Gherkin / BDD text into well-structured Markdown.
  *  Feature / Scenario lines → headings; Given/When/Then blocks → fenced code blocks. */
 function formatGherkinInMarkdown(md: string): string {
-  // ── Step 1: Unwrap ```gherkin fenced code blocks ──
-  // ReactMarkdown may fail to render gherkin fences correctly when custom
-  // code components are used. Unwrap them so content is processed below.
-  let src = md
-  if (/```gherkin/.test(src)) {
-    src = src.replace(/```gherkin\s*\n([\s\S]*?)```/g, '$1')
-  }
+  // If the content already has proper ```gherkin fenced code blocks,
+  // return as-is and let ReactMarkdown render them natively.
+  if (/```gherkin/.test(md)) return md
   // Non-gherkin code blocks (e.g. mermaid) → leave as-is
-  if (/```/.test(src)) return src
+  if (/```/.test(md)) return md
+
+  let src = md
 
   // ── Step 2: Restore line breaks in concatenated Gherkin ──
   // Content may have been stored with newlines stripped into one line,
@@ -99,12 +97,15 @@ function formatGherkinInMarkdown(md: string): string {
   if (!hasGherkin) return src
 
   const result: string[] = []
-  let inCodeBlock = false
-  const closeBlock = () => {
-    if (inCodeBlock) {
+  let stepLines: string[] = []
+  const flushSteps = () => {
+    if (stepLines.length) {
+      result.push('')
+      result.push('```gherkin')
+      stepLines.forEach(l => result.push(l))
       result.push('```')
       result.push('')
-      inCodeBlock = false
+      stepLines = []
     }
   }
 
@@ -114,7 +115,7 @@ function formatGherkinInMarkdown(md: string): string {
     // Feature heading
     const fm = trimmed.match(featureRe)
     if (fm) {
-      closeBlock()
+      flushSteps()
       const num = fm[1] ? ` ${fm[1]}` : ''
       result.push(`## Feature${num}：${fm[2]}`)
       result.push('')
@@ -124,7 +125,7 @@ function formatGherkinInMarkdown(md: string): string {
     // Scenario heading
     const sm = trimmed.match(scenarioRe)
     if (sm) {
-      closeBlock()
+      flushSteps()
       const num = sm[2] ? ` ${sm[2]}` : ''
       result.push(`### ${sm[1]}${num}：${sm[3]}`)
       result.push('')
@@ -134,7 +135,7 @@ function formatGherkinInMarkdown(md: string): string {
     // Background heading
     const bm = trimmed.match(bgRe)
     if (bm) {
-      closeBlock()
+      flushSteps()
       result.push(`### Background${bm[1]?.trim() ? '：' + bm[1].trim() : ''}`)
       result.push('')
       continue
@@ -143,40 +144,36 @@ function formatGherkinInMarkdown(md: string): string {
     // Examples heading
     const em2 = trimmed.match(exRe)
     if (em2) {
-      closeBlock()
+      flushSteps()
       result.push(`### Examples${em2[1]?.trim() ? '：' + em2[1].trim() : ''}`)
       result.push('')
       continue
     }
 
-    // Step keywords → open / continue fenced code block
+    // Step keywords → collect for HTML <pre> block
     if (stepKw.test(trimmed)) {
-      if (!inCodeBlock) {
-        result.push('```gherkin')
-        inCodeBlock = true
-      }
-      result.push(trimmed)
+      stepLines.push(trimmed)
       continue
     }
 
-    // Non-empty line while inside code block (data tables, doc-strings, etc.)
-    if (inCodeBlock && trimmed) {
-      result.push(line)
+    // Non-empty line while collecting steps (data tables, doc-strings, etc.)
+    if (stepLines.length > 0 && trimmed) {
+      stepLines.push(trimmed)
       continue
     }
 
-    // Empty line → close code block
+    // Empty line → flush step block
     if (!trimmed) {
-      closeBlock()
+      flushSteps()
       result.push('')
       continue
     }
 
-    // Any other text outside code block
+    // Any other text outside step block
     result.push(line)
   }
 
-  closeBlock()
+  flushSteps()
   return result.join('\n')
 }
 
@@ -571,7 +568,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                           remarkPlugins={[remarkGfm, remarkBreaks]}
                           components={{
                             pre({ children }) {
-                              // Only unwrap <pre> for mermaid blocks (custom MermaidBlock component)
+                              // Only unwrap <pre> for mermaid blocks
                               if (React.isValidElement(children)) {
                                 const cp = children.props as { className?: string }
                                 if (/language-mermaid/.test(cp.className || "")) {
@@ -1011,8 +1008,12 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                       remarkPlugins={[remarkGfm, remarkBreaks]}
                                       components={{
                                         pre({ children }) {
-                                          if (React.isValidElement(children) && typeof children.type !== "string") {
-                                            return <>{children}</>
+                                          // Only unwrap <pre> for mermaid blocks
+                                          if (React.isValidElement(children)) {
+                                            const cp = children.props as { className?: string }
+                                            if (/language-mermaid/.test(cp.className || "")) {
+                                              return <>{children}</>
+                                            }
                                           }
                                           return <pre>{children}</pre>
                                         },
