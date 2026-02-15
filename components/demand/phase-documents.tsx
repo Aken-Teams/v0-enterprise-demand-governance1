@@ -50,6 +50,7 @@ interface PhaseDocumentsProps {
   selectedDocId?: string | null
   userId?: string
   userRole?: string
+  userName?: string
 }
 
 function getFileIconAndColor(fileName: string): { icon: typeof File; color: string } {
@@ -91,6 +92,7 @@ export function PhaseDocuments({
   selectedDocId,
   userId,
   userRole,
+  userName,
 }: PhaseDocumentsProps) {
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [uploadPhase, setUploadPhase] = useState(currentPhase)
@@ -241,11 +243,18 @@ export function PhaseDocuments({
     if (!doc.fileUrl) return
     setPdfLoadingId(doc.id)
     try {
-      await downloadExcelAsPdf(doc.fileUrl, doc.fileName)
+      const now = new Date().toLocaleString("zh-TW", {
+        timeZone: "Asia/Taipei",
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hour12: false,
+      })
+      const watermark = userName ? `${userName} | ${now}` : undefined
+      await downloadExcelAsPdf(doc.fileUrl, doc.fileName, watermark)
     } catch { /* ignore */ } finally {
       setPdfLoadingId(null)
     }
-  }, [])
+  }, [userName])
 
   const renderDocRow = (doc: Document) => {
     const isExternalLink = doc.type === "APP_RESULT" && doc.fileUrl?.startsWith("http")

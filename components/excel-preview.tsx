@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { Loader2 } from "lucide-react"
 
 /* ─── Types ─── */
-interface ExcelSheet { name: string; html: string }
+interface ExcelSheet { name: string; html: string; totalWidth: number }
 interface ExcelPreviewProps {
   fileUrl: string
   fileName?: string
@@ -89,10 +89,10 @@ function decodeCellRef(ref: string): { r: number; c: number } {
   return { r: parseInt(m[2]), c: col }
 }
 
-function worksheetToHtml(ws: any): string {
+function worksheetToHtml(ws: any): { html: string; totalWidth: number } {
   const rowCount = ws.rowCount
   const colCount = ws.columnCount
-  if (!rowCount || !colCount) return ""
+  if (!rowCount || !colCount) return { html: "", totalWidth: 0 }
 
   // Merge map
   const mergeMap = new Map<string, { rowSpan: number; colSpan: number }>()
@@ -110,6 +110,7 @@ function worksheetToHtml(ws: any): string {
   }
 
   let html = "<table>"
+  let totalWidth = 0
 
   // Column widths
   let hasColWidths = false
@@ -122,9 +123,12 @@ function worksheetToHtml(ws: any): string {
     for (let c = 1; c <= colCount; c++) {
       const col = ws.getColumn(c)
       const w = col.width ? Math.round(col.width * 7.5) : 64
+      totalWidth += w
       html += `<col style="width:${w}px">`
     }
     html += "</colgroup>"
+  } else {
+    totalWidth = colCount * 64
   }
 
   ws.eachRow({ includeEmpty: true }, (row: any, rowNumber: number) => {
@@ -231,7 +235,7 @@ function worksheetToHtml(ws: any): string {
   })
 
   html += "</table>"
-  return html
+  return { html, totalWidth }
 }
 
 /* ─── XLSX fallback (for .xls files) ─── */
@@ -241,7 +245,9 @@ async function parseWithXlsx(buf: ArrayBuffer): Promise<ExcelSheet[]> {
   return wb.SheetNames.map((name) => {
     const ws = wb.Sheets[name]
     const html = XLSX.utils.sheet_to_html(ws, { id: `sheet-${name}` })
-    return { name, html }
+    const range = ws["!ref"] ? XLSX.utils.decode_range(ws["!ref"]) : { s: { c: 0 }, e: { c: 0 } }
+    const colCount = range.e.c - range.s.c + 1
+    return { name, html, totalWidth: colCount * 64 }
   })
 }
 
@@ -266,7 +272,8 @@ async function parseExcelFile(fileUrl: string): Promise<ExcelSheet[]> {
       await workbook.xlsx.load(buf)
       sheets = []
       workbook.eachSheet((ws) => {
-        sheets.push({ name: ws.name, html: worksheetToHtml(ws) })
+        const result = worksheetToHtml(ws)
+        sheets.push({ name: ws.name, html: result.html, totalWidth: result.totalWidth })
       })
     } catch {
       sheets = await parseWithXlsx(buf)
@@ -277,41 +284,87 @@ async function parseExcelFile(fileUrl: string): Promise<ExcelSheet[]> {
   return sheets
 }
 
-/* ─── Exported: download Excel as PDF ─── */
-export async function downloadExcelAsPdf(fileUrl: string, fileName?: string) {
-  const sheets = await parseExcelFile(fileUrl)
-  if (!sheets.length) return
+/* ─── Convert pixel col widths → percentages for print ─── */
+function colPxToPercent(html: string): string {
+  return html.replace(/<colgroup>([\s\S]*?)<\/colgroup>/, (_, cols) => {
+    const widths = [...(cols as string).matchAll(/width:(\d+)px/g)].map(m => parseInt(m[1]))
+    if (!widths.length) return `<colgroup>${cols}</colgroup>`
+    const total = widths.reduce((a, b) => a + b, 0)
+    if (total === 0) return `<colgroup>${cols}</colgroup>`
+    const pctCols = widths.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join("")
+    return `<colgroup>${pctCols}</colgroup>`
+  })
+}
 
+/* ─── Exported: download Excel as PDF ─── */
+export async function downloadExcelAsPdf(fileUrl: string, fileName?: string, watermarkText?: string) {
   const title = fileName?.replace(/\.\w+$/, "") || "Excel"
+
+  // Open window IMMEDIATELY in user-gesture context to avoid popup blocker
+  const w = window.open("", "_blank")
+  if (!w) return
+
+  // Show loading state while parsing
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#6b7280;font-size:16px">載入中…</body></html>`)
+
+  const sheets = await parseExcelFile(fileUrl)
+  if (!sheets.length) {
+    w.document.body.textContent = "無法解析 Excel 檔案"
+    return
+  }
+
+  // Build watermark overlay using tiled SVG background
+  let watermarkCss = ""
+  let watermarkDiv = ""
+  if (watermarkText) {
+    const svgText = watermarkText
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="280" height="140"><text transform="rotate(35,140,70)" x="140" y="70" text-anchor="middle" font-size="16" fill="#999" fill-opacity="0.18" font-family="Microsoft JhengHei,PingFang TC,sans-serif">${svgText}</text></svg>`
+    const dataUrl = `data:image/svg+xml,${encodeURIComponent(svg)}`
+    watermarkCss = `.watermark{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;background:url("${dataUrl}") repeat;}`
+    watermarkDiv = `<div class="watermark"></div>`
+  }
+
+  // Convert pixel column widths to percentages so table fits within page
+  const sheetsHtml = sheets.map((s) => {
+    const html = colPxToPercent(s.html)
+    return `<div class="sheet-section">${sheets.length > 1 ? `<div class="sheet-title">${escapeHtml(s.name)}</div>` : ""}${html}</div>`
+  }).join("")
+
   const printHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <style>
 @page { size: A4 landscape; margin: 8mm; }
 @media print {
+  .no-print { display: none !important; }
   .sheet-section { page-break-after: always; }
   .sheet-section:last-child { page-break-after: auto; }
 }
 body { font-family: "Microsoft JhengHei","PingFang TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; padding:0; }
+.toolbar { position: sticky; top: 0; z-index: 10000; background: #fff; border-bottom: 1px solid #e5e7eb; padding: 8px 16px; display: flex; align-items: center; gap: 12px; }
+.toolbar button { padding: 6px 16px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+.toolbar button:hover { background: #1d4ed8; }
+.toolbar span { font-size: 13px; color: #6b7280; }
 .sheet-section { padding: 4mm 0; }
 .sheet-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
-colgroup, col { width: auto !important; }
-table { width: 100% !important; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
+table { width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
 td, th { border: 1px solid #d1d5db; padding: 2px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 th { background-color: #f3f4f6; font-weight: 600; }
+${watermarkCss}
 </style></head><body>
-${sheets.map((s) => `<div class="sheet-section">${sheets.length > 1 ? `<div class="sheet-title">${escapeHtml(s.name)}</div>` : ""}${s.html}</div>`).join("")}
-<script>window.onload=function(){window.print()}<\/script>
+<div class="toolbar no-print">
+  <button onclick="window.print()">列印 / 儲存 PDF</button>
+  <span>${escapeHtml(title)}</span>
+</div>
+${watermarkDiv}
+${sheetsHtml}
 </body></html>`
-  const blob = new Blob([printHtml], { type: "text/html;charset=utf-8" })
-  const url = URL.createObjectURL(blob)
-  const w = window.open(url, "_blank")
-  if (w) {
-    const cleanup = () => URL.revokeObjectURL(url)
-    w.onafterprint = () => { w.close(); cleanup() }
-    setTimeout(cleanup, 60000)
-  } else {
-    URL.revokeObjectURL(url)
-  }
+
+  // Replace loading state with actual content
+  w.document.open()
+  w.document.write(printHtml)
+  w.document.close()
 }
 
 /* ─── Component ─── */

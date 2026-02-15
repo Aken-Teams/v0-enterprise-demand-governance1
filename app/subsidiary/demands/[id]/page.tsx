@@ -1096,6 +1096,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       onRefresh={fetchDemand}
                       onDocumentSelect={setSelectedDoc}
                       selectedDocId={selectedDoc?.id}
+                      userName={user?.name}
                     />
                   </CardContent>
                 </Card>

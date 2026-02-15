@@ -1281,6 +1281,7 @@ export default function DemandDetailPage() {
                       selectedDocId={selectedDoc?.id}
                       userId={user?.id}
                       userRole={user?.role}
+                      userName={user?.name}
                     />
                   </CardContent>
                 </Card>
