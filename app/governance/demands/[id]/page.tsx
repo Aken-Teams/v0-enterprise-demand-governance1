@@ -32,7 +32,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import mermaid from "mermaid"
-import * as XLSX from "xlsx"
+import { ExcelPreview } from "@/components/excel-preview"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -351,8 +351,7 @@ export default function DemandDetailPage() {
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
-  const [excelHtml, setExcelHtml] = useState("")
-  const [excelLoading, setExcelLoading] = useState(false)
+  const [excelReady, setExcelReady] = useState(false)
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
@@ -428,26 +427,11 @@ export default function DemandDetailPage() {
       .finally(() => setTextLoading(false))
   }, [selectedDoc])
 
-  // Fetch & parse Excel for preview
+  // Track when Excel file is selected for preview
   useEffect(() => {
-    if (!selectedDoc?.fileUrl) { setExcelHtml(""); return }
+    if (!selectedDoc?.fileUrl) { setExcelReady(false); return }
     const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
-    if (!["xls", "xlsx"].includes(ext)) return
-    setExcelLoading(true)
-    fetch(selectedDoc.fileUrl)
-      .then((res) => res.arrayBuffer())
-      .then((buf) => {
-        const wb = XLSX.read(buf, { type: "array" })
-        // Render all sheets as HTML tables
-        const html = wb.SheetNames.map((name) => {
-          const ws = wb.Sheets[name]
-          const table = XLSX.utils.sheet_to_html(ws, { id: `sheet-${name}` })
-          return `<div class="mb-4"><p class="text-xs font-semibold text-muted-foreground mb-2">${wb.SheetNames.length > 1 ? name : ""}</p>${table}</div>`
-        }).join("")
-        setExcelHtml(html)
-      })
-      .catch(() => setExcelHtml(""))
-      .finally(() => setExcelLoading(false))
+    setExcelReady(["xls", "xlsx"].includes(ext))
   }, [selectedDoc])
 
   // Trigger LibreOffice server-side conversion for Office files
@@ -1205,27 +1189,11 @@ export default function DemandDetailPage() {
                               )
                             }
 
-                            if (["xls", "xlsx"].includes(ext)) {
-                              if (excelLoading) {
-                                return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                              }
-                              if (excelHtml) {
-                                return (
-                                  <div
-                                    className="w-full max-h-[520px] overflow-auto p-4 text-sm [&_table]:border-collapse [&_table]:min-w-max [&_td]:border [&_td]:border-border [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-xs [&_td]:whitespace-nowrap [&_th]:border [&_th]:border-border [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-xs [&_th]:bg-muted/50 [&_th]:font-medium [&_th]:whitespace-nowrap"
-                                    dangerouslySetInnerHTML={{ __html: excelHtml }}
-                                  />
-                                )
-                              }
+                            if (["xls", "xlsx"].includes(ext) && excelReady) {
                               return (
-                                <div className="text-center space-y-3">
-                                  <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
-                                  <p className="text-sm font-medium">{selectedDoc.fileName}</p>
-                                  <p className="text-xs text-muted-foreground">無法解析此 Excel 檔案</p>
-                                  <Button variant="outline" size="sm" asChild>
-                                    <a href={url} download><Download className="h-3.5 w-3.5 mr-1.5" />下載檔案</a>
-                                  </Button>
-                                </div>
+                                <ExcelPreview
+                                  fileUrl={selectedDoc.fileUrl}
+                                />
                               )
                             }
 
