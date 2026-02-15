@@ -335,46 +335,22 @@ export default function GovernanceAnalyticsPage() {
 
           {/* ====== 指標分析 ====== */}
           <TabsContent value="metrics">
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">準時交付率</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-4xl font-bold text-foreground">
-                    {d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {d.performance.onTimeCount} / {d.performance.deliverableTotal} 筆準時完成開發
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">開案通過率</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-4xl font-bold text-foreground">
-                    {d.performance.passTotal > 0 ? `${d.performance.passRate}%` : "—"}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {d.performance.passClosed} / {d.performance.passTotal} 筆完成結案
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">平均開發天數</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-4xl font-bold text-foreground">
-                    {d.kpi.avgDaysCount > 0 ? `${d.kpi.avgDays} 天` : "—"}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {d.kpi.avgDaysCount > 0 ? `${d.kpi.avgDaysCount} 筆有實際開發日期` : "尚無工程師填寫實際日期"}
-                  </p>
-                </CardContent>
-              </Card>
+            <div className="grid grid-cols-3 divide-x rounded-lg border bg-card text-center">
+              <div className="px-4 py-3">
+                <p className="text-xs text-muted-foreground">準時交付率</p>
+                <p className="text-2xl font-bold mt-0.5">{d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"}</p>
+                <p className="text-[11px] text-muted-foreground">{d.performance.onTimeCount}/{d.performance.deliverableTotal} 筆準時</p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-xs text-muted-foreground">開案通過率</p>
+                <p className="text-2xl font-bold mt-0.5">{d.performance.passTotal > 0 ? `${d.performance.passRate}%` : "—"}</p>
+                <p className="text-[11px] text-muted-foreground">{d.performance.passClosed}/{d.performance.passTotal} 筆結案</p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-xs text-muted-foreground">平均開發天數</p>
+                <p className="text-2xl font-bold mt-0.5">{d.kpi.avgDaysCount > 0 ? `${d.kpi.avgDays} 天` : "—"}</p>
+                <p className="text-[11px] text-muted-foreground">{d.kpi.avgDaysCount > 0 ? `${d.kpi.avgDaysCount} 筆` : "尚無資料"}</p>
+              </div>
             </div>
 
             {/* Developer workload */}
