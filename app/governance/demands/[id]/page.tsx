@@ -146,6 +146,137 @@ mermaid.initialize({
   themeVariables: { background: "transparent", primaryColor: "#dbeafe", primaryTextColor: "#1e3a5f", lineColor: "#94a3b8" },
 })
 
+/** Pre-process raw Gherkin / BDD text into well-structured Markdown.
+ *  Feature / Scenario lines → headings; Given/When/Then blocks → fenced code blocks. */
+function formatGherkinInMarkdown(md: string): string {
+  // ── Step 1: Unwrap ```gherkin fenced code blocks ──
+  // ReactMarkdown may fail to render gherkin fences correctly when custom
+  // code components are used. Unwrap them so content is processed below.
+  let src = md
+  if (/```gherkin/.test(src)) {
+    src = src.replace(/```gherkin\s*\n([\s\S]*?)```/g, '$1')
+  }
+  // Non-gherkin code blocks (e.g. mermaid) → leave as-is
+  if (/```/.test(src)) return src
+
+  // ── Step 2: Restore line breaks in concatenated Gherkin ──
+  // Content may have been stored with newlines stripped into one line,
+  // possibly wrapped in single backticks. Detect and expand.
+  const kwPattern = '(?:Feature\\s*[\\d.]*\\s*[:：]|Scenario(?:\\s+Outline)?\\s*[\\d.]*\\s*[:：]|Background\\s*[:：]|Examples\\s*[:：]|Given\\b|When\\b|Then\\b|And\\b|But\\b)'
+  const kwCountRe = new RegExp(kwPattern, 'g')
+  const splitBeforeKwRe = new RegExp(`(\\S)\\s+(?=${kwPattern})`, 'g')
+
+  const expanded = src.split('\n').flatMap((raw) => {
+    let line = raw.trim()
+    // Strip wrapping single backticks (inline code that wraps Gherkin)
+    if (/^`[^`]+`$/.test(line)) {
+      line = line.slice(1, -1).trim()
+    }
+    // If ≥3 Gherkin keywords on one line → likely concatenated, split them
+    const kwHits = line.match(kwCountRe)
+    if (kwHits && kwHits.length >= 3) {
+      return line.replace(splitBeforeKwRe, '$1\n').split('\n')
+    }
+    return [line]
+  }).join('\n')
+
+  // ── Step 3: Convert Gherkin keywords into structured Markdown ──
+  const lines = expanded.split('\n')
+  const featureRe = /^Feature\s*([\d.]*)\s*[:：]\s*(.+)/
+  const scenarioRe = /^(Scenario(?:\s+Outline)?)\s*([\d.]*)\s*[:：]\s*(.+)/
+  const bgRe = /^Background\s*[:：](.*)/
+  const exRe = /^Examples\s*[:：](.*)/
+  const stepKw = /^(Given|When|Then|And|But)\b/
+
+  // Detect whether the content contains Gherkin structure
+  const hasGherkin = lines.some((l) => {
+    const t = l.trim()
+    return featureRe.test(t) || scenarioRe.test(t) || stepKw.test(t)
+  })
+  if (!hasGherkin) return src
+
+  const result: string[] = []
+  let inCodeBlock = false
+  const closeBlock = () => {
+    if (inCodeBlock) {
+      result.push('```')
+      result.push('')
+      inCodeBlock = false
+    }
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    // Feature heading
+    const fm = trimmed.match(featureRe)
+    if (fm) {
+      closeBlock()
+      const num = fm[1] ? ` ${fm[1]}` : ''
+      result.push(`## Feature${num}：${fm[2]}`)
+      result.push('')
+      continue
+    }
+
+    // Scenario heading
+    const sm = trimmed.match(scenarioRe)
+    if (sm) {
+      closeBlock()
+      const num = sm[2] ? ` ${sm[2]}` : ''
+      result.push(`### ${sm[1]}${num}：${sm[3]}`)
+      result.push('')
+      continue
+    }
+
+    // Background heading
+    const bm = trimmed.match(bgRe)
+    if (bm) {
+      closeBlock()
+      result.push(`### Background${bm[1]?.trim() ? '：' + bm[1].trim() : ''}`)
+      result.push('')
+      continue
+    }
+
+    // Examples heading
+    const em2 = trimmed.match(exRe)
+    if (em2) {
+      closeBlock()
+      result.push(`### Examples${em2[1]?.trim() ? '：' + em2[1].trim() : ''}`)
+      result.push('')
+      continue
+    }
+
+    // Step keywords → open / continue fenced code block
+    if (stepKw.test(trimmed)) {
+      if (!inCodeBlock) {
+        result.push('```gherkin')
+        inCodeBlock = true
+      }
+      result.push(trimmed)
+      continue
+    }
+
+    // Non-empty line while inside code block (data tables, doc-strings, etc.)
+    if (inCodeBlock && trimmed) {
+      result.push(line)
+      continue
+    }
+
+    // Empty line → close code block
+    if (!trimmed) {
+      closeBlock()
+      result.push('')
+      continue
+    }
+
+    // Any other text outside code block
+    result.push(line)
+  }
+
+  closeBlock()
+  return result.join('\n')
+}
+
 function MermaidBlock({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading")
@@ -741,8 +872,31 @@ export default function DemandDetailPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-0">
-                    <div className="pb-4">
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{demand.description}</p>
+                    <div className="pb-4 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                        components={{
+                          pre({ children }) {
+                            // Only unwrap <pre> for mermaid blocks (custom MermaidBlock component)
+                            if (React.isValidElement(children)) {
+                              const cp = children.props as { className?: string }
+                              if (/language-mermaid/.test(cp.className || "")) {
+                                return <>{children}</>
+                              }
+                            }
+                            return <pre>{children}</pre>
+                          },
+                          code({ className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || "")
+                            if (match?.[1] === "mermaid") {
+                              return <MermaidBlock code={String(children).trim()} />
+                            }
+                            return <code className={className} {...props}>{children}</code>
+                          },
+                        }}
+                      >
+                        {formatGherkinInMarkdown(demand.description)}
+                      </ReactMarkdown>
                     </div>
                     {demand.painPoint && (
                       <>
@@ -1039,7 +1193,7 @@ export default function DemandDetailPage() {
                                         },
                                       }}
                                     >
-                                      {textContent}
+                                      {formatGherkinInMarkdown(textContent)}
                                     </ReactMarkdown>
                                   </div>
                                 )
