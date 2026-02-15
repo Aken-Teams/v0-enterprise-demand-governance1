@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
-import { Loader2, FileDown } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 /* ─── Types ─── */
 interface ExcelSheet { name: string; html: string }
@@ -245,6 +245,75 @@ async function parseWithXlsx(buf: ArrayBuffer): Promise<ExcelSheet[]> {
   })
 }
 
+/* ─── Parse cache (avoids re-fetching / re-parsing for PDF) ─── */
+const sheetsCache = new Map<string, ExcelSheet[]>()
+
+async function parseExcelFile(fileUrl: string): Promise<ExcelSheet[]> {
+  const cached = sheetsCache.get(fileUrl)
+  if (cached) return cached
+
+  const res = await fetch(fileUrl)
+  const buf = await res.arrayBuffer()
+  const ext = fileUrl.split(".").pop()?.toLowerCase() || ""
+
+  let sheets: ExcelSheet[]
+  if (ext === "xls") {
+    sheets = await parseWithXlsx(buf)
+  } else {
+    try {
+      const ExcelJS = await import("exceljs")
+      const workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(buf)
+      sheets = []
+      workbook.eachSheet((ws) => {
+        sheets.push({ name: ws.name, html: worksheetToHtml(ws) })
+      })
+    } catch {
+      sheets = await parseWithXlsx(buf)
+    }
+  }
+
+  sheetsCache.set(fileUrl, sheets)
+  return sheets
+}
+
+/* ─── Exported: download Excel as PDF ─── */
+export async function downloadExcelAsPdf(fileUrl: string, fileName?: string) {
+  const sheets = await parseExcelFile(fileUrl)
+  if (!sheets.length) return
+
+  const title = fileName?.replace(/\.\w+$/, "") || "Excel"
+  const printHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+@page { size: A4 landscape; margin: 8mm; }
+@media print {
+  .sheet-section { page-break-after: always; }
+  .sheet-section:last-child { page-break-after: auto; }
+}
+body { font-family: "Microsoft JhengHei","PingFang TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; padding:0; }
+.sheet-section { padding: 4mm 0; }
+.sheet-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
+colgroup, col { width: auto !important; }
+table { width: 100% !important; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
+td, th { border: 1px solid #d1d5db; padding: 2px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+th { background-color: #f3f4f6; font-weight: 600; }
+</style></head><body>
+${sheets.map((s) => `<div class="sheet-section">${sheets.length > 1 ? `<div class="sheet-title">${escapeHtml(s.name)}</div>` : ""}${s.html}</div>`).join("")}
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`
+  const blob = new Blob([printHtml], { type: "text/html;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const w = window.open(url, "_blank")
+  if (w) {
+    const cleanup = () => URL.revokeObjectURL(url)
+    w.onafterprint = () => { w.close(); cleanup() }
+    setTimeout(cleanup, 60000)
+  } else {
+    URL.revokeObjectURL(url)
+  }
+}
+
 /* ─── Component ─── */
 export function ExcelPreview({ fileUrl, fileName, className }: ExcelPreviewProps) {
   const [sheets, setSheets] = useState<ExcelSheet[]>([])
@@ -259,76 +328,13 @@ export function ExcelPreview({ fileUrl, fileName, className }: ExcelPreviewProps
     setSheets([])
     setActiveSheet(0)
 
-    ;(async () => {
-      try {
-        const res = await fetch(fileUrl)
-        const buf = await res.arrayBuffer()
-        if (cancelled) return
-
-        const ext = fileUrl.split(".").pop()?.toLowerCase() || ""
-        let parsed: ExcelSheet[] = []
-
-        if (ext === "xls") {
-          // Old format – use XLSX (SheetJS) fallback
-          parsed = await parseWithXlsx(buf)
-        } else {
-          // .xlsx – use ExcelJS for full style support
-          try {
-            const ExcelJS = await import("exceljs")
-            const workbook = new ExcelJS.Workbook()
-            await workbook.xlsx.load(buf)
-            if (cancelled) return
-            workbook.eachSheet((ws) => {
-              parsed.push({ name: ws.name, html: worksheetToHtml(ws) })
-            })
-          } catch {
-            // ExcelJS failed – fall back to XLSX
-            parsed = await parseWithXlsx(buf)
-          }
-        }
-
-        if (!cancelled) setSheets(parsed)
-      } catch {
-        if (!cancelled) setError(true)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
+    parseExcelFile(fileUrl)
+      .then((parsed) => { if (!cancelled) setSheets(parsed) })
+      .catch(() => { if (!cancelled) setError(true) })
+      .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
   }, [fileUrl])
-
-  const handleDownloadPdf = useCallback(() => {
-    const title = fileName?.replace(/\.\w+$/, "") || "Excel"
-    const printHtml = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
-<style>
-@page { size: A4 landscape; margin: 8mm; }
-@media print {
-  .sheet-section { page-break-after: always; }
-  .sheet-section:last-child { page-break-after: auto; }
-}
-body { font-family: "Microsoft JhengHei","PingFang TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; padding:0; }
-.sheet-section { padding: 4mm 0; }
-.sheet-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
-table { width: 100%; border-collapse: collapse; font-size: 9px; table-layout: auto; }
-td, th { border: 1px solid #d1d5db; padding: 2px 5px; }
-th { background-color: #f3f4f6; font-weight: 600; }
-</style></head><body>
-${sheets.map((s) => `<div class="sheet-section">${sheets.length > 1 ? `<div class="sheet-title">${escapeHtml(s.name)}</div>` : ""}${s.html}</div>`).join("")}
-<script>window.onload=function(){window.print()}<\/script>
-</body></html>`
-    const blob = new Blob([printHtml], { type: "text/html;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const w = window.open(url, "_blank")
-    if (w) {
-      const cleanup = () => URL.revokeObjectURL(url)
-      w.onafterprint = () => { w.close(); cleanup() }
-      setTimeout(cleanup, 60000) // fallback cleanup
-    } else {
-      URL.revokeObjectURL(url)
-    }
-  }, [sheets, fileName])
 
   if (loading) {
     return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
@@ -338,10 +344,10 @@ ${sheets.map((s) => `<div class="sheet-section">${sheets.length > 1 ? `<div clas
 
   return (
     <div className={cn("flex flex-col w-full h-full", className)}>
-      {/* Sheet tabs + PDF download */}
-      <div className="flex items-center border-b border-border bg-muted/30 shrink-0">
-        <div className="flex overflow-x-auto flex-1 min-w-0">
-          {sheets.length > 1 ? sheets.map((sheet, i) => (
+      {/* Sheet tabs */}
+      {sheets.length > 1 && (
+        <div className="flex border-b border-border bg-muted/30 overflow-x-auto shrink-0">
+          {sheets.map((sheet, i) => (
             <button
               key={i}
               onClick={() => setActiveSheet(i)}
@@ -354,19 +360,9 @@ ${sheets.map((s) => `<div class="sheet-section">${sheets.length > 1 ? `<div clas
             >
               {sheet.name}
             </button>
-          )) : (
-            <span className="px-3 py-1.5 text-xs text-muted-foreground">{fileName || "預覽"}</span>
-          )}
+          ))}
         </div>
-        <button
-          onClick={handleDownloadPdf}
-          className="shrink-0 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-          title="下載 PDF"
-        >
-          <FileDown className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">PDF</span>
-        </button>
-      </div>
+      )}
 
       {/* Sheet content – left-aligned with horizontal scroll */}
       <div

@@ -14,6 +14,7 @@ import {
   Download, Upload, Loader2, Check, Circle, ExternalLink, Link, Trash2,
   ChevronRight, ChevronLeft,
 } from "lucide-react"
+import { downloadExcelAsPdf } from "@/components/excel-preview"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -203,6 +204,7 @@ export function PhaseDocuments({
   }
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null)
 
   const handleDownload = useCallback(async (doc: Document) => {
     if (!token) return
@@ -235,6 +237,16 @@ export function PhaseDocuments({
     return unique.map((t) => ({ value: t, label: DOCUMENT_TYPE_LABELS[t] || t }))
   }
 
+  const handlePdfDownload = useCallback(async (doc: Document) => {
+    if (!doc.fileUrl) return
+    setPdfLoadingId(doc.id)
+    try {
+      await downloadExcelAsPdf(doc.fileUrl, doc.fileName)
+    } catch { /* ignore */ } finally {
+      setPdfLoadingId(null)
+    }
+  }, [])
+
   const renderDocRow = (doc: Document) => {
     const isExternalLink = doc.type === "APP_RESULT" && doc.fileUrl?.startsWith("http")
     const { icon: Icon, color: iconColor } = isExternalLink
@@ -244,6 +256,8 @@ export function PhaseDocuments({
     const isAdmin = userRole === "admin"
     const docCanDownload = canDownload && (isAdmin || isOwnDoc)
     const docCanDelete = canUpload && (isAdmin || isOwnDoc)
+    const ext = doc.fileName.split(".").pop()?.toLowerCase() || ""
+    const isExcel = ["xls", "xlsx"].includes(ext)
     return (
       <div
         key={doc.id}
@@ -282,10 +296,11 @@ export function PhaseDocuments({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={() => handleDownload(doc)}
-              disabled={downloadingId === doc.id}
+              onClick={() => isExcel ? handlePdfDownload(doc) : handleDownload(doc)}
+              disabled={isExcel ? pdfLoadingId === doc.id : downloadingId === doc.id}
+              title="下載 PDF"
             >
-              {downloadingId === doc.id
+              {(isExcel ? pdfLoadingId === doc.id : downloadingId === doc.id)
                 ? <Loader2 className="h-4 w-4 animate-spin" />
                 : <Download className="h-4 w-4" />}
             </Button>
