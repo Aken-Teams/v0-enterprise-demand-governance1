@@ -1028,6 +1028,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 <div className="absolute inset-0">
                                   <ExcelPreview
                                     fileUrl={selectedDoc.fileUrl}
+                                    fileName={selectedDoc.fileName}
                                   />
                                 </div>
                               )

@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
-import { Loader2 } from "lucide-react"
+import { Loader2, FileDown } from "lucide-react"
 
 /* ─── Types ─── */
 interface ExcelSheet { name: string; html: string }
 interface ExcelPreviewProps {
   fileUrl: string
+  fileName?: string
   className?: string
 }
 
@@ -245,7 +246,7 @@ async function parseWithXlsx(buf: ArrayBuffer): Promise<ExcelSheet[]> {
 }
 
 /* ─── Component ─── */
-export function ExcelPreview({ fileUrl, className }: ExcelPreviewProps) {
+export function ExcelPreview({ fileUrl, fileName, className }: ExcelPreviewProps) {
   const [sheets, setSheets] = useState<ExcelSheet[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -297,6 +298,38 @@ export function ExcelPreview({ fileUrl, className }: ExcelPreviewProps) {
     return () => { cancelled = true }
   }, [fileUrl])
 
+  const handleDownloadPdf = useCallback(() => {
+    const title = fileName?.replace(/\.\w+$/, "") || "Excel"
+    const printHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+@page { size: A4 landscape; margin: 8mm; }
+@media print {
+  .sheet-section { page-break-after: always; }
+  .sheet-section:last-child { page-break-after: auto; }
+}
+body { font-family: "Microsoft JhengHei","PingFang TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; padding:0; }
+.sheet-section { padding: 4mm 0; }
+.sheet-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
+table { width: 100%; border-collapse: collapse; font-size: 9px; table-layout: auto; }
+td, th { border: 1px solid #d1d5db; padding: 2px 5px; }
+th { background-color: #f3f4f6; font-weight: 600; }
+</style></head><body>
+${sheets.map((s) => `<div class="sheet-section">${sheets.length > 1 ? `<div class="sheet-title">${escapeHtml(s.name)}</div>` : ""}${s.html}</div>`).join("")}
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`
+    const blob = new Blob([printHtml], { type: "text/html;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const w = window.open(url, "_blank")
+    if (w) {
+      const cleanup = () => URL.revokeObjectURL(url)
+      w.onafterprint = () => { w.close(); cleanup() }
+      setTimeout(cleanup, 60000) // fallback cleanup
+    } else {
+      URL.revokeObjectURL(url)
+    }
+  }, [sheets, fileName])
+
   if (loading) {
     return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
   }
@@ -305,10 +338,10 @@ export function ExcelPreview({ fileUrl, className }: ExcelPreviewProps) {
 
   return (
     <div className={cn("flex flex-col w-full h-full", className)}>
-      {/* Sheet tabs */}
-      {sheets.length > 1 && (
-        <div className="flex border-b border-border bg-muted/30 overflow-x-auto shrink-0">
-          {sheets.map((sheet, i) => (
+      {/* Sheet tabs + PDF download */}
+      <div className="flex items-center border-b border-border bg-muted/30 shrink-0">
+        <div className="flex overflow-x-auto flex-1 min-w-0">
+          {sheets.length > 1 ? sheets.map((sheet, i) => (
             <button
               key={i}
               onClick={() => setActiveSheet(i)}
@@ -321,9 +354,19 @@ export function ExcelPreview({ fileUrl, className }: ExcelPreviewProps) {
             >
               {sheet.name}
             </button>
-          ))}
+          )) : (
+            <span className="px-3 py-1.5 text-xs text-muted-foreground">{fileName || "預覽"}</span>
+          )}
         </div>
-      )}
+        <button
+          onClick={handleDownloadPdf}
+          className="shrink-0 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          title="下載 PDF"
+        >
+          <FileDown className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">PDF</span>
+        </button>
+      </div>
 
       {/* Sheet content – left-aligned with horizontal scroll */}
       <div

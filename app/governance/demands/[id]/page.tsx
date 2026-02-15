@@ -1194,6 +1194,7 @@ export default function DemandDetailPage() {
                                 <div className="absolute inset-0">
                                   <ExcelPreview
                                     fileUrl={selectedDoc.fileUrl}
+                                    fileName={selectedDoc.fileName}
                                   />
                                 </div>
                               )
