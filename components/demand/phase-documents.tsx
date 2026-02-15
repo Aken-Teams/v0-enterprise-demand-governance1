@@ -244,8 +244,6 @@ export function PhaseDocuments({
     const isAdmin = userRole === "admin"
     const docCanDownload = canDownload && (isAdmin || isOwnDoc)
     const docCanDelete = canUpload && (isAdmin || isOwnDoc)
-    const ext = doc.fileName.split(".").pop()?.toLowerCase() || ""
-    const isExcel = ["xls", "xlsx"].includes(ext)
     return (
       <div
         key={doc.id}

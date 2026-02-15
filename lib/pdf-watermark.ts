@@ -772,6 +772,30 @@ export async function officeToPdf(
   try {
     await writeFile(inputPath, fileBytes)
 
+    // For Excel files: set page setup to landscape + fit all columns on one page
+    if (ext === "xlsx") {
+      try {
+        const ExcelJS = await import("exceljs")
+        const workbook = new ExcelJS.Workbook()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await workbook.xlsx.load(fileBytes as any)
+        workbook.eachSheet((ws: any) => {
+          ws.pageSetup = {
+            ...ws.pageSetup,
+            orientation: "landscape" as const,
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 0,
+            paperSize: 9, // A4
+          }
+        })
+        const modifiedBuffer = await workbook.xlsx.writeBuffer()
+        await writeFile(inputPath, Buffer.from(modifiedBuffer))
+      } catch (e) {
+        console.warn("Failed to modify Excel page setup, using original:", e)
+      }
+    }
+
     let converted = false
     for (const soffice of SOFFICE_PATHS) {
       try {
