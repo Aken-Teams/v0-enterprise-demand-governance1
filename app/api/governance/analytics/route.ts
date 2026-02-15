@@ -293,13 +293,20 @@ export async function GET(request: NextRequest) {
     })
 
     // --- Developer workload ---
-    const devWorkload: Record<string, { name: string; count: number; sp: number }> = {}
+    const devWorkload: Record<string, { name: string; count: number; completedSp: number; committedSp: number; pendingSp: number }> = {}
     for (const d of demands) {
-      if (!activeStatuses.has(d.status) || !d.developer) continue
+      if (d.status === "REJECTED" || !d.developer) continue
       const key = d.developer.name
-      if (!devWorkload[key]) devWorkload[key] = { name: key, count: 0, sp: 0 }
+      if (!devWorkload[key]) devWorkload[key] = { name: key, count: 0, completedSp: 0, committedSp: 0, pendingSp: 0 }
       devWorkload[key].count++
-      devWorkload[key].sp += d.confirmedSp ?? d.estimatedSp
+      const sp = d.confirmedSp ?? d.estimatedSp ?? 0
+      if (d.status === "CLOSED") {
+        devWorkload[key].completedSp += sp
+      } else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") {
+        devWorkload[key].committedSp += sp
+      } else {
+        devWorkload[key].pendingSp += sp
+      }
     }
 
     return NextResponse.json({
@@ -335,7 +342,7 @@ export async function GET(request: NextRequest) {
         staleDemands,
       },
       phaseAvgDays,
-      devWorkload: Object.values(devWorkload).sort((a, b) => b.sp - a.sp),
+      devWorkload: Object.values(devWorkload).sort((a, b) => (b.completedSp + b.committedSp + b.pendingSp) - (a.completedSp + a.committedSp + a.pendingSp)),
     })
   } catch (error) {
     if (error instanceof AuthError) {

@@ -71,7 +71,7 @@ interface AnalyticsData {
     }[]
   }
   phaseAvgDays: { phase: string; avgDays: number; count: number }[]
-  devWorkload: { name: string; count: number; sp: number }[]
+  devWorkload: { name: string; count: number; completedSp: number; committedSp: number; pendingSp: number }[]
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -355,27 +355,44 @@ export default function GovernanceAnalyticsPage() {
 
             {/* Developer workload */}
             {d.devWorkload.length > 0 && (
-              <Card className="mt-4">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-4 w-4" />
+              <div className="mt-4 rounded-lg border bg-card overflow-hidden">
+                <div className="px-4 py-2.5 border-b bg-muted/30">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
                     開發人員負載
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {d.devWorkload.map((dev) => (
-                      <div key={dev.name} className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{dev.name}</span>
-                        <div className="flex items-center gap-3">
-                          <Badge variant="secondary">{dev.count} 筆需求</Badge>
-                          <Badge variant="outline">{dev.sp} SP</Badge>
+                  </p>
+                </div>
+                <div className="divide-y">
+                  {d.devWorkload.map((dev) => {
+                    const total = dev.completedSp + dev.committedSp + dev.pendingSp
+                    const barW = total > 0 ? 100 : 0
+                    const completedPct = total > 0 ? (dev.completedSp / total) * barW : 0
+                    const committedPct = total > 0 ? (dev.committedSp / total) * barW : 0
+                    return (
+                      <div key={dev.name} className="px-4 py-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{dev.name}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">{dev.count} 筆 · {total} SP</span>
                         </div>
+                        {total > 0 && (
+                          <>
+                            <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+                              {dev.completedSp > 0 && <div className="bg-emerald-500" style={{ width: `${completedPct}%` }} />}
+                              {dev.committedSp > 0 && <div className="bg-blue-500" style={{ width: `${committedPct}%` }} />}
+                              {dev.pendingSp > 0 && <div className="bg-amber-400" style={{ width: `${100 - completedPct - committedPct}%` }} />}
+                            </div>
+                            <div className="flex gap-3 text-[11px] text-muted-foreground">
+                              {dev.completedSp > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />已完成 {dev.completedSp}</span>}
+                              {dev.committedSp > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-blue-500" />已承諾 {dev.committedSp}</span>}
+                              {dev.pendingSp > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" />預估 {dev.pendingSp}</span>}
+                            </div>
+                          </>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    )
+                  })}
+                </div>
+              </div>
             )}
 
             {/* Risk cards */}
