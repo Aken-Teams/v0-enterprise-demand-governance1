@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Settings, Eye, EyeOff, ArrowRight, ArrowLeft, Mail } from "lucide-react"
+import { Building2, Settings, Eye, EyeOff, ArrowRight } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select"
 import { useAuth } from "@/hooks/use-auth"
 
-type FormView = "login" | "forgot-password"
 type LoginType = "company" | "admin"
 type AdminRoleType = "admin" | "jv-team" | "zhaoi-team"
 
@@ -58,9 +57,6 @@ export default function HomePage() {
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [formView, setFormView] = useState<FormView>("login")
-  const [forgotEmail, setForgotEmail] = useState("")
-  const [forgotSubmitted, setForgotSubmitted] = useState(false)
   const [selectedAdminRole, setSelectedAdminRole] = useState<AdminRole>(adminRoles[0])
 
   const currentEmail = loginType === "company"
@@ -98,21 +94,6 @@ export default function HomePage() {
       setError("網路錯誤，請稍後再試")
       setIsLoading(false)
     }
-  }
-
-  const handleForgotPassword = (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
-      setForgotSubmitted(true)
-    }, 500)
-  }
-
-  const handleBackToLogin = () => {
-    setFormView("login")
-    setForgotEmail("")
-    setForgotSubmitted(false)
   }
 
   return (
@@ -158,7 +139,6 @@ export default function HomePage() {
 
               {/* Login Card */}
               <Card className="overflow-hidden shadow-xl">
-                {formView === "login" ? (
                   <>
                     {/* Login Type Toggle */}
                     <div className="border-b bg-gray-50 px-6 py-4">
@@ -308,21 +288,6 @@ export default function HomePage() {
                           <p className="text-sm text-red-500 font-medium">{error}</p>
                         )}
 
-                        {/* 選項 */}
-                        <div className="flex items-center justify-between text-sm">
-                          <label className="flex items-center gap-2 cursor-pointer text-gray-600">
-                            <input type="checkbox" className="rounded border-gray-300" />
-                            <span>記住我</span>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setFormView("forgot-password")}
-                            className="text-primary hover:underline"
-                          >
-                            忘記密碼？
-                          </button>
-                        </div>
-
                         {/* 登入按鈕 */}
                         <Button
                           type="submit"
@@ -339,82 +304,6 @@ export default function HomePage() {
                       </form>
                     </CardContent>
                   </>
-                ) : (
-                  <>
-                    {/* Forgot Password Header */}
-                    <div className="border-b bg-gray-50 px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                          <Mail className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900">忘記密碼</h3>
-                          <p className="text-sm text-gray-500">輸入您的電子郵件以重設密碼</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Forgot Password Form */}
-                    <CardContent className="p-6">
-                      {forgotSubmitted ? (
-                        <div className="space-y-4 text-center">
-                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                            <Mail className="h-6 w-6 text-green-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-gray-900">郵件已發送</h4>
-                            <p className="mt-1 text-sm text-gray-500">
-                              重設密碼連結已發送至 {forgotEmail}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full h-11"
-                            onClick={handleBackToLogin}
-                          >
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            返回登入
-                          </Button>
-                        </div>
-                      ) : (
-                        <form onSubmit={handleForgotPassword} className="space-y-4">
-                          <div>
-                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                              電子郵件
-                            </label>
-                            <Input
-                              type="email"
-                              placeholder="請輸入您的電子郵件"
-                              value={forgotEmail}
-                              onChange={(e) => setForgotEmail(e.target.value)}
-                              className="h-11"
-                              required
-                            />
-                          </div>
-
-                          <Button
-                            type="submit"
-                            className="w-full h-11 bg-primary hover:bg-primary/90 shadow-lg"
-                            disabled={isLoading || !forgotEmail}
-                          >
-                            {isLoading ? "發送中..." : "發送重設連結"}
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                          </Button>
-
-                          <button
-                            type="button"
-                            onClick={handleBackToLogin}
-                            className="flex w-full items-center justify-center gap-2 text-sm text-gray-500 hover:text-gray-700"
-                          >
-                            <ArrowLeft className="h-4 w-4" />
-                            返回登入
-                          </button>
-                        </form>
-                      )}
-                    </CardContent>
-                  </>
-                )}
               </Card>
             </div>
           </div>
