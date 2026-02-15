@@ -1025,9 +1025,11 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
                             if (["xls", "xlsx"].includes(ext) && excelReady) {
                               return (
-                                <ExcelPreview
-                                  fileUrl={selectedDoc.fileUrl}
-                                />
+                                <div className="absolute inset-0">
+                                  <ExcelPreview
+                                    fileUrl={selectedDoc.fileUrl}
+                                  />
+                                </div>
                               )
                             }
 

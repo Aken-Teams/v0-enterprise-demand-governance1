@@ -304,7 +304,7 @@ export function ExcelPreview({ fileUrl, className }: ExcelPreviewProps) {
   if (error || sheets.length === 0) return null
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn("flex flex-col w-full h-full", className)}>
       {/* Sheet tabs */}
       {sheets.length > 1 && (
         <div className="flex border-b border-border bg-muted/30 overflow-x-auto shrink-0">
@@ -325,9 +325,9 @@ export function ExcelPreview({ fileUrl, className }: ExcelPreviewProps) {
         </div>
       )}
 
-      {/* Sheet content */}
+      {/* Sheet content – left-aligned with horizontal scroll */}
       <div
-        className="w-full max-h-[520px] overflow-auto p-4 text-sm [&_table]:border-collapse [&_table]:min-w-max [&_td]:border [&_td]:border-border [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-xs [&_td]:whitespace-nowrap [&_th]:border [&_th]:border-border [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-xs [&_th]:bg-muted/50 [&_th]:font-medium [&_th]:whitespace-nowrap"
+        className="w-full flex-1 overflow-x-auto overflow-y-auto p-4 text-sm [&_table]:border-collapse [&_table]:min-w-max [&_td]:border [&_td]:border-border [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-xs [&_td]:whitespace-nowrap [&_th]:border [&_th]:border-border [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-xs [&_th]:bg-muted/50 [&_th]:font-medium [&_th]:whitespace-nowrap"
         dangerouslySetInnerHTML={{ __html: sheets[activeSheet]?.html || "" }}
       />
     </div>

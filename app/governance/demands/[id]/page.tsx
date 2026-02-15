@@ -1191,9 +1191,11 @@ export default function DemandDetailPage() {
 
                             if (["xls", "xlsx"].includes(ext) && excelReady) {
                               return (
-                                <ExcelPreview
-                                  fileUrl={selectedDoc.fileUrl}
-                                />
+                                <div className="absolute inset-0">
+                                  <ExcelPreview
+                                    fileUrl={selectedDoc.fileUrl}
+                                  />
+                                </div>
                               )
                             }
 
