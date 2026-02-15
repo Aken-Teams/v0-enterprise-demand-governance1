@@ -9,8 +9,8 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "GOVORA - 照亮企業決策的治理平台",
-  description: "Governance × Aurora - 讓企業需求、資源與決策被清楚照亮的系統",
+  title: "JV 需求管理平台",
+  description: "企業 IT 需求管理 — 需求提案、資源配置、開發追蹤、交付管控",
   generator: "v0.app",
   icons: {
     icon: [

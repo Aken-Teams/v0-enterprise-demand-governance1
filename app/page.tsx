@@ -105,7 +105,7 @@ export default function HomePage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-blue-600 shadow-md">
               <Building2 className="h-5 w-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900">GOVORA</span>
+            <span className="text-xl font-bold text-gray-900">JV 需求管理平台</span>
           </div>
         </div>
       </header>
@@ -130,11 +130,10 @@ export default function HomePage() {
             <div>
               {/* Hero Text */}
               <div className="mb-8">
-                <h1 className="mb-4 text-3xl font-bold tracking-tight text-gray-900 lg:text-4xl">
-                  GOVORA - Governance × Aurora
-                  <br />
-                  <span className="text-primary">協作管理平台</span>
+                <h1 className="mb-2 text-3xl font-bold tracking-tight text-gray-900 lg:text-4xl">
+                  JV 需求管理平台
                 </h1>
+                <p className="text-base text-gray-500">需求提案 · 資源配置 · 開發追蹤 · 交付管控</p>
               </div>
 
               {/* Login Card */}
@@ -318,9 +317,9 @@ export default function HomePage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <Building2 className="h-4 w-4 text-white" />
               </div>
-              <span className="font-semibold text-gray-900">GOVORA</span>
+              <span className="font-semibold text-gray-900">JV 需求管理平台</span>
             </div>
-            <p className="text-sm text-gray-500">© 2025 GOVORA - 照亮企業決策的治理平台</p>
+            <p className="text-sm text-gray-500">© 2025 JV 需求管理平台 Powered by <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">智合科技</a></p>
           </div>
         </div>
       </footer>

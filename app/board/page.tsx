@@ -8,7 +8,7 @@ export default function BoardDashboardPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">董事會總覽</h1>
-          <p className="text-muted-foreground">GOVORA 治理與資源投入概況</p>
+          <p className="text-muted-foreground">治理與資源投入概況</p>
         </div>
 
         {/* Executive Summary */}
