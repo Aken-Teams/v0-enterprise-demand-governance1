@@ -73,7 +73,7 @@ export default function UsersPage() {
 
   // Edit dialog
   const [editUser, setEditUser] = useState<UserRow | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", isActive: true, organizationId: "", password: "" })
+  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", isActive: true, organizationId: "", password: "", adminPassword: "" })
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false)
@@ -184,6 +184,7 @@ export default function UsersPage() {
       isActive: user.isActive,
       organizationId: user.organizationId || "",
       password: "",
+      adminPassword: "",
     })
   }
 
@@ -200,7 +201,13 @@ export default function UsersPage() {
         organizationId: editForm.organizationId || null,
       }
       if (editForm.password) {
+        if (!editForm.adminPassword) {
+          toast.error("修改密碼需要輸入您的管理員密碼確認")
+          setSaving(false)
+          return
+        }
         payload.password = editForm.password
+        payload.adminPassword = editForm.adminPassword
       }
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
@@ -502,8 +509,15 @@ export default function UsersPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>新密碼</Label>
-                  <Input type="password" placeholder="留空表示不修改" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />
+                  <Input type="password" placeholder="留空表示不修改" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value, adminPassword: "" })} />
                 </div>
+                {editForm.password && (
+                  <div className="space-y-2">
+                    <Label>管理員密碼確認 <span className="text-destructive">*</span></Label>
+                    <Input type="password" placeholder="請輸入您自己的密碼以確認身份" value={editForm.adminPassword} onChange={(e) => setEditForm({ ...editForm, adminPassword: e.target.value })} />
+                    <p className="text-xs text-muted-foreground">修改密碼需要驗證管理員身份</p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>角色</Label>
                   <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
