@@ -50,6 +50,7 @@ enum DocumentType {
   MODULE_ARCHITECTURE // 模組架構文件
   SP_PLAN             // SP 規劃文件
   APP_RESULT          // APP 交付成果
+  GITHUB_REPO         // GitHub 連結
   AUDIO               // 音訊
   VIDEO               // 影片
 }

@@ -103,6 +103,7 @@ export default function UsersPage() {
   // Filter & pagination
   const [searchQuery, setSearchQuery] = useState("")
   const [filterRole, setFilterRole] = useState("all")
+  const [filterOrg, setFilterOrg] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
   const [page, setPage] = useState(1)
 
@@ -129,7 +130,7 @@ export default function UsersPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Filtered users
+  // Filtered & grouped users
   const filtered = useMemo(() => {
     let list = users
     if (searchQuery) {
@@ -139,14 +140,23 @@ export default function UsersPage() {
     if (filterRole !== "all") {
       list = list.filter((u) => u.role === filterRole)
     }
+    if (filterOrg !== "all") {
+      list = list.filter((u) => (filterOrg === "none" ? !u.organizationId : u.organizationId === filterOrg))
+    }
     if (filterStatus !== "all") {
       list = list.filter((u) => (filterStatus === "active" ? u.isActive : !u.isActive))
     }
-    return list
-  }, [users, searchQuery, filterRole, filterStatus])
+    // Sort: group by organization, then main accounts (accessCount=0) before sub-accounts
+    return [...list].sort((a, b) => {
+      const orgA = a.organizationName || "\uffff"
+      const orgB = b.organizationName || "\uffff"
+      if (orgA !== orgB) return orgA.localeCompare(orgB, "zh-TW")
+      return a.accessCount - b.accessCount
+    })
+  }, [users, searchQuery, filterRole, filterOrg, filterStatus])
 
   // Reset page when filters change
-  useEffect(() => { setPage(1) }, [searchQuery, filterRole, filterStatus])
+  useEffect(() => { setPage(1) }, [searchQuery, filterRole, filterOrg, filterStatus])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -367,7 +377,7 @@ export default function UsersPage() {
   }
 
   const roleCount = summary?.roleCounts ?? {}
-  const hasFilters = searchQuery || filterRole !== "all" || filterStatus !== "all"
+  const hasFilters = searchQuery || filterRole !== "all" || filterOrg !== "all" || filterStatus !== "all"
 
   return (
     <AppLayout userRole="admin">
@@ -429,6 +439,18 @@ export default function UsersPage() {
                 <SelectItem value="subsidiary">需求單位</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filterOrg} onValueChange={setFilterOrg}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="組織" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部組織</SelectItem>
+                <SelectItem value="none">無組織</SelectItem>
+                {organizations.map((org) => (
+                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="狀態" />
@@ -440,7 +462,7 @@ export default function UsersPage() {
               </SelectContent>
             </Select>
             {hasFilters && (
-              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setSearchQuery(""); setFilterRole("all"); setFilterStatus("all") }}>
+              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setSearchQuery(""); setFilterRole("all"); setFilterOrg("all"); setFilterStatus("all") }}>
                 清除篩選
               </Button>
             )}
@@ -459,7 +481,7 @@ export default function UsersPage() {
                   <TableHead className="text-center">狀態</TableHead>
                   <TableHead className="text-center">可見需求</TableHead>
                   <TableHead className="text-center">建立時間</TableHead>
-                  <TableHead className="text-center">操作</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -469,12 +491,23 @@ export default function UsersPage() {
                       無符合條件的使用者
                     </TableCell>
                   </TableRow>
-                ) : paged.map((user) => (
-                  <TableRow key={user.id}>
+                ) : paged.map((user, idx) => {
+                  const prevUser = idx > 0 ? paged[idx - 1] : null
+                  const isSubAccount = user.accessCount > 0 && user.organizationId != null &&
+                    paged.slice(0, idx).some((u) => u.organizationId === user.organizationId && u.accessCount === 0)
+                  const isNewOrgGroup = !prevUser || prevUser.organizationId !== user.organizationId
+
+                  return (
+                  <TableRow key={user.id} className={isNewOrgGroup && idx > 0 ? "border-t-2" : ""}>
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{user.name}</div>
-                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                      <div className="flex items-center">
+                        {isSubAccount && (
+                          <span className="text-muted-foreground/50 mr-1 ml-4 shrink-0 font-mono text-sm">└</span>
+                        )}
+                        <div>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-xs text-muted-foreground">{user.email}</div>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
@@ -523,7 +556,8 @@ export default function UsersPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
 

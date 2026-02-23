@@ -102,7 +102,8 @@ export function PhaseDocuments({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [activePhase, setActivePhase] = useState<string | null>(null)
 
-  const isLinkType = uploadType === "APP_RESULT"
+  const LINK_TYPES = new Set(["APP_RESULT", "GITHUB_REPO"])
+  const isLinkType = LINK_TYPES.has(uploadType)
 
   // Bind external upload trigger button
   useEffect(() => {
@@ -236,7 +237,7 @@ export function PhaseDocuments({
   }
 
   const renderDocRow = (doc: Document) => {
-    const isExternalLink = doc.type === "APP_RESULT" && doc.fileUrl?.startsWith("http")
+    const isExternalLink = LINK_TYPES.has(doc.type) && doc.fileUrl?.startsWith("http")
     const { icon: Icon, color: iconColor } = isExternalLink
       ? { icon: ExternalLink, color: "text-blue-500" }
       : getFileIconAndColor(doc.fileName)
@@ -430,7 +431,7 @@ export function PhaseDocuments({
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{isLinkType ? "新增 APP 連結" : "上傳文件"}</DialogTitle>
+            <DialogTitle>{isLinkType ? `新增${DOCUMENT_TYPE_LABELS[uploadType] || "連結"}` : "上傳文件"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
@@ -465,10 +466,10 @@ export function PhaseDocuments({
             </div>
             {isLinkType ? (
               <div>
-                <label className="text-sm font-medium">APP 連結</label>
+                <label className="text-sm font-medium">{DOCUMENT_TYPE_LABELS[uploadType] || "連結"}</label>
                 <Input
                   className="mt-1"
-                  placeholder="https://..."
+                  placeholder={uploadType === "GITHUB_REPO" ? "https://github.com/..." : "https://..."}
                   value={appResultUrl}
                   onChange={(e) => setAppResultUrl(e.target.value)}
                 />

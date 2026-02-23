@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Settings, Eye, EyeOff, ArrowRight } from "lucide-react"
+import { Building2, Settings, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,54 +17,105 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 
 type LoginType = "company" | "admin"
-type AdminRoleType = "admin" | "jv-team" | "zhaoi-team"
 
-interface Subsidiary {
+interface AccountUser {
   id: string
   name: string
   email: string
+  role?: string
 }
 
-interface AdminRole {
-  id: AdminRoleType
+interface OrgWithUsers {
+  id: string
   name: string
-  email: string
-  route: string
+  users: AccountUser[]
 }
 
-const adminRoles: AdminRole[] = [
-  { id: "admin", name: "管理者", email: "admin@panjit.com", route: "/governance/inbox" },
-  { id: "jv-team", name: "JV 團隊", email: "jv@jvision.com", route: "/delivery" },
-  { id: "zhaoi-team", name: "智合團隊", email: "john@zhaoi.com", route: "/delivery" },
-]
+const ADMIN_ROLE_LABELS: Record<string, string> = {
+  admin: "管理者",
+  delivery: "交付團隊",
+}
 
-const subsidiaries: Subsidiary[] = [
-  { id: "panjit", name: "強茂", email: "panjit@panjit.com" },
-  { id: "panjit-tech", name: "璟茂科技", email: "panjit-tech@panjit.com" },
-  { id: "ymoptics", name: "熒茂光學", email: "ymoptics@panjit.com" },
-  { id: "panjit-wuxi", name: "強茂電子（無錫）", email: "panjit-wuxi@panjit.com" },
-  { id: "panjit-xuzhou", name: "強茂半導體（徐州）", email: "panjit-xuzhou@panjit.com" },
-  { id: "panjit-shandong", name: "山東強茂電子", email: "panjit-shandong@panjit.com" },
-  { id: "hge", name: "虹冠電子工業", email: "hge@panjit.com" },
-]
+const ROLE_ROUTES: Record<string, string> = {
+  admin: "/governance/inbox",
+  delivery: "/delivery",
+  subsidiary: "/subsidiary",
+}
 
 export default function HomePage() {
   const router = useRouter()
   const { login } = useAuth()
   const [loginType, setLoginType] = useState<LoginType>("company")
-  const [selectedSubsidiary, setSelectedSubsidiary] = useState<Subsidiary>(subsidiaries[0])
   const [showPassword, setShowPassword] = useState(false)
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [selectedAdminRole, setSelectedAdminRole] = useState<AdminRole>(adminRoles[0])
+  const [dataLoading, setDataLoading] = useState(true)
 
-  const currentEmail = loginType === "company"
-    ? selectedSubsidiary.email
-    : selectedAdminRole.email
+  // Dynamic data from API
+  const [organizations, setOrganizations] = useState<OrgWithUsers[]>([])
+  const [adminUsers, setAdminUsers] = useState<AccountUser[]>([])
+
+  // Company login state
+  const [selectedOrgId, setSelectedOrgId] = useState("")
+  const [selectedAccountEmail, setSelectedAccountEmail] = useState("")
+
+  // Admin login state
+  const [selectedAdminRole, setSelectedAdminRole] = useState("admin")
+  const [selectedAdminEmail, setSelectedAdminEmail] = useState("")
+
+  // Fetch accounts on mount
+  useEffect(() => {
+    fetch("/api/auth/accounts")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.organizations) {
+          setOrganizations(data.organizations)
+          if (data.organizations.length > 0) {
+            setSelectedOrgId(data.organizations[0].id)
+          }
+        }
+        if (data.adminUsers) {
+          setAdminUsers(data.adminUsers)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDataLoading(false))
+  }, [])
+
+  // Auto-select first account when org changes
+  useEffect(() => {
+    const org = organizations.find((o) => o.id === selectedOrgId)
+    if (org && org.users.length > 0) {
+      setSelectedAccountEmail(org.users[0].email)
+    } else {
+      setSelectedAccountEmail("")
+    }
+  }, [selectedOrgId, organizations])
+
+  // Auto-select first account when admin role changes
+  useEffect(() => {
+    const users = adminUsers.filter((u) => u.role === selectedAdminRole)
+    if (users.length > 0) {
+      setSelectedAdminEmail(users[0].email)
+    } else {
+      setSelectedAdminEmail("")
+    }
+  }, [selectedAdminRole, adminUsers])
+
+  // Derived data
+  const currentOrg = organizations.find((o) => o.id === selectedOrgId)
+  const orgUsers = currentOrg?.users || []
+  const roleUsers = adminUsers.filter((u) => u.role === selectedAdminRole)
+  const adminRoleOptions = [...new Set(adminUsers.map((u) => u.role || ""))]
+    .filter(Boolean)
+    .sort((a, b) => (a === "admin" ? -1 : b === "admin" ? 1 : 0))
+
+  const currentEmail = loginType === "company" ? selectedAccountEmail : selectedAdminEmail
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!currentEmail) return
     setIsLoading(true)
     setError("")
 
@@ -84,12 +135,7 @@ export default function HomePage() {
       }
 
       login(data.user, data.token)
-
-      const route = loginType === "company"
-        ? "/subsidiary"
-        : selectedAdminRole.route
-
-      router.push(route)
+      router.push(ROLE_ROUTES[data.user.role] || "/subsidiary")
     } catch {
       setError("網路錯誤，請稍後再試")
       setIsLoading(false)
@@ -138,124 +184,174 @@ export default function HomePage() {
 
               {/* Login Card */}
               <Card className="overflow-hidden shadow-xl">
-                  <>
-                    {/* Login Type Toggle */}
-                    <div className="border-b bg-gray-50 px-6 py-4">
-                      <div className="flex items-center justify-center gap-4">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLoginType("company")
-                            setPassword("")
-                            setError("")
-                            setSelectedSubsidiary(subsidiaries[0])
-                          }}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                            loginType === "company"
-                              ? "bg-blue-500 text-white shadow-md"
-                              : "bg-white text-gray-600 hover:bg-gray-100"
-                          }`}
-                        >
-                          <Building2 className="h-4 w-4" />
-                          <span>公司登入</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLoginType("admin")
-                            setPassword("")
-                            setError("")
-                            setSelectedAdminRole(adminRoles[0])
-                          }}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                            loginType === "admin"
-                              ? "bg-orange-500 text-white shadow-md"
-                              : "bg-white text-gray-600 hover:bg-gray-100"
-                          }`}
-                        >
-                          <Settings className="h-4 w-4" />
-                          <span>管理方登入</span>
-                        </button>
-                      </div>
+                <>
+                  {/* Login Type Toggle */}
+                  <div className="border-b bg-gray-50 px-6 py-4">
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginType("company")
+                          setPassword("")
+                          setError("")
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                          loginType === "company"
+                            ? "bg-blue-500 text-white shadow-md"
+                            : "bg-white text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        <Building2 className="h-4 w-4" />
+                        <span>公司登入</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginType("admin")
+                          setPassword("")
+                          setError("")
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                          loginType === "admin"
+                            ? "bg-orange-500 text-white shadow-md"
+                            : "bg-white text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        <Settings className="h-4 w-4" />
+                        <span>管理方登入</span>
+                      </button>
                     </div>
+                  </div>
 
-                    {/* Login Form */}
-                    <CardContent className="p-6">
+                  {/* Login Form */}
+                  <CardContent className="p-6">
+                    {dataLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
                       <form onSubmit={handleLogin} className="space-y-4">
-                        {/* 角色選擇 (只在管理方登入顯示) */}
-                        {loginType === "admin" && (
-                          <div>
-                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                              登入身份
-                            </label>
-                            <Select
-                              value={selectedAdminRole.id}
-                              onValueChange={(value) => {
-                                const role = adminRoles.find((r) => r.id === value)
-                                if (role) {
-                                  setSelectedAdminRole(role)
-                                  setError("")
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-11 w-full">
-                                <SelectValue placeholder="選擇登入身份" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {adminRoles.map((role) => (
-                                  <SelectItem key={role.id} value={role.id}>
-                                    {role.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-
-                        {/* 公司選擇 (只在公司登入顯示) */}
+                        {/* ===== Company Login ===== */}
                         {loginType === "company" && (
-                          <div>
-                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                              公司
-                            </label>
-                            <Select
-                              value={selectedSubsidiary.id}
-                              onValueChange={(value) => {
-                                const sub = subsidiaries.find((s) => s.id === value)
-                                if (sub) {
-                                  setSelectedSubsidiary(sub)
+                          <>
+                            {/* Select Organization */}
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                                公司
+                              </label>
+                              <Select
+                                value={selectedOrgId}
+                                onValueChange={(value) => {
+                                  setSelectedOrgId(value)
                                   setError("")
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-11 w-full">
-                                <SelectValue placeholder="選擇公司" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {subsidiaries.map((sub) => (
-                                  <SelectItem key={sub.id} value={sub.id}>
-                                    {sub.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                                }}
+                              >
+                                <SelectTrigger className="h-11 w-full">
+                                  <SelectValue placeholder="選擇公司" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {organizations.map((org) => (
+                                    <SelectItem key={org.id} value={org.id}>
+                                      {org.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Select Account */}
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                                帳號
+                              </label>
+                              {orgUsers.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">此公司尚無可用帳號</p>
+                              ) : (
+                                <Select
+                                  value={selectedAccountEmail}
+                                  onValueChange={(value) => {
+                                    setSelectedAccountEmail(value)
+                                    setError("")
+                                  }}
+                                >
+                                  <SelectTrigger className="h-11 w-full">
+                                    <SelectValue placeholder="選擇帳號" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {orgUsers.map((user) => (
+                                      <SelectItem key={user.id} value={user.email}>
+                                        <span>{user.name}</span>
+                                        <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </>
                         )}
 
-                        {/* 帳號 (唯讀顯示) */}
-                        <div>
-                          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                            帳號
-                          </label>
-                          <Input
-                            type="email"
-                            value={currentEmail}
-                            className="h-11 bg-gray-50 text-gray-600"
-                            readOnly
-                          />
-                        </div>
+                        {/* ===== Admin Login ===== */}
+                        {loginType === "admin" && (
+                          <>
+                            {/* Select Role */}
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                                登入身份
+                              </label>
+                              <Select
+                                value={selectedAdminRole}
+                                onValueChange={(value) => {
+                                  setSelectedAdminRole(value)
+                                  setError("")
+                                }}
+                              >
+                                <SelectTrigger className="h-11 w-full">
+                                  <SelectValue placeholder="選擇登入身份" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {adminRoleOptions.map((role) => (
+                                    <SelectItem key={role} value={role}>
+                                      {ADMIN_ROLE_LABELS[role] || role}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
 
-                        {/* 密碼 */}
+                            {/* Select Account */}
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                                帳號
+                              </label>
+                              {roleUsers.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">此身份尚無可用帳號</p>
+                              ) : (
+                                <Select
+                                  value={selectedAdminEmail}
+                                  onValueChange={(value) => {
+                                    setSelectedAdminEmail(value)
+                                    setError("")
+                                  }}
+                                >
+                                  <SelectTrigger className="h-11 w-full">
+                                    <SelectValue placeholder="選擇帳號" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {roleUsers.map((user) => (
+                                      <SelectItem key={user.id} value={user.email}>
+                                        <span>{user.name}</span>
+                                        <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </>
+                        )}
+
+                        {/* Password */}
                         <div>
                           <label className="mb-1.5 block text-sm font-medium text-gray-700">
                             密碼
@@ -282,12 +378,12 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        {/* 錯誤訊息 */}
+                        {/* Error */}
                         {error && (
                           <p className="text-sm text-red-500 font-medium">{error}</p>
                         )}
 
-                        {/* 登入按鈕 */}
+                        {/* Submit */}
                         <Button
                           type="submit"
                           className={`w-full h-11 ${
@@ -295,14 +391,15 @@ export default function HomePage() {
                               ? "bg-blue-500 hover:bg-blue-600"
                               : "bg-orange-500 hover:bg-orange-600"
                           } shadow-lg`}
-                          disabled={isLoading}
+                          disabled={isLoading || !currentEmail}
                         >
                           {isLoading ? "登入中..." : "登入系統"}
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </form>
-                    </CardContent>
-                  </>
+                    )}
+                  </CardContent>
+                </>
               </Card>
             </div>
           </div>
