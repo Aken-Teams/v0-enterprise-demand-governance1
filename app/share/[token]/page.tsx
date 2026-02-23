@@ -605,19 +605,23 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
     <div className="min-h-screen bg-background">
       {/* ── Top bar ── */}
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-6xl mx-auto flex items-center justify-between h-14 px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-sm">JV 需求管理平台</span>
-            <Badge variant="outline" className="text-[10px] font-normal">唯讀分享</Badge>
-            {expiresAt && (
-              <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                有效至 {fmtDate(expiresAt)}
-              </span>
-            )}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between py-2.5">
+          <div className="flex flex-col">
+            <span className="font-bold text-sm leading-snug">JV 需求管理平台</span>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>唯讀分享</span>
+              {expiresAt && (
+                <>
+                  <span>·</span>
+                  <span>有效至 {fmtDate(expiresAt)}</span>
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isLoggedIn ? (
               <>
+                <User className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground hidden sm:inline">
                   {authUser.name}
                 </span>
