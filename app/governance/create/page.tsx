@@ -90,6 +90,7 @@ export default function CreateDemandPage() {
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
+  const [fileError, setFileError] = useState("")
 
   const [organizations, setOrganizations] = useState<Organization[]>([])
 
@@ -117,8 +118,13 @@ export default function CreateDemandPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || [])
     const maxSize = 10 * 1024 * 1024
-    const valid = selected.filter((f) => f.size <= maxSize)
-    setFiles((prev) => [...prev, ...valid])
+    const oversized = selected.filter((f) => f.size > maxSize)
+    if (oversized.length > 0) {
+      setFileError(`檔案「${oversized[0].name}」超過 10MB 限制`)
+    } else {
+      setFileError("")
+    }
+    setFiles((prev) => [...prev, ...selected.filter((f) => f.size <= maxSize)])
     // Reset input so same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
@@ -344,6 +350,7 @@ export default function CreateDemandPage() {
                     選擇檔案
                   </Button>
                   <p className="text-xs text-muted-foreground">支援 PDF, Word, Excel, PPT, Markdown, 圖片，單檔最大 10MB</p>
+                  {fileError && <p className="text-xs text-red-600">{fileError}</p>}
 
                   {files.length > 0 && (
                     <div className="space-y-2 mt-3">

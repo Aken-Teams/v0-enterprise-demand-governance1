@@ -487,7 +487,21 @@ export function PhaseDocuments({
                   multiple
                   className="hidden"
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.jpg,.jpeg,.png,.gif,.webp,.mp3,.wav,.ogg,.mp4,.webm"
-                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.files || [])
+                    const videoExts = new Set(["mp4", "webm"])
+                    const getLimit = (f: File) => {
+                      const ext = f.name.split(".").pop()?.toLowerCase() || ""
+                      return videoExts.has(ext) ? 50 * 1024 * 1024 : 20 * 1024 * 1024
+                    }
+                    const oversized = selected.filter((f) => f.size > getLimit(f))
+                    if (oversized.length > 0) {
+                      const ext = oversized[0].name.split(".").pop()?.toLowerCase() || ""
+                      const limitMB = videoExts.has(ext) ? 50 : 20
+                      setUploadError(`檔案「${oversized[0].name}」超過 ${limitMB}MB 限制`)
+                    }
+                    setSelectedFiles(selected.filter((f) => f.size <= getLimit(f)))
+                  }}
                 />
                 <Button
                   variant="outline"

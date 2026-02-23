@@ -116,9 +116,16 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
     setUploadError("")
   }
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)])
+      const selected = Array.from(e.target.files)
+      const oversized = selected.filter((f) => f.size > MAX_FILE_SIZE)
+      if (oversized.length > 0) {
+        setUploadError(`檔案「${oversized[0].name}」超過 10MB 限制`)
+      }
+      setPendingFiles((prev) => [...prev, ...selected.filter((f) => f.size <= MAX_FILE_SIZE)])
       e.target.value = ""
     }
   }

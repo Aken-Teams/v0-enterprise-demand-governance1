@@ -35,7 +35,17 @@ const ALLOWED_EXTENSIONS = new Set([
   "mp3", "wav", "ogg", "mp4", "webm",
 ])
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB for audio/video
+const MAX_FILE_SIZE_DEFAULT = 20 * 1024 * 1024 // 20MB
+const MAX_FILE_SIZE_VIDEO = 50 * 1024 * 1024   // 50MB for video
+
+const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm"])
+
+function getMaxFileSize(file: File): number {
+  if (VIDEO_MIME_TYPES.has(file.type)) return MAX_FILE_SIZE_VIDEO
+  const ext = file.name.split(".").pop()?.toLowerCase() || ""
+  if (ext === "mp4" || ext === "webm") return MAX_FILE_SIZE_VIDEO
+  return MAX_FILE_SIZE_DEFAULT
+}
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
 const VALID_DOC_TYPES = new Set<string>(Object.values(DocumentType))
@@ -135,9 +145,11 @@ export async function POST(
 
     const files = formData.getAll("files") as File[]
     for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
+      const maxSize = getMaxFileSize(file)
+      if (file.size > maxSize) {
+        const limitMB = maxSize / (1024 * 1024)
         return NextResponse.json(
-          { error: `檔案 "${file.name}" 超過大小限制` },
+          { error: `檔案「${file.name}」超過 ${limitMB}MB 限制` },
           { status: 400 }
         )
       }
