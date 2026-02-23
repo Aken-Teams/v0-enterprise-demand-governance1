@@ -122,7 +122,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
 
   // Fetch notifications from API
   const fetchNotifications = React.useCallback(() => {
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth_token")
     if (!token) return
     fetch("/api/notifications?filter=unread&limit=5", {
       headers: { Authorization: `Bearer ${token}` },
@@ -143,7 +143,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   }, [fetchNotifications])
 
   const markAllRead = React.useCallback(() => {
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth_token")
     if (!token) return
     fetch("/api/notifications", {
       method: "PATCH",
@@ -166,7 +166,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   // Fetch pending signoff count for subsidiary users
   React.useEffect(() => {
     if (!user?.role || user.role !== "subsidiary") return
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth_token")
     if (!token) return
     fetch("/api/signoffs/pending", {
       headers: { Authorization: `Bearer ${token}` },

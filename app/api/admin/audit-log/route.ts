@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       if (dateTo) where.createdAt.lte = new Date(dateTo + "T23:59:59.999Z")
     }
 
-    const [logs, total] = await Promise.all([
+    const [rawLogs, total] = await Promise.all([
       prisma.auditLog.findMany({
         where,
         include: {
@@ -42,6 +42,20 @@ export async function GET(request: NextRequest) {
       }),
       prisma.auditLog.count({ where }),
     ])
+
+    const logs = rawLogs.map((log) => ({
+      id: log.id,
+      userId: log.userId,
+      action: log.action,
+      entity: log.entity,
+      entityId: log.entityId,
+      demandId: log.demandId,
+      details: log.details,
+      ipAddress: log.ipAddress,
+      createdAt: log.createdAt instanceof Date ? log.createdAt.toISOString() : String(log.createdAt),
+      user: log.user ? { id: log.user.id, name: log.user.name, email: log.user.email } : null,
+      demand: log.demand ? { id: log.demand.id, demandNumber: log.demand.demandNumber, title: log.demand.title } : null,
+    }))
 
     return NextResponse.json({ logs, total, page, limit })
   } catch (error) {

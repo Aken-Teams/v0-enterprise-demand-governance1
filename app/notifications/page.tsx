@@ -69,7 +69,7 @@ export default function NotificationsPage() {
 
   const fetchNotifications = useCallback(
     async (filter: string, p: number) => {
-      const token = localStorage.getItem("token")
+      const token = localStorage.getItem("auth_token")
       if (!token) return
       setLoading(true)
       try {
@@ -94,7 +94,7 @@ export default function NotificationsPage() {
   }, [tab, page, fetchNotifications])
 
   const markAsRead = async (ids: string[]) => {
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth_token")
     if (!token) return
     await fetch("/api/notifications", {
       method: "PATCH",
@@ -105,7 +105,7 @@ export default function NotificationsPage() {
   }
 
   const markAllRead = async () => {
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth_token")
     if (!token) return
     await fetch("/api/notifications", {
       method: "PATCH",
@@ -116,7 +116,7 @@ export default function NotificationsPage() {
   }
 
   const deleteNotifications = async (ids: string[]) => {
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth_token")
     if (!token) return
     await fetch("/api/notifications", {
       method: "DELETE",

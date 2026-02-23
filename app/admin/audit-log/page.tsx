@@ -94,7 +94,7 @@ export default function AuditLogPage() {
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null)
 
   const fetchLogs = useCallback(async () => {
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth_token")
     if (!token) { setLoading(false); return }
     setLoading(true)
     try {
