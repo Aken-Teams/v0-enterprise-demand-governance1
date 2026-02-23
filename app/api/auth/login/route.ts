@@ -54,6 +54,15 @@ export async function POST(request: NextRequest) {
       { expiresIn: "7d" }
     )
 
+    // Check if subsidiary user has restricted demand visibility
+    let restrictedView = false
+    if (user.role === "subsidiary") {
+      const accessCount = await prisma.demandAccess.count({
+        where: { userId: user.id },
+      })
+      restrictedView = accessCount > 0
+    }
+
     return NextResponse.json({
       token,
       user: {
@@ -63,6 +72,7 @@ export async function POST(request: NextRequest) {
         role: user.role,
         subsidiary: user.organization?.name,
         organizationId: user.organizationId,
+        restrictedView,
       },
     })
   } catch (error) {

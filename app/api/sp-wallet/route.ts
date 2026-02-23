@@ -6,11 +6,19 @@ export async function GET(request: NextRequest) {
   try {
     const auth = verifyAuth(request)
 
-    // Look up user to get organizationId
-    const user = await prisma.user.findUnique({
-      where: { id: auth.userId },
-      select: { organizationId: true },
-    })
+    // Look up user + check if restricted
+    const [user, accessCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: auth.userId },
+        select: { organizationId: true },
+      }),
+      prisma.demandAccess.count({ where: { userId: auth.userId } }),
+    ])
+
+    // Restricted users (with DemandAccess whitelist) cannot access SP wallet
+    if (accessCount > 0) {
+      return NextResponse.json({ error: "您的帳號無權查看 SP 錢包" }, { status: 403 })
+    }
 
     if (!user?.organizationId) {
       return NextResponse.json({ error: "使用者未關聯組織" }, { status: 400 })

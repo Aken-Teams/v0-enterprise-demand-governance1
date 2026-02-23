@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -36,9 +37,14 @@ interface WalletData {
 }
 
 export default function WalletPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+  const router = useRouter()
   const [data, setData] = useState<WalletData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (user?.restrictedView) router.replace("/subsidiary/demands")
+  }, [user?.restrictedView, router])
 
   useEffect(() => {
     if (!token) return

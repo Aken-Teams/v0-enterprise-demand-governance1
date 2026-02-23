@@ -160,10 +160,19 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
     return userRole || "subsidiary"
   }, [pathname, userRole, user?.role])
 
-  const visibleSections = React.useMemo(() => 
-    navSections.filter((section) => section.roles.includes(detectedRole)),
-    [detectedRole]
-  )
+  const isRestricted = user?.role === "subsidiary" && user?.restrictedView === true
+
+  const visibleSections = React.useMemo(() => {
+    const sections = navSections.filter((section) => section.roles.includes(detectedRole))
+    if (!isRestricted) return sections
+    // Restricted subsidiary: only show 需求列表, hide 需求總覽 and SP 錢包
+    return sections.map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        item.href !== "/subsidiary" && item.href !== "/subsidiary/wallet"
+      ),
+    })).filter((section) => section.items.length > 0)
+  }, [detectedRole, isRestricted])
 
   return (
     <div className="flex min-h-screen bg-background">

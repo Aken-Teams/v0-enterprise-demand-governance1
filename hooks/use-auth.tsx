@@ -10,6 +10,7 @@ interface User {
   role: string
   subsidiary?: string
   organizationId?: string | null
+  restrictedView?: boolean
 }
 
 interface AuthContextType {
