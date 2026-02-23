@@ -18,6 +18,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ScrollText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -79,6 +80,7 @@ const navSections: NavSection[] = [
     items: [
       { title: "帳號管理", href: "/admin/users", icon: UserCog, roles: ["admin"] },
       { title: "SP 管理", href: "/admin/organizations", icon: Building2, roles: ["admin"] },
+      { title: "操作紀錄", href: "/admin/audit-log", icon: ScrollText, roles: ["admin"] },
     ],
   },
   {
@@ -100,25 +102,61 @@ const navSections: NavSection[] = [
 
 interface NotificationItem {
   id: string
+  type: string
   title: string
-  description: string
-  time: string
-  read: boolean
+  message: string
+  isRead: boolean
+  linkUrl: string | null
+  createdAt: string
 }
-
-const MOCK_NOTIFICATIONS: NotificationItem[] = []
 
 export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
-  const [notifications, setNotifications] = React.useState<NotificationItem[]>(MOCK_NOTIFICATIONS)
+  const [notifications, setNotifications] = React.useState<NotificationItem[]>([])
+  const [unreadCount, setUnreadCount] = React.useState(0)
 
   const [pendingSignoffCount, setPendingSignoffCount] = React.useState(0)
 
-  const unreadCount = notifications.filter((n) => !n.read).length
-  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+  // Fetch notifications from API
+  const fetchNotifications = React.useCallback(() => {
+    const token = localStorage.getItem("token")
+    if (!token) return
+    fetch("/api/notifications?filter=unread&limit=5", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.notifications) setNotifications(data.notifications)
+        if (typeof data.unreadCount === "number") setUnreadCount(data.unreadCount)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Poll notifications every 60 seconds
+  React.useEffect(() => {
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 60_000)
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
+
+  const markAllRead = React.useCallback(() => {
+    const token = localStorage.getItem("token")
+    if (!token) return
+    fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ markAll: true }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setNotifications([])
+        if (typeof data.unreadCount === "number") setUnreadCount(data.unreadCount)
+      })
+      .catch(() => {})
+  }, [])
 
   React.useEffect(() => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
@@ -336,22 +374,30 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                     <p className="py-8 text-center text-sm text-muted-foreground">沒有通知</p>
                   ) : (
                     notifications.map((n) => (
-                      <div
+                      <Link
                         key={n.id}
+                        href={n.linkUrl || "/notifications"}
                         className={cn(
-                          "flex gap-3 border-b px-4 py-3 last:border-b-0",
-                          !n.read && "bg-muted/50",
+                          "flex gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-muted/30 transition-colors",
+                          !n.isRead && "bg-muted/50",
                         )}
                       >
-                        <div className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-primary")} />
+                        <div className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.isRead ? "bg-transparent" : "bg-primary")} />
                         <div className="min-w-0 flex-1">
-                          <p className={cn("text-sm", !n.read && "font-medium")}>{n.title}</p>
-                          <p className="text-xs text-muted-foreground line-clamp-1">{n.description}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground/70">{n.time}</p>
+                          <p className={cn("text-sm", !n.isRead && "font-medium")}>{n.title}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">{n.message}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground/70">
+                            {new Date(n.createdAt).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </p>
                         </div>
-                      </div>
+                      </Link>
                     ))
                   )}
+                </div>
+                <div className="border-t px-4 py-2">
+                  <Link href="/notifications" className="block text-center text-xs text-muted-foreground hover:text-foreground">
+                    查看全部通知
+                  </Link>
                 </div>
               </PopoverContent>
             </Popover>

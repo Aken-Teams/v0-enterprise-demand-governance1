@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import bcrypt from "bcryptjs"
+import { logAudit } from "@/lib/audit"
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "管理員",
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin"])
     const body = await request.json()
     const { name, email, password, role, organizationId } = body
 
@@ -85,6 +86,15 @@ export async function POST(request: NextRequest) {
         role: role as "admin" | "delivery" | "subsidiary",
         organizationId: organizationId || null,
       },
+    })
+
+    logAudit({
+      userId: auth.userId,
+      action: "CREATE",
+      entity: "USER",
+      entityId: user.id,
+      details: { name, email, role, organizationId: organizationId || null },
+      request,
     })
 
     return NextResponse.json({ success: true, userId: user.id })
@@ -134,6 +144,16 @@ export async function PATCH(request: NextRequest) {
     }
 
     await prisma.user.update({ where: { id }, data })
+
+    const changedFields = Object.keys(data).filter(k => k !== "password")
+    logAudit({
+      userId: auth.userId,
+      action: "UPDATE",
+      entity: "USER",
+      entityId: id,
+      details: { fields: changedFields, passwordChanged: "password" in data },
+      request,
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -186,6 +206,15 @@ export async function DELETE(request: NextRequest) {
 
       // Delete user
       await tx.user.delete({ where: { id } })
+    })
+
+    logAudit({
+      userId: auth.userId,
+      action: "DELETE",
+      entity: "USER",
+      entityId: id,
+      details: { deletedUserId: id },
+      request,
     })
 
     return NextResponse.json({ success: true })

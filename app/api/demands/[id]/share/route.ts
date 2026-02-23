@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { nanoid } from "nanoid"
+import { logAudit } from "@/lib/audit"
 
 // POST: Create a share link for a demand
 export async function POST(
@@ -27,6 +28,16 @@ export async function POST(
         createdById: auth.userId,
         expiresAt,
       },
+    })
+
+    logAudit({
+      userId: auth.userId,
+      action: "CREATE",
+      entity: "SHARE",
+      entityId: share.id,
+      demandId: id,
+      details: { token: share.token, expiresAt: share.expiresAt },
+      request,
     })
 
     return NextResponse.json({
@@ -75,8 +86,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery"])
-    await params // validate route param exists
+    const auth = verifyRole(request, ["admin", "delivery"])
+    const { id } = await params
 
     const { shareId } = await request.json()
     if (!shareId) {
@@ -84,6 +95,16 @@ export async function DELETE(
     }
 
     await prisma.demandShare.delete({ where: { id: shareId } })
+
+    logAudit({
+      userId: auth.userId,
+      action: "DELETE",
+      entity: "SHARE",
+      entityId: shareId,
+      demandId: id,
+      details: { shareId },
+      request,
+    })
 
     return NextResponse.json({ message: "分享連結已撤銷" })
   } catch (error) {

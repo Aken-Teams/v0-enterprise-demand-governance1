@@ -7,6 +7,8 @@ import { createDemandSchema } from "@/lib/validations/demand"
 import { generateDemandNumber } from "@/lib/demand-number"
 import { buildDemandVisibilityFilter } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
+import { notifyUsers } from "@/lib/notify"
+import { logAudit } from "@/lib/audit"
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -171,7 +173,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 9. Return success
+    // 9. Fire-and-forget: notification + audit
+    notifyUsers([submitter.id], {
+      type: "DEMAND_STATUS",
+      title: "新需求已建立",
+      message: `需求 ${demand.demandNumber}「${demand.title}」已建立。`,
+      linkUrl: `/demands/${demand.id}`,
+    })
+    logAudit({
+      userId: auth.userId,
+      action: "CREATE",
+      entity: "DEMAND",
+      entityId: demand.id,
+      demandId: demand.id,
+      details: { demandNumber: demand.demandNumber, title: demand.title },
+      request,
+    })
+
+    // 10. Return success
     return NextResponse.json(
       {
         message: "需求建立成功",

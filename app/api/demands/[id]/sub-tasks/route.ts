@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { createSubTaskSchema } from "@/lib/validations/sub-task"
+import { logAudit } from "@/lib/audit"
 
 // GET: List sub-tasks for a demand
 export async function GET(
@@ -41,7 +42,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery"])
+    const auth = verifyRole(request, ["admin", "delivery"])
     const { id } = await params
     const body = await request.json()
 
@@ -71,6 +72,16 @@ export async function POST(
       include: {
         assignee: { select: { id: true, name: true } },
       },
+    })
+
+    logAudit({
+      userId: auth.userId,
+      action: "CREATE",
+      entity: "SUB_TASK",
+      entityId: subTask.id,
+      demandId: id,
+      details: { name: subTask.name },
+      request,
     })
 
     return NextResponse.json({ subTask }, { status: 201 })

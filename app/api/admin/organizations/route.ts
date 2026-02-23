@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
+import { notifyUsers, getOrgSubsidiaryUserIds } from "@/lib/notify"
+import { logAudit } from "@/lib/audit"
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,7 +83,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin"])
     const body = await request.json()
     const { id, spQuota } = body
 
@@ -98,6 +100,27 @@ export async function PATCH(request: NextRequest) {
         update: { totalQuota: spQuota },
       })
     }
+
+    // Fire-and-forget: notify org subsidiary users + audit
+    if (spQuota !== undefined) {
+      getOrgSubsidiaryUserIds(id).then((orgIds) => {
+        const recipients = orgIds.filter(uid => uid !== auth.userId)
+        notifyUsers(recipients, {
+          type: "SP_CHANGE",
+          title: "SP 額度變更",
+          message: `您所屬組織的 SP 額度已更新為 ${spQuota}。`,
+          linkUrl: `/dashboard`,
+        })
+      })
+    }
+    logAudit({
+      userId: auth.userId,
+      action: "UPDATE",
+      entity: "ORGANIZATION",
+      entityId: id,
+      details: { spQuota },
+      request,
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -4,6 +4,8 @@ import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus, DocumentType } from "@/lib/generated/prisma/client"
+import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
+import { logAudit } from "@/lib/audit"
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -90,7 +92,10 @@ export async function POST(
     const auth = verifyRole(request, ["admin", "delivery"])
     const { id } = await params
 
-    const demand = await prisma.demand.findUnique({ where: { id } })
+    const demand = await prisma.demand.findUnique({
+      where: { id },
+      select: { id: true, demandNumber: true, title: true, organizationId: true },
+    })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
@@ -123,6 +128,28 @@ export async function POST(
           fileSize: null,
           uploadedBy: auth.userId,
         },
+      })
+
+      // Fire-and-forget: notification + audit for URL doc
+      const stakeholderIds1 = getDemandStakeholderIds(id)
+      const orgUserIds1 = getOrgSubsidiaryUserIds(demand.organizationId)
+      Promise.all([stakeholderIds1, orgUserIds1]).then(([sIds, oIds]) => {
+        const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
+        notifyUsers(recipients, {
+          type: "DOCUMENT",
+          title: "新文件已上傳",
+          message: `需求 ${demand.demandNumber}「${demand.title}」有新的連結文件。`,
+          linkUrl: `/demands/${id}`,
+        })
+      })
+      logAudit({
+        userId: auth.userId,
+        action: "UPLOAD",
+        entity: "DOCUMENT",
+        entityId: doc.id,
+        demandId: id,
+        details: { fileName: doc.fileName, type: doc.type },
+        request,
       })
 
       return NextResponse.json(
@@ -201,6 +228,30 @@ export async function POST(
         },
       })
       savedDocuments.push(doc)
+    }
+
+    // Fire-and-forget: notification + audit for uploaded files
+    const stakeholderIds2 = getDemandStakeholderIds(id)
+    const orgUserIds2 = getOrgSubsidiaryUserIds(demand.organizationId)
+    Promise.all([stakeholderIds2, orgUserIds2]).then(([sIds, oIds]) => {
+      const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
+      notifyUsers(recipients, {
+        type: "DOCUMENT",
+        title: "新文件已上傳",
+        message: `需求 ${demand.demandNumber}「${demand.title}」有 ${savedDocuments.length} 個新文件上傳。`,
+        linkUrl: `/demands/${id}`,
+      })
+    })
+    for (const doc of savedDocuments) {
+      logAudit({
+        userId: auth.userId,
+        action: "UPLOAD",
+        entity: "DOCUMENT",
+        entityId: doc.id,
+        demandId: id,
+        details: { fileName: doc.fileName, fileSize: doc.fileSize, type: doc.type },
+        request,
+      })
     }
 
     return NextResponse.json(

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { updateSubTaskSchema } from "@/lib/validations/sub-task"
 import { SubTaskStatus } from "@/lib/generated/prisma/client"
+import { logAudit } from "@/lib/audit"
 
 // PATCH: Update a sub-task
 export async function PATCH(
@@ -10,7 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; taskId: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery"])
+    const auth = verifyRole(request, ["admin", "delivery"])
     const { id, taskId } = await params
     const body = await request.json()
 
@@ -48,6 +49,16 @@ export async function PATCH(
       },
     })
 
+    logAudit({
+      userId: auth.userId,
+      action: "UPDATE",
+      entity: "SUB_TASK",
+      entityId: taskId,
+      demandId: id,
+      details: { fields: Object.keys(updateData) },
+      request,
+    })
+
     return NextResponse.json({ subTask })
   } catch (error) {
     if (error instanceof AuthError) {
@@ -64,7 +75,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; taskId: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery"])
+    const auth = verifyRole(request, ["admin", "delivery"])
     const { id, taskId } = await params
 
     const existing = await prisma.demandSubTask.findFirst({
@@ -75,6 +86,16 @@ export async function DELETE(
     }
 
     await prisma.demandSubTask.delete({ where: { id: taskId } })
+
+    logAudit({
+      userId: auth.userId,
+      action: "DELETE",
+      entity: "SUB_TASK",
+      entityId: taskId,
+      demandId: id,
+      details: { name: existing.name },
+      request,
+    })
 
     return NextResponse.json({ message: "子任務已刪除" })
   } catch (error) {

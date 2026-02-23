@@ -3,6 +3,7 @@ import { unlink } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 // DELETE: Delete a document
 export async function DELETE(
@@ -36,6 +37,16 @@ export async function DELETE(
     }
 
     await prisma.demandDocument.delete({ where: { id: docId } })
+
+    logAudit({
+      userId: auth.userId,
+      action: "DELETE",
+      entity: "DOCUMENT",
+      entityId: docId,
+      demandId: id,
+      details: { fileName: doc.fileName },
+      request,
+    })
 
     return NextResponse.json({ message: "文件已刪除" })
   } catch (error) {

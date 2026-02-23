@@ -4,6 +4,8 @@ import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
+import { notifyUsers, getAdminUserIds } from "@/lib/notify"
+import { logAudit } from "@/lib/audit"
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -66,7 +68,7 @@ export async function PATCH(
     const signoff = await prisma.phaseSignoff.findUnique({
       where: { id: signoffId },
       include: {
-        demand: { select: { id: true, submitterId: true, organizationId: true } },
+        demand: { select: { id: true, demandNumber: true, title: true, submitterId: true, organizationId: true, managerId: true, developerId: true } },
       },
     })
 
@@ -136,6 +138,32 @@ export async function PATCH(
         })
       }
     }
+
+    // Fire-and-forget: notify admin + manager + developer about signoff result + audit
+    const actionLabel = action === "approve" ? "已確認" : "已退回"
+    getAdminUserIds().then((adminIds) => {
+      const targetIds = [
+        ...adminIds,
+        signoff.demand.managerId,
+        signoff.demand.developerId,
+      ].filter((uid): uid is string => uid !== null && uid !== auth.userId)
+      const recipients = [...new Set(targetIds)]
+      notifyUsers(recipients, {
+        type: "SIGNOFF",
+        title: `簽核${actionLabel}`,
+        message: `需求 ${signoff.demand.demandNumber}「${signoff.demand.title}」的簽核已${actionLabel}。`,
+        linkUrl: `/demands/${id}`,
+      })
+    })
+    logAudit({
+      userId: auth.userId,
+      action: action === "approve" ? "SIGNOFF_APPROVE" : "SIGNOFF_REJECT",
+      entity: "SIGNOFF",
+      entityId: signoffId,
+      demandId: id,
+      details: { phase: signoff.phase, action },
+      request,
+    })
 
     return NextResponse.json({ signoff: updated })
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 // GET: List a user's demand access whitelist
 export async function GET(
@@ -64,6 +65,15 @@ export async function PUT(
           })),
         })
       }
+    })
+
+    logAudit({
+      userId: auth.userId,
+      action: "GRANT",
+      entity: "ACCESS",
+      entityId: id,
+      details: { demandIds, count: demandIds.length },
+      request,
     })
 
     return NextResponse.json({ success: true, count: demandIds.length })

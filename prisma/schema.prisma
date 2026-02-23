@@ -74,6 +74,10 @@ enum NotificationType {
   ACCEPTANCE    // 驗收通知
   SP_CHANGE     // SP變動
   SYSTEM        // 系統通知
+  SIGNOFF       // 簽核通知
+  DOCUMENT      // 文件通知
+  COMMENT       // 討論通知
+  ASSIGNMENT    // 指派通知
 }
 
 enum AcceptanceResult {
@@ -137,6 +141,7 @@ model User {
   signoffRequests    PhaseSignoff[]  @relation("SignoffRequester")
   signoffResponses   PhaseSignoff[]  @relation("SignoffResponder")
   createdShares      DemandShare[]
+  auditLogs          AuditLog[]
 
   @@map("users")
 }
@@ -216,6 +221,7 @@ model Demand {
   accessGrants      DemandAccess[]
   phaseSignoffs     PhaseSignoff[]
   shares            DemandShare[]
+  auditLogs         AuditLog[]
 
   @@index([organizationId])
   @@index([status])
@@ -307,6 +313,28 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+/// 操作紀錄 (統一審計日誌)
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String /// CREATE, UPDATE, DELETE, STATUS_CHANGE, SIGNOFF_REQUEST, SIGNOFF_APPROVE, SIGNOFF_REJECT, UPLOAD, ASSIGN, GRANT, REVOKE
+  entity    String /// DEMAND, DOCUMENT, SIGNOFF, SUB_TASK, COMMENT, USER, ORGANIZATION, SHARE, ACCESS
+  entityId  String
+  demandId  String?
+  demand    Demand?  @relation(fields: [demandId], references: [id], onDelete: SetNull)
+  details   String?  @db.Text /// JSON metadata (old/new values, context)
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([demandId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
 }
 
 /// 需求階段規劃

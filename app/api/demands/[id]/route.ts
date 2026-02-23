@@ -3,8 +3,10 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { canAccessDemand } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
-import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
+import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP } from "@/lib/constants/demand"
 import { updateDemandSchema } from "@/lib/validations/demand"
+import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
+import { logAudit } from "@/lib/audit"
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
 
@@ -114,6 +116,30 @@ export async function PATCH(
           developer: { select: { id: true, name: true } },
         },
       })
+
+      // Notify newly assigned users
+      const assignedIds: string[] = []
+      if (body.managerId && body.managerId !== demand.managerId) assignedIds.push(body.managerId)
+      if (body.developerId && body.developerId !== demand.developerId) assignedIds.push(body.developerId)
+      const notifyIds = [...new Set(assignedIds)].filter(uid => uid !== auth.userId)
+      if (notifyIds.length > 0) {
+        notifyUsers(notifyIds, {
+          type: "ASSIGNMENT",
+          title: "您已被指派需求",
+          message: `您已被指派至需求 ${demand.demandNumber}「${demand.title}」。`,
+          linkUrl: `/demands/${id}`,
+        })
+      }
+      logAudit({
+        userId: auth.userId,
+        action: "ASSIGN",
+        entity: "DEMAND",
+        entityId: id,
+        demandId: id,
+        details: { managerId: body.managerId, developerId: body.developerId },
+        request,
+      })
+
       return NextResponse.json({
         demand: {
           id: updated.id,
@@ -151,6 +177,15 @@ export async function PATCH(
       const updated = await prisma.demand.update({
         where: { id },
         data: updateData,
+      })
+      logAudit({
+        userId: auth.userId,
+        action: "UPDATE",
+        entity: "DEMAND",
+        entityId: id,
+        demandId: id,
+        details: { fields: Object.keys(updateData) },
+        request,
       })
       return NextResponse.json({ demand: { id: updated.id } })
     }
@@ -344,6 +379,30 @@ export async function PATCH(
       return d
     })
 
+    // Fire-and-forget: status change notification + audit
+    const fromLabel = STATUS_MAP[demand.status]?.label ?? demand.status
+    const toLabel = STATUS_MAP[status]?.label ?? status
+    const stakeholderIds = getDemandStakeholderIds(id)
+    const orgUserIds = getOrgSubsidiaryUserIds(demand.organizationId)
+    Promise.all([stakeholderIds, orgUserIds]).then(([sIds, oIds]) => {
+      const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
+      notifyUsers(recipients, {
+        type: "DEMAND_STATUS",
+        title: "需求狀態變更",
+        message: `需求 ${demand.demandNumber}「${demand.title}」狀態已從「${fromLabel}」變更為「${toLabel}」。`,
+        linkUrl: `/demands/${id}`,
+      })
+    })
+    logAudit({
+      userId: auth.userId,
+      action: "STATUS_CHANGE",
+      entity: "DEMAND",
+      entityId: id,
+      demandId: id,
+      details: { fromStatus: demand.status, toStatus: status },
+      request,
+    })
+
     return NextResponse.json({ demand: { id: updated.id, status: updated.status } })
   } catch (error) {
     if (error instanceof AuthError) {
@@ -360,7 +419,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin"])
     const { id } = await params
 
     const demand = await prisma.demand.findUnique({ where: { id } })
@@ -369,6 +428,16 @@ export async function DELETE(
     }
 
     await prisma.demand.delete({ where: { id } })
+
+    logAudit({
+      userId: auth.userId,
+      action: "DELETE",
+      entity: "DEMAND",
+      entityId: id,
+      demandId: id,
+      details: { demandNumber: demand.demandNumber, title: demand.title },
+      request,
+    })
 
     return NextResponse.json({ message: "需求已刪除" })
   } catch (error) {

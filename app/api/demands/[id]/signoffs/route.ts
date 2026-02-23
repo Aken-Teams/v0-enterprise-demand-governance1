@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
-import { SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
+import { SIGNOFF_REQUIRED_PHASES, STATUS_MAP } from "@/lib/constants/demand"
+import { notifyUsers, getOrgSubsidiaryUserIds } from "@/lib/notify"
+import { logAudit } from "@/lib/audit"
 
 // POST: Re-request sign-off (after rejection)
 export async function POST(
@@ -14,7 +16,10 @@ export async function POST(
     const { id } = await params
     const { phase } = await request.json()
 
-    const demand = await prisma.demand.findUnique({ where: { id } })
+    const demand = await prisma.demand.findUnique({
+      where: { id },
+      select: { id: true, demandNumber: true, title: true, status: true, organizationId: true },
+    })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
@@ -46,6 +51,27 @@ export async function POST(
       include: {
         requestedBy: { select: { id: true, name: true } },
       },
+    })
+
+    // Fire-and-forget: notify org subsidiary users + audit
+    const phaseLabel = STATUS_MAP[phase]?.label ?? phase
+    getOrgSubsidiaryUserIds(demand.organizationId).then((orgIds) => {
+      const recipients = orgIds.filter(uid => uid !== auth.userId)
+      notifyUsers(recipients, {
+        type: "SIGNOFF",
+        title: "簽核請求",
+        message: `需求 ${demand.demandNumber}「${demand.title}」在「${phaseLabel}」階段需要您的簽核確認。`,
+        linkUrl: `/demands/${id}`,
+      })
+    })
+    logAudit({
+      userId: auth.userId,
+      action: "SIGNOFF_REQUEST",
+      entity: "SIGNOFF",
+      entityId: signoff.id,
+      demandId: id,
+      details: { phase },
+      request,
     })
 
     return NextResponse.json({ signoff })
