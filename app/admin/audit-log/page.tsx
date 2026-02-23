@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ScrollText, Loader2, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react"
+import { Loader2, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface AuditLog {
@@ -135,10 +135,7 @@ export default function AuditLogPage() {
     <AppLayout userRole="admin">
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
-            <ScrollText className="h-8 w-8" />
-            操作紀錄
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">操作紀錄</h1>
           <p className="text-muted-foreground mt-1">查看系統所有操作的完整紀錄</p>
         </div>
 
