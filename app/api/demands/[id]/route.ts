@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
+import { canAccessDemand } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { PIPELINE_STEPS } from "@/lib/constants/demand"
 import { updateDemandSchema } from "@/lib/validations/demand"
@@ -13,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    verifyAuth(request)
+    const auth = verifyAuth(request)
     const { id } = await params
 
     const demand = await prisma.demand.findUnique({
@@ -51,6 +52,16 @@ export async function GET(
 
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+    }
+
+    // Access control: check if user can view this demand
+    const hasAccess = await canAccessDemand(auth, {
+      id: demand.id,
+      organizationId: demand.organizationId,
+      developerId: demand.developerId,
+    })
+    if (!hasAccess) {
+      return NextResponse.json({ error: "無權限查看此需求" }, { status: 403 })
     }
 
     return NextResponse.json({ demand })

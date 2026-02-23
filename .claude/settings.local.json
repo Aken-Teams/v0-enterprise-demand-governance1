@@ -16,7 +16,8 @@
       "Bash(npm run lint)",
       "Bash(npx next build:*)",
       "Bash(test:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(npx prisma generate:*)"
     ],
     "defaultMode": "acceptEdits"
   }

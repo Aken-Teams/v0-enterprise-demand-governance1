@@ -19,7 +19,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Users, Shield, UserCheck, Edit, Loader2, Search, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Users, Shield, UserCheck, Edit, Loader2, Search, ChevronLeft, ChevronRight, Plus, Trash2, Eye } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
@@ -33,7 +34,15 @@ interface UserRow {
   isActive: boolean
   organizationId: string | null
   organizationName: string | null
+  accessCount: number
   createdAt: string
+}
+
+interface DemandOption {
+  id: string
+  demandNumber: string
+  title: string
+  status: string
 }
 
 interface Summary {
@@ -82,6 +91,14 @@ export default function UsersPage() {
   // Delete dialog
   const [deleteUser, setDeleteUser] = useState<UserRow | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Permission dialog
+  const [permUser, setPermUser] = useState<UserRow | null>(null)
+  const [permDemandIds, setPermDemandIds] = useState<Set<string>>(new Set())
+  const [permAllDemands, setPermAllDemands] = useState<DemandOption[]>([])
+  const [permLoading, setPermLoading] = useState(false)
+  const [permSaving, setPermSaving] = useState(false)
+  const [permSearch, setPermSearch] = useState("")
 
   // Filter & pagination
   const [searchQuery, setSearchQuery] = useState("")
@@ -254,6 +271,91 @@ export default function UsersPage() {
     }
   }
 
+  // --- Permission ---
+  const openPermission = async (user: UserRow) => {
+    setPermUser(user)
+    setPermLoading(true)
+    setPermSearch("")
+    try {
+      // Fetch current whitelist and available demands in parallel
+      const params = new URLSearchParams()
+      if (user.role === "subsidiary" && user.organizationId) {
+        params.set("organizationId", user.organizationId)
+      } else if (user.role === "delivery") {
+        params.set("developerId", user.id)
+      }
+
+      const [accessRes, demandsRes] = await Promise.all([
+        fetch(`/api/admin/users/${user.id}/access`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/demands?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ])
+
+      const accessData = await accessRes.json()
+      const demandsData = await demandsRes.json()
+
+      if (accessRes.ok) {
+        setPermDemandIds(new Set(accessData.demandIds as string[]))
+      }
+      if (demandsRes.ok) {
+        setPermAllDemands(
+          demandsData.demands.map((d: { id: string; demandNumber: string; title: string; status: string }) => ({
+            id: d.id,
+            demandNumber: d.demandNumber,
+            title: d.title,
+            status: d.status,
+          }))
+        )
+      }
+    } catch {
+      toast.error("載入權限資料失敗")
+    } finally {
+      setPermLoading(false)
+    }
+  }
+
+  const handlePermSave = async () => {
+    if (!token || !permUser) return
+    setPermSaving(true)
+    try {
+      const res = await fetch(`/api/admin/users/${permUser.id}/access`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ demandIds: Array.from(permDemandIds) }),
+      })
+      if (res.ok) {
+        toast.success(permDemandIds.size > 0 ? `已限制為 ${permDemandIds.size} 筆可見需求` : "已解除限制，可看全部需求")
+        setPermUser(null)
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast.error(data.error || "儲存失敗")
+      }
+    } catch {
+      toast.error("網路錯誤")
+    } finally {
+      setPermSaving(false)
+    }
+  }
+
+  const togglePermDemand = (demandId: string) => {
+    setPermDemandIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(demandId)) next.delete(demandId)
+      else next.add(demandId)
+      return next
+    })
+  }
+
+  const filteredPermDemands = permAllDemands.filter((d) => {
+    if (!permSearch) return true
+    const q = permSearch.toLowerCase()
+    return d.demandNumber.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
+  })
+
   if (loading) {
     return (
       <AppLayout userRole="admin">
@@ -355,6 +457,7 @@ export default function UsersPage() {
                   <TableHead className="text-center">角色</TableHead>
                   <TableHead className="text-center">組織</TableHead>
                   <TableHead className="text-center">狀態</TableHead>
+                  <TableHead className="text-center">可見需求</TableHead>
                   <TableHead className="text-center">建立時間</TableHead>
                   <TableHead className="text-center">操作</TableHead>
                 </TableRow>
@@ -362,7 +465,7 @@ export default function UsersPage() {
               <TableBody>
                 {paged.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       無符合條件的使用者
                     </TableCell>
                   </TableRow>
@@ -388,11 +491,29 @@ export default function UsersPage() {
                         {user.isActive ? "啟用" : "停用"}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-center">
+                      {user.role === "admin" ? (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      ) : user.accessCount > 0 ? (
+                        <Badge variant="outline" className="border-orange-300 text-orange-600 text-xs">
+                          限 {user.accessCount} 筆
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">全部</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-center text-sm text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString("zh-TW")}
                     </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {user.role !== "admin" ? (
+                          <Button variant="ghost" size="sm" onClick={() => openPermission(user)} title="權限設定">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <div className="w-8" />
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => openEdit(user)}>
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -587,6 +708,101 @@ export default function UsersPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* ===== Permission Dialog ===== */}
+        <Dialog open={!!permUser} onOpenChange={(open) => !open && setPermUser(null)}>
+          <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Eye className="h-4 w-4" />
+                設定「{permUser?.name}」的可見需求
+              </DialogTitle>
+              <DialogDescription>
+                勾選此帳號可以查看的需求。未勾選任何需求表示可看到全部（角色預設權限）。
+              </DialogDescription>
+            </DialogHeader>
+            {permLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="flex-1 overflow-hidden flex flex-col gap-3">
+                {/* Status bar */}
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {permDemandIds.size > 0
+                      ? <span>已選 <span className="font-medium text-foreground">{permDemandIds.size}</span> / {permAllDemands.length} 筆</span>
+                      : <span className="text-emerald-600">未限制（可看全部）</span>
+                    }
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => setPermDemandIds(new Set(permAllDemands.map((d) => d.id)))}
+                    >
+                      全選
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => setPermDemandIds(new Set())}
+                    >
+                      清除
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="搜尋需求編號或標題..."
+                    className="pl-9 h-8 text-sm"
+                    value={permSearch}
+                    onChange={(e) => setPermSearch(e.target.value)}
+                  />
+                </div>
+
+                {/* Demand list */}
+                <div className="flex-1 overflow-y-auto border rounded-md divide-y max-h-[340px]">
+                  {filteredPermDemands.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">無可選需求</p>
+                  ) : (
+                    filteredPermDemands.map((d) => (
+                      <label
+                        key={d.id}
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={permDemandIds.has(d.id)}
+                          onCheckedChange={() => togglePermDemand(d.id)}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-muted-foreground shrink-0">{d.demandNumber}</span>
+                            <span className="text-sm truncate">{d.title}</span>
+                          </div>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="outline" onClick={() => setPermUser(null)}>取消</Button>
+                  <Button onClick={handlePermSave} disabled={permSaving}>
+                    {permSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    儲存
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   )

@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const users = await prisma.user.findMany({
       include: {
         organization: { select: { id: true, name: true } },
+        _count: { select: { demandAccessGrants: true } },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
       isActive: u.isActive,
       organizationId: u.organizationId,
       organizationName: u.organization?.name || null,
+      accessCount: u._count.demandAccessGrants,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
     }))

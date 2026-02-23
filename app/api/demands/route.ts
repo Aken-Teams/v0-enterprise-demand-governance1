@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { createDemandSchema } from "@/lib/validations/demand"
 import { generateDemandNumber } from "@/lib/demand-number"
+import { buildDemandVisibilityFilter } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -207,7 +208,7 @@ const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
 
 export async function GET(request: NextRequest) {
   try {
-    verifyAuth(request)
+    const auth = verifyAuth(request)
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
@@ -215,6 +216,9 @@ export async function GET(request: NextRequest) {
     const submitterId = searchParams.get("submitterId")
     const developerId = searchParams.get("developerId")
     const organizationId = searchParams.get("organizationId")
+
+    // Server-side visibility filter based on user's whitelist
+    const visibilityFilter = await buildDemandVisibilityFilter(auth)
 
     // Build where clause
     const where: Record<string, unknown> = {}
@@ -238,16 +242,25 @@ export async function GET(request: NextRequest) {
       ]
     }
 
+    // Merge visibility filter into where clause
+    const finalWhere = visibilityFilter
+      ? { AND: [where, visibilityFilter] }
+      : where
+
     // Build base filter for counts (same scope as list, minus search/status)
     const countWhere: Record<string, unknown> = {}
     if (organizationId) countWhere.organizationId = organizationId
     if (developerId) countWhere.developerId = developerId === "unassigned" ? null : developerId
     if (submitterId) countWhere.submitterId = submitterId
 
+    const finalCountWhere = visibilityFilter
+      ? { AND: [countWhere, visibilityFilter] }
+      : countWhere
+
     // Fetch demands, counts, and filter options in parallel
     const [demands, total, counts, submitters, developers] = await Promise.all([
       prisma.demand.findMany({
-        where,
+        where: finalWhere,
         include: {
           organization: { select: { name: true } },
           submitter: { select: { name: true } },
@@ -258,22 +271,27 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.demand.count({ where: countWhere }),
+      prisma.demand.count({ where: finalCountWhere }),
       prisma.demand.groupBy({
         by: ["status"],
-        where: countWhere,
+        where: finalCountWhere,
         _count: { _all: true },
       }),
-      prisma.user.findMany({
-        where: { isActive: true, role: "subsidiary" },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
-      }),
-      prisma.user.findMany({
-        where: { isActive: true },
-        select: { id: true, name: true, role: true },
-        orderBy: { name: "asc" },
-      }),
+      // Only admin gets full filter options; others don't need them
+      auth.role === "admin"
+        ? prisma.user.findMany({
+            where: { isActive: true, role: "subsidiary" },
+            select: { id: true, name: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
+      auth.role === "admin"
+        ? prisma.user.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true, role: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
     ])
 
     // Build status count map
@@ -288,17 +306,13 @@ export async function GET(request: NextRequest) {
       const currentYear = new Date().getFullYear()
       const wallet = await prisma.spWallet.findFirst({
         where: { organizationId, year: currentYear },
-        select: { totalQuota: true },
+        select: { totalQuota: true, committedSp: true, usedSp: true },
       })
-      const totalQuota = wallet?.totalQuota ?? 0
-      let committedSp = 0
-      let usedSp = 0
-      for (const d of demands) {
-        const sp = d.confirmedSp ?? d.estimatedSp
-        if (d.status === "CLOSED") usedSp += sp
-        else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") committedSp += sp
+      spSummary = {
+        totalQuota: wallet?.totalQuota ?? 0,
+        committedSp: wallet?.committedSp ?? 0,
+        usedSp: wallet?.usedSp ?? 0,
       }
-      spSummary = { totalQuota, committedSp, usedSp }
     }
 
     return NextResponse.json({
