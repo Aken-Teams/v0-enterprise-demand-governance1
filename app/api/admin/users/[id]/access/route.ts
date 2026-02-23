@@ -68,20 +68,19 @@ export async function PUT(
     })
 
     // Resolve demand numbers for audit log
-    const demands = demandIds.length > 0
+    const grantedDemands = demandIds.length > 0
       ? await prisma.demand.findMany({
           where: { id: { in: demandIds } },
           select: { demandNumber: true, title: true },
         })
       : []
-    const demandList = demands.map((d) => `${d.demandNumber}（${d.title}）`)
 
     logAudit({
       userId: auth.userId,
       action: "GRANT",
       entity: "ACCESS",
       entityId: id,
-      details: { demands: demandList.join("、") || "無", count: demandIds.length },
+      details: { demands: grantedDemands.map((d) => `${d.demandNumber} ${d.title}`) },
       request,
     })
 

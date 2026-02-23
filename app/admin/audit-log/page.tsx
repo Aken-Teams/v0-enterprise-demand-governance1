@@ -439,12 +439,41 @@ export default function AuditLogPage() {
                         <span className="text-sm font-medium text-foreground">詳細資料</span>
                       </div>
                       <div className="space-y-2.5">
-                        {Object.entries(details).map(([key, value]) => (
-                          <div key={key} className="flex items-baseline justify-between gap-4 text-sm">
-                            <span className="text-muted-foreground shrink-0">{DETAIL_KEY_LABELS[key] || key}</span>
-                            <span className="text-right font-medium break-all">{formatDetailValue(key, value)}</span>
-                          </div>
-                        ))}
+                        {Object.entries(details)
+                          .filter(([key]) => {
+                            // Hide count when demands are present
+                            if (key === "count" && ("demands" in details)) return false
+                            return true
+                          })
+                          .map(([key, value]) => {
+                          // demands list — handle both array (new) and string (old "、"-joined) format
+                          if (key === "demands" && value) {
+                            const items: string[] = Array.isArray(value)
+                              ? value.map(String)
+                              : String(value).split("、").filter(Boolean)
+                            if (items.length > 0) {
+                              return (
+                                <div key={key} className="text-sm">
+                                  <span className="text-muted-foreground">{DETAIL_KEY_LABELS[key] || key}</span>
+                                  <div className="mt-1.5 space-y-1">
+                                    {items.map((item, i) => (
+                                      <div key={i} className="flex items-center gap-2 rounded bg-muted/50 px-2.5 py-1.5 text-xs font-medium">
+                                        <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                        {item}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            }
+                          }
+                          return (
+                            <div key={key} className="flex items-baseline justify-between gap-4 text-sm">
+                              <span className="text-muted-foreground shrink-0">{DETAIL_KEY_LABELS[key] || key}</span>
+                              <span className="text-right font-medium break-all">{formatDetailValue(key, value)}</span>
+                            </div>
+                          )
+                        })}
                       </div>
                     </>
                   )}
