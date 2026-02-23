@@ -165,7 +165,7 @@ export function PhaseSignoffBanner({
                 onChange={handleFileChange}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.jpg,.jpeg,.png,.gif,.webp"
               />
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Button
                   size="sm"
                   variant="destructive"
@@ -175,23 +175,26 @@ export function PhaseSignoffBanner({
                   {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                   確認退回
                 </Button>
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-muted-foreground"
                   onClick={() => { setShowForm(false); setComment(""); setError(""); setFiles([]) }}
                   disabled={loading}
                 >
                   取消
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1 ml-auto"
+                  size="sm"
+                  variant="outline"
+                  className="text-muted-foreground ml-auto"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
                 >
-                  <Paperclip className="h-3 w-3" />
+                  <Paperclip className="h-3.5 w-3.5 mr-1" />
                   附加檔案
-                </button>
+                </Button>
               </div>
             </div>
           )}
