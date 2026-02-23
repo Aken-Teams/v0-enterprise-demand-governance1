@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
-import { Check, Clock, X, SkipForward, FileIcon, Download, Filter } from "lucide-react"
+import { Check, Clock, X, SkipForward, FileIcon, Download, Filter, Paperclip, Trash2, Loader2 } from "lucide-react"
 
 interface SignoffDocument {
   id: string
@@ -27,6 +28,9 @@ interface SignoffRecord {
 
 interface SignoffHistoryProps {
   signoffs: SignoffRecord[]
+  demandId?: string
+  token?: string | null
+  onRefresh?: () => void
 }
 
 const STATUS_ICONS: Record<string, typeof Check> = {
@@ -59,10 +63,17 @@ type FilterStatus = "all" | string
 
 const PAGE_SIZE = 10
 
-export function SignoffHistory({ signoffs }: SignoffHistoryProps) {
+export function SignoffHistory({ signoffs, demandId, token, onRefresh }: SignoffHistoryProps) {
   const [filterPhase, setFilterPhase] = useState<FilterPhase>("all")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [page, setPage] = useState(1)
+
+  // Post-hoc upload state per signoff
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploadError, setUploadError] = useState("")
+  const [uploadLoading, setUploadLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Collect unique phases present in signoffs
   const phases = useMemo(() => {
@@ -91,6 +102,58 @@ export function SignoffHistory({ signoffs }: SignoffHistoryProps) {
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const hasFilters = filterPhase !== "all" || filterStatus !== "all"
 
+  const canUpload = !!demandId && !!token
+
+  const startUpload = (signoffId: string) => {
+    setUploadingId(signoffId)
+    setPendingFiles([])
+    setUploadError("")
+  }
+
+  const cancelUpload = () => {
+    setUploadingId(null)
+    setPendingFiles([])
+    setUploadError("")
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)])
+      e.target.value = ""
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const submitFiles = async () => {
+    if (!uploadingId || !demandId || !token || pendingFiles.length === 0) return
+    setUploadLoading(true)
+    setUploadError("")
+    try {
+      const formData = new FormData()
+      pendingFiles.forEach((f) => formData.append("files", f))
+
+      const res = await fetch(`/api/demands/${demandId}/signoffs/${uploadingId}/documents`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      if (res.ok) {
+        cancelUpload()
+        onRefresh?.()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setUploadError(data.error || "上傳失敗")
+      }
+    } catch {
+      setUploadError("網路錯誤")
+    } finally {
+      setUploadLoading(false)
+    }
+  }
+
   if (signoffs.length === 0) {
     return (
       <p className="text-xs text-muted-foreground/40 text-center py-4">尚無簽核紀錄</p>
@@ -99,6 +162,16 @@ export function SignoffHistory({ signoffs }: SignoffHistoryProps) {
 
   return (
     <div className="space-y-4">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileChange}
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.jpg,.jpeg,.png,.gif,.webp"
+      />
+
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap rounded-lg bg-muted/40 border border-border/60 px-3 py-2">
         <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -187,6 +260,8 @@ export function SignoffHistory({ signoffs }: SignoffHistoryProps) {
               const statusInfo = SIGNOFF_STATUS_MAP[s.status]
               const phaseLabel = STATUS_MAP[s.phase]?.label || s.phase
               const docs = s.documents?.filter((d) => d.fileUrl) || []
+              const isUploading = uploadingId === s.id
+              const canAddDocs = canUpload && (s.status === "REJECTED" || s.status === "APPROVED")
 
               return (
                 <div key={s.id} className="flex gap-3">
@@ -242,6 +317,78 @@ export function SignoffHistory({ signoffs }: SignoffHistoryProps) {
                             <Download className="h-3 w-3 text-muted-foreground/40 group-hover:text-foreground shrink-0" />
                           </a>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Post-hoc upload area */}
+                    {canAddDocs && !isUploading && (
+                      <button
+                        className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                        onClick={() => startUpload(s.id)}
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        補充文件
+                      </button>
+                    )}
+
+                    {isUploading && (
+                      <div className="mt-2 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+                        {/* Pending file list */}
+                        {pendingFiles.length > 0 && (
+                          <div className="space-y-1">
+                            {pendingFiles.map((f, i) => (
+                              <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded bg-white border border-border/60 px-2 py-1 text-xs">
+                                <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span className="truncate flex-1">{f.name}</span>
+                                <span className="text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                                <button
+                                  type="button"
+                                  className="text-red-400 hover:text-red-600 shrink-0"
+                                  onClick={() => removeFile(i)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadLoading}
+                          >
+                            <Paperclip className="h-3 w-3 mr-1" />
+                            選擇檔案
+                          </Button>
+                          <div className="flex items-center gap-2 ml-auto">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs text-muted-foreground"
+                              onClick={cancelUpload}
+                              disabled={uploadLoading}
+                            >
+                              取消
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={submitFiles}
+                              disabled={uploadLoading || pendingFiles.length === 0}
+                            >
+                              {uploadLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                              上傳
+                            </Button>
+                          </div>
+                        </div>
+
+                        {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
                       </div>
                     )}
                   </div>

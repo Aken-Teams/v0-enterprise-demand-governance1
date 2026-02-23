@@ -1179,7 +1179,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <SignoffHistory signoffs={demand.phaseSignoffs || []} />
+                <SignoffHistory signoffs={demand.phaseSignoffs || []} demandId={demand.id} token={token} onRefresh={fetchDemand} />
               </CardContent>
             </Card>
           </TabsContent>

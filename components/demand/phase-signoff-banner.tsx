@@ -167,34 +167,36 @@ export function PhaseSignoffBanner({
               />
               <div className="flex items-center gap-2">
                 <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleAction("reject")}
-                  disabled={loading}
-                >
-                  {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                  確認退回
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-muted-foreground"
-                  onClick={() => { setShowForm(false); setComment(""); setError(""); setFiles([]) }}
-                  disabled={loading}
-                >
-                  取消
-                </Button>
-                <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="text-muted-foreground ml-auto"
+                  className="text-muted-foreground"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
                 >
                   <Paperclip className="h-3.5 w-3.5 mr-1" />
                   附加檔案
                 </Button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-muted-foreground"
+                    onClick={() => { setShowForm(false); setComment(""); setError(""); setFiles([]) }}
+                    disabled={loading}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => handleAction("reject")}
+                    disabled={loading}
+                  >
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                    確認退回
+                  </Button>
+                </div>
               </div>
             </div>
           )}
