@@ -624,28 +624,39 @@ export default function DemandDetailPage() {
                       <div className="flex justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       </div>
-                    ) : (
+                    ) : (() => {
+                      const hasActive = shareLinks.some((s) => new Date(s.expiresAt) > new Date())
+                      return (
                       <>
-                        {shareLinks.filter((s) => new Date(s.expiresAt) > new Date()).length > 0 ? (
+                        {shareLinks.length > 0 ? (
                           <div className="space-y-2">
-                            {shareLinks.filter((s) => new Date(s.expiresAt) > new Date()).map((s) => (
-                              <div key={s.id} className="rounded-lg border p-3 space-y-2">
-                                <p className="text-sm font-mono text-foreground break-all">
-                                  {typeof window !== "undefined" ? `${window.location.origin}/share/${s.token}` : `/share/${s.token}`}
-                                </p>
+                            {shareLinks.map((s) => {
+                              const expired = new Date(s.expiresAt) <= new Date()
+                              return (
+                              <div key={s.id} className={cn("rounded-lg border p-3 space-y-2", expired && "opacity-60 bg-muted/30")}>
+                                <div className="flex items-center gap-2">
+                                  <p className={cn("text-sm font-mono break-all flex-1", expired ? "text-muted-foreground line-through" : "text-foreground")}>
+                                    {typeof window !== "undefined" ? `${window.location.origin}/share/${s.token}` : `/share/${s.token}`}
+                                  </p>
+                                  {expired && (
+                                    <Badge variant="outline" className="text-[10px] text-red-500 border-red-200 shrink-0">已失效</Badge>
+                                  )}
+                                </div>
                                 <div className="flex items-center justify-between">
                                   <p className="text-xs text-muted-foreground">
-                                    有效至 {new Date(s.expiresAt).toLocaleDateString("zh-TW")} · {s.createdBy.name} 建立
+                                    {expired ? "已於" : "有效至"} {new Date(s.expiresAt).toLocaleDateString("zh-TW")} {expired ? "過期" : ""} · {s.createdBy.name} 建立
                                   </p>
                                   <div className="flex items-center gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7"
-                                      onClick={() => copyShareUrl(s.token)}
-                                    >
-                                      {shareCopied === s.token ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                                    </Button>
+                                    {!expired && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => copyShareUrl(s.token)}
+                                      >
+                                        {shareCopied === s.token ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -657,20 +668,22 @@ export default function DemandDetailPage() {
                                   </div>
                                 </div>
                               </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground text-center py-2">目前沒有有效的分享連結</p>
+                          <p className="text-sm text-muted-foreground text-center py-2">目前沒有分享連結</p>
                         )}
-                        <Button onClick={createShareLink} disabled={shareLoading} className="w-full">
+                        <Button onClick={createShareLink} disabled={shareLoading || hasActive} className="w-full">
                           {shareLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Share2 className="h-4 w-4 mr-2" />}
                           產生新的分享連結（7 天有效）
                         </Button>
                         <p className="text-[11px] text-muted-foreground text-center">
-                          分享連結為唯讀，登入後可執行簽核操作
+                          {hasActive ? "已有有效連結，到期後才可產生新連結" : "唯讀分享，登入後可簽核"}
                         </p>
                       </>
-                    )}
+                      )
+                    })()}
                   </div>
                 </DialogContent>
               </Dialog>
