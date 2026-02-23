@@ -272,6 +272,12 @@ function fmtDateFull(dateStr: string) {
 }
 
 // ━━━━━━━━━━━━ Login Modal ━━━━━━━━━━━━
+interface OrgWithUsers {
+  id: string
+  name: string
+  users: { id: string; name: string; email: string }[]
+}
+
 function LoginModal({
   open,
   onOpenChange,
@@ -283,21 +289,55 @@ function LoginModal({
   shareToken: string
   onSuccess: (user: ShareUser, token: string) => void
 }) {
-  const [email, setEmail] = useState("")
+  const [organizations, setOrganizations] = useState<OrgWithUsers[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState("")
+  const [selectedEmail, setSelectedEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [fetchingUsers, setFetchingUsers] = useState(false)
   const [error, setError] = useState("")
+
+  // Fetch organizations & users when modal opens
+  useEffect(() => {
+    if (!open) return
+    setFetchingUsers(true)
+    fetch(`/api/share/${shareToken}/users`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.organizations) {
+          setOrganizations(data.organizations)
+          // Auto-select first org
+          if (data.organizations.length > 0) {
+            setSelectedOrgId(data.organizations[0].id)
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setFetchingUsers(false))
+  }, [open, shareToken])
+
+  // Users in the selected organization
+  const orgUsers = organizations.find((o) => o.id === selectedOrgId)?.users || []
+
+  // Auto-select first account when org changes
+  useEffect(() => {
+    if (orgUsers.length > 0) {
+      setSelectedEmail(orgUsers[0].email)
+    } else {
+      setSelectedEmail("")
+    }
+  }, [selectedOrgId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) { setError("請輸入帳號和密碼"); return }
+    if (!selectedEmail || !password) { setError("請選擇帳號並輸入密碼"); return }
     setLoading(true)
     setError("")
     try {
       const res = await fetch(`/api/share/${shareToken}/auth`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: selectedEmail, password }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -322,18 +362,49 @@ function LoginModal({
             登入以執行操作
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-2">
-            <Label htmlFor="share-email">帳號 (Email)</Label>
-            <Input
-              id="share-email"
-              type="email"
-              placeholder="name@company.com"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError("") }}
-              autoFocus
-            />
+        {fetchingUsers ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
+        ) : (
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          {/* 公司 */}
+          <div className="space-y-2">
+            <Label>公司</Label>
+            {organizations.length <= 1 ? (
+              <div className="flex h-9 items-center rounded-md border border-input bg-muted/50 px-3 text-sm">
+                {organizations[0]?.name || "—"}
+              </div>
+            ) : (
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={selectedOrgId}
+                onChange={(e) => { setSelectedOrgId(e.target.value); setError("") }}
+              >
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          {/* 帳號 */}
+          <div className="space-y-2">
+            <Label>帳號</Label>
+            {orgUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">此公司尚無可用帳號</p>
+            ) : (
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={selectedEmail}
+                onChange={(e) => { setSelectedEmail(e.target.value); setError("") }}
+              >
+                {orgUsers.map((u) => (
+                  <option key={u.id} value={u.email}>{u.name}（{u.email}）</option>
+                ))}
+              </select>
+            )}
+          </div>
+          {/* 密碼 */}
           <div className="space-y-2">
             <Label htmlFor="share-password">密碼</Label>
             <Input
@@ -344,11 +415,12 @@ function LoginModal({
             />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || !selectedEmail}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             登入
           </Button>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   )
