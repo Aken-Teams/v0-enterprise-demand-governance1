@@ -43,19 +43,51 @@ export async function GET(request: NextRequest) {
       prisma.auditLog.count({ where }),
     ])
 
-    const logs = rawLogs.map((log) => ({
-      id: log.id,
-      userId: log.userId,
-      action: log.action,
-      entity: log.entity,
-      entityId: log.entityId,
-      demandId: log.demandId,
-      details: log.details,
-      ipAddress: log.ipAddress,
-      createdAt: log.createdAt instanceof Date ? log.createdAt.toISOString() : String(log.createdAt),
-      user: log.user ? { id: log.user.id, name: log.user.name, email: log.user.email } : null,
-      demand: log.demand ? { id: log.demand.id, demandNumber: log.demand.demandNumber, title: log.demand.title } : null,
-    }))
+    // Resolve organizationId in details to org names
+    const orgIds = new Set<string>()
+    for (const log of rawLogs) {
+      if (log.details) {
+        try {
+          const d = JSON.parse(log.details)
+          if (d.organizationId && typeof d.organizationId === "string") orgIds.add(d.organizationId)
+        } catch { /* ignore */ }
+      }
+    }
+    const orgMap = new Map<string, string>()
+    if (orgIds.size > 0) {
+      const orgs = await prisma.organization.findMany({
+        where: { id: { in: [...orgIds] } },
+        select: { id: true, name: true },
+      })
+      for (const o of orgs) orgMap.set(o.id, o.name)
+    }
+
+    const logs = rawLogs.map((log) => {
+      let details = log.details
+      if (details) {
+        try {
+          const d = JSON.parse(details)
+          if (d.organizationId && orgMap.has(d.organizationId)) {
+            d.organization = orgMap.get(d.organizationId)
+            delete d.organizationId
+            details = JSON.stringify(d)
+          }
+        } catch { /* ignore */ }
+      }
+      return {
+        id: log.id,
+        userId: log.userId,
+        action: log.action,
+        entity: log.entity,
+        entityId: log.entityId,
+        demandId: log.demandId,
+        details,
+        ipAddress: log.ipAddress,
+        createdAt: log.createdAt instanceof Date ? log.createdAt.toISOString() : String(log.createdAt),
+        user: log.user ? { id: log.user.id, name: log.user.name, email: log.user.email } : null,
+        demand: log.demand ? { id: log.demand.id, demandNumber: log.demand.demandNumber, title: log.demand.title } : null,
+      }
+    })
 
     return NextResponse.json({ logs, total, page, limit })
   } catch (error) {

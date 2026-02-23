@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
         role: role as "admin" | "delivery" | "subsidiary",
         organizationId: organizationId || null,
       },
+      include: { organization: { select: { name: true } } },
     })
 
     logAudit({
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       action: "CREATE",
       entity: "USER",
       entityId: user.id,
-      details: { name, email, role, organizationId: organizationId || null },
+      details: { name, email, role, organization: user.organization?.name || null },
       request,
     })
 

@@ -77,6 +77,106 @@ function formatDetails(details: string | null): Record<string, unknown> | null {
   catch { return null }
 }
 
+const DETAIL_KEY_LABELS: Record<string, string> = {
+  name: "名稱",
+  email: "電子郵件",
+  role: "角色",
+  organizationId: "組織",
+  organization: "組織",
+  fields: "變更欄位",
+  passwordChanged: "密碼變更",
+  deletedUserId: "刪除的使用者 ID",
+  demandNumber: "需求編號",
+  title: "標題",
+  managerId: "管理者",
+  developerId: "開發者",
+  fromStatus: "原狀態",
+  toStatus: "新狀態",
+  fileName: "檔案名稱",
+  fileSize: "檔案大小",
+  type: "文件類型",
+  isInternal: "內部留言",
+  phase: "簽核階段",
+  action: "操作",
+  token: "分享令牌",
+  expiresAt: "到期時間",
+  shareId: "分享連結 ID",
+  demandIds: "需求列表",
+  count: "數量",
+  spQuota: "SP 預算",
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  SUBMITTED: "已提交",
+  APPROVED: "已立案",
+  IN_PROGRESS: "開發中",
+  TESTING: "測試中",
+  ACCEPTANCE: "驗收中",
+  COMPLETED: "已完成",
+  CLOSED: "已結案",
+  REJECTED: "已退回",
+}
+
+const ROLE_LABELS_MAP: Record<string, string> = {
+  admin: "管理員",
+  delivery: "交付團隊",
+  subsidiary: "需求單位",
+}
+
+const PHASE_LABELS: Record<string, string> = {
+  CASE_OPEN: "開案確認",
+  DEVELOPMENT_COMPLETE: "開發完成確認",
+  TESTING_COMPLETE: "測試完成確認",
+  ACCEPTANCE: "驗收確認",
+}
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  REQUIREMENTS: "需求規格",
+  DESIGN: "設計文件",
+  DEVELOPMENT: "開發文件",
+  TESTING: "測試文件",
+  ACCEPTANCE: "驗收文件",
+  OTHER: "其他",
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  title: "標題",
+  description: "描述",
+  priority: "優先順序",
+  estimatedSP: "預估 SP",
+  actualSP: "實際 SP",
+  managerId: "管理者",
+  developerId: "開發者",
+  status: "狀態",
+  expectedDate: "預期日期",
+  name: "名稱",
+  progress: "進度",
+  assigneeId: "負責人",
+}
+
+function formatDetailValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return "—"
+  if (typeof value === "boolean") return value ? "是" : "否"
+  if (key === "fromStatus" || key === "toStatus") return STATUS_LABELS[String(value)] || String(value)
+  if (key === "role") return ROLE_LABELS_MAP[String(value)] || String(value)
+  if (key === "phase") return PHASE_LABELS[String(value)] || String(value)
+  if (key === "type") return DOC_TYPE_LABELS[String(value)] || String(value)
+  if (key === "action") return ACTION_LABELS[String(value)] || String(value)
+  if (key === "fileSize" && typeof value === "number") {
+    if (value < 1024) return `${value} B`
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+    return `${(value / 1024 / 1024).toFixed(1)} MB`
+  }
+  if (key === "fields" && Array.isArray(value)) {
+    return value.map((f) => FIELD_LABELS[String(f)] || String(f)).join("、")
+  }
+  if (key === "demandIds" && Array.isArray(value)) return `${value.length} 筆`
+  if (key === "expiresAt") {
+    try { return new Date(String(value)).toLocaleString("zh-TW") } catch { return String(value) }
+  }
+  return String(value)
+}
+
 export default function AuditLogPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [total, setTotal] = useState(0)
@@ -144,7 +244,7 @@ export default function AuditLogPage() {
           <CardContent className="pt-6">
             <div className="flex flex-wrap items-end gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs">實體類型</Label>
+                <Label className="text-xs">種類</Label>
                 <select
                   className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   value={filterEntity}
@@ -215,7 +315,7 @@ export default function AuditLogPage() {
                       <th className="pb-3 pr-4 font-medium text-muted-foreground">時間</th>
                       <th className="pb-3 pr-4 font-medium text-muted-foreground">操作者</th>
                       <th className="pb-3 pr-4 font-medium text-muted-foreground">操作</th>
-                      <th className="pb-3 pr-4 font-medium text-muted-foreground">實體</th>
+                      <th className="pb-3 pr-4 font-medium text-muted-foreground">種類</th>
                       <th className="pb-3 pr-4 font-medium text-muted-foreground">關聯需求</th>
                       <th className="pb-3 font-medium text-muted-foreground">詳情</th>
                     </tr>
@@ -318,19 +418,13 @@ export default function AuditLogPage() {
                       </p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">實體</span>
+                      <span className="text-muted-foreground">種類</span>
                       <p className="font-medium">{ENTITY_LABELS[selectedLog.entity] || selectedLog.entity}</p>
                     </div>
                     {selectedLog.demand && (
                       <div className="col-span-2">
                         <span className="text-muted-foreground">關聯需求</span>
                         <p className="font-medium">{selectedLog.demand.demandNumber} — {selectedLog.demand.title}</p>
-                      </div>
-                    )}
-                    {selectedLog.ipAddress && (
-                      <div>
-                        <span className="text-muted-foreground">IP 位址</span>
-                        <p className="font-mono text-xs">{selectedLog.ipAddress}</p>
                       </div>
                     )}
                   </div>
@@ -342,9 +436,11 @@ export default function AuditLogPage() {
                           <tbody>
                             {Object.entries(details).map(([key, value]) => (
                               <tr key={key} className="border-b last:border-b-0">
-                                <td className="py-1.5 pr-4 font-medium text-muted-foreground whitespace-nowrap align-top">{key}</td>
+                                <td className="py-1.5 pr-4 font-medium text-muted-foreground whitespace-nowrap align-top">
+                                  {DETAIL_KEY_LABELS[key] || key}
+                                </td>
                                 <td className="py-1.5 break-all">
-                                  {typeof value === "object" ? JSON.stringify(value) : String(value ?? "—")}
+                                  {formatDetailValue(key, value)}
                                 </td>
                               </tr>
                             ))}
