@@ -14,7 +14,9 @@
       "Bash(rm:*)",
       "Bash(npm run build:*)",
       "Bash(npm run lint)",
-      "Bash(npx next build:*)"
+      "Bash(npx next build:*)",
+      "Bash(test:*)",
+      "Bash(wc:*)"
     ],
     "defaultMode": "acceptEdits"
   }

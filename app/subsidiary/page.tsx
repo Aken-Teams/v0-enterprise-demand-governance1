@@ -9,102 +9,27 @@ import {
   Timer,
   ListTodo,
   ChartLine,
-  PieChart,
+  PieChart as PieChartIcon,
   Gauge,
   Loader2,
   Radio,
 } from "lucide-react"
+import { PieChart, Pie, Cell, Label } from "recharts"
+import {
+  ChartContainer,
+  ChartTooltip,
+  type ChartConfig,
+} from "@/components/ui/chart"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 
-/** Donut chart where `total` is the full ring (gray bg), and `segments` fill on top. */
-const SpDonutChart = ({ total, segments, availableSp, size = 150 }: {
-  total: number
-  segments: { value: number; color: string; label: string }[]
-  availableSp: number
-  size?: number
-}) => {
-  const sw = size * 0.09
-  const radius = (size - sw) / 2 - 4
-  const circumference = 2 * Math.PI * radius
-  let cumulativePercent = 0
-  const [tooltip, setTooltip] = useState<{ label: string; value: number; pct: string; x: number; y: number } | null>(null)
-
-  // Pre-compute segment midpoints for tooltip positioning (in un-rotated coords)
-  const segMeta = segments.map((seg) => {
-    const pct = total > 0 ? (seg.value / total) * 100 : 0
-    const midPct = cumulativePercent + pct / 2
-    cumulativePercent += pct
-    // Convert percentage to angle (0% = top, clockwise). SVG is rotated -90deg so 0% starts at top.
-    const angle = (midPct / 100) * 2 * Math.PI - Math.PI / 2
-    return {
-      ...seg, pct,
-      mx: size / 2 + radius * Math.cos(angle),
-      my: size / 2 + radius * Math.sin(angle),
-    }
-  })
-  // Available segment midpoint
-  const availPct = total > 0 ? (availableSp / total) * 100 : 100
-  const availMidPct = cumulativePercent + availPct / 2
-  const availAngle = (availMidPct / 100) * 2 * Math.PI - Math.PI / 2
-  const availMx = size / 2 + radius * Math.cos(availAngle)
-  const availMy = size / 2 + radius * Math.sin(availAngle)
-
-  // Reset for render
-  cumulativePercent = 0
-
-  return (
-    <div className="relative"
-      onMouseLeave={() => setTooltip(null)}
-    >
-      <svg width={size} height={size} className="transform -rotate-90">
-        {/* Gray background ring = available */}
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#e5e7eb" strokeWidth={sw}
-          className="cursor-pointer"
-          onMouseEnter={(e) => {
-            const rect = e.currentTarget.ownerSVGElement!.getBoundingClientRect()
-            setTooltip({ label: "可用", value: availableSp, pct: `${total > 0 ? Math.round((availableSp / total) * 100) : 0}%`, x: availMx, y: availMy })
-          }}
-        />
-        {/* Colored segments on top */}
-        {segMeta.map((seg, i) => {
-          const pct = total > 0 ? (seg.value / total) * 100 : 0
-          const dashLen = (pct / 100) * circumference
-          const dash = `${dashLen} ${circumference - dashLen}`
-          const dashOffset = -(cumulativePercent / 100) * circumference
-          cumulativePercent += pct
-          return (
-            <circle key={i} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={seg.color} strokeWidth={sw}
-              strokeDasharray={dash} strokeDashoffset={dashOffset} strokeLinecap="round"
-              className="transition-all duration-1000 ease-out cursor-pointer"
-              onMouseEnter={() => {
-                setTooltip({ label: seg.label, value: seg.value, pct: `${Math.round(seg.pct)}%`, x: seg.mx, y: seg.my })
-              }}
-            />
-          )
-        })}
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="text-center">
-          <div className="text-lg font-bold">{total}</div>
-          <div className="text-xs text-muted-foreground">總配額</div>
-        </div>
-      </div>
-      {/* Tooltip */}
-      {tooltip && (
-        <div
-          className="absolute z-10 pointer-events-none rounded-md bg-popover border px-3 py-1.5 shadow-md text-sm"
-          style={{ left: tooltip.x, top: tooltip.y, transform: "translate(-50%, -140%)" }}
-        >
-          <span className="font-medium">{tooltip.label}</span>
-          <span className="text-muted-foreground ml-2">{tooltip.value}</span>
-          <span className="text-muted-foreground ml-1">({tooltip.pct})</span>
-        </div>
-      )}
-    </div>
-  )
-}
+/** SP donut chart config for Recharts + shadcn ChartContainer */
+const spChartConfig = {
+  used: { label: "已使用", color: "#3b82f6" },
+  committed: { label: "已承諾", color: "#f59e0b" },
+  available: { label: "可用", color: "#e5e7eb" },
+} satisfies ChartConfig
 
 // --- Types ---
 
@@ -175,10 +100,11 @@ export default function SubsidiaryDashboard() {
   const monthlyTrends = data?.monthlyTrends ?? []
   const recentChanges = data?.recentChanges ?? []
 
-  // Only used & committed are colored segments; available = gray background
-  const spSegments = [
-    { value: sp.usedSp, color: "#3b82f6", label: "已使用" },
-    { value: sp.committedSp, color: "#f59e0b", label: "已承諾" },
+  // Recharts data for SP donut — include all three segments
+  const spDonutData = [
+    { key: "used", label: "已使用", value: sp.usedSp, fill: "#3b82f6" },
+    { key: "committed", label: "已承諾", value: sp.committedSp, fill: "#f59e0b" },
+    { key: "available", label: "可用", value: sp.availableSp, fill: "#e5e7eb" },
   ]
 
   const maxMonthlyVal = Math.max(...monthlyTrends.map((m) => Math.max(m.submitted, m.completed)), 1)
@@ -270,12 +196,60 @@ export default function SubsidiaryDashboard() {
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <PieChart className="h-5 w-5" />
+                <PieChartIcon className="h-5 w-5" />
                 SP 使用分析
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
-              <SpDonutChart total={sp.totalQuota} segments={spSegments} availableSp={sp.availableSp} size={200} />
+              <ChartContainer config={spChartConfig} className="aspect-square w-[200px]">
+                <PieChart>
+                  <ChartTooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      const pct = sp.totalQuota > 0 ? Math.round((d.value / sp.totalQuota) * 100) : 0
+                      return (
+                        <div className="rounded-md bg-popover border px-3 py-1.5 shadow-md text-sm">
+                          <span className="font-medium">{d.label}</span>
+                          <span className="text-muted-foreground ml-2">{d.value} SP</span>
+                          <span className="text-muted-foreground ml-1">({pct}%)</span>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Pie
+                    data={spDonutData}
+                    dataKey="value"
+                    nameKey="key"
+                    innerRadius={60}
+                    outerRadius={85}
+                    paddingAngle={4}
+                    cornerRadius={6}
+                    minAngle={12}
+                    strokeWidth={0}
+                  >
+                    {spDonutData.map((d) => (
+                      <Cell key={d.key} fill={d.fill} />
+                    ))}
+                    <Label
+                      content={({ viewBox }) => {
+                        if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                          return (
+                            <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                              <tspan x={viewBox.cx} y={(viewBox.cy || 0) - 8} className="fill-foreground text-2xl font-bold">
+                                {sp.totalQuota}
+                              </tspan>
+                              <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 12} className="fill-muted-foreground text-xs">
+                                總配額
+                              </tspan>
+                            </text>
+                          )
+                        }
+                      }}
+                    />
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
               <div className="grid grid-cols-3 gap-4 w-full text-center">
                 <div className="space-y-1">
                   <div className="flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /></div>
