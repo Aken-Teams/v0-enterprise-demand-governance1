@@ -563,6 +563,15 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="signoffs" className="gap-1.5">
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              簽核紀錄
+              {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
+                <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
+                  {demand.phaseSignoffs.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           {/* ══════ Tab: 概覽 ══════ */}
@@ -908,20 +917,6 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                   </CardContent>
                 </Card>
 
-                {/* Sign-off History */}
-                {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <ClipboardCheck className="h-4 w-4" />
-                        簽核紀錄
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <SignoffHistory signoffs={demand.phaseSignoffs} />
-                    </CardContent>
-                  </Card>
-                )}
               </div>
             </div>
           </TabsContent>
@@ -1172,6 +1167,21 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 </Card>
               </div>
             </div>
+          </TabsContent>
+
+          {/* ══════ Tab: 簽核紀錄 ══════ */}
+          <TabsContent value="signoffs" className="mt-5">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4" />
+                  簽核紀錄
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SignoffHistory signoffs={demand.phaseSignoffs || []} />
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
