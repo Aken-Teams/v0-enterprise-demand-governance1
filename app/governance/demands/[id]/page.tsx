@@ -1098,9 +1098,35 @@ export default function DemandDetailPage() {
                           {(() => {
                             const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
                             const url = selectedDoc.fileUrl
-                            const isExternal = selectedDoc.type === "APP_RESULT" && url?.startsWith("http")
+                            const isExternalLink = (selectedDoc.type === "APP_RESULT" || selectedDoc.type === "GITHUB_REPO") && url?.startsWith("http")
 
-                            if (isExternal) {
+                            if (isExternalLink && selectedDoc.type === "GITHUB_REPO") {
+                              return (
+                                <div className="flex flex-col items-center justify-center gap-4 text-center">
+                                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                                    <ExternalLink className="h-8 w-8 text-muted-foreground/60" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-medium">GitHub 連結</p>
+                                    <a
+                                      href={url!}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sm text-blue-600 hover:underline break-all"
+                                    >
+                                      {url}
+                                    </a>
+                                  </div>
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a href={url!} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="h-3.5 w-3.5 mr-1.5" />前往 GitHub
+                                    </a>
+                                  </Button>
+                                </div>
+                              )
+                            }
+
+                            if (isExternalLink) {
                               return (
                                 <div className="w-full h-full min-h-[520px] flex flex-col">
                                   <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">

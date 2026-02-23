@@ -245,8 +245,8 @@ const PIE_COLORS: Record<string, string> = {
   CLOSED: "#10b981",
 }
 
-// All document types are now visible to subsidiary users
-const CONFIDENTIAL_DOC_TYPES = new Set<string>([])
+// Internal-only document types hidden from subsidiary users
+const CONFIDENTIAL_DOC_TYPES = new Set<string>(["GITHUB_REPO"])
 
 interface DemandDetail {
   id: string
@@ -528,9 +528,9 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             <TabsTrigger value="documents" className="gap-1.5">
               <Paperclip className="h-3.5 w-3.5" />
               文件
-              {demand.documents.length > 0 && (
+              {demand.documents.filter((d) => d.type !== "GITHUB_REPO").length > 0 && (
                 <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
-                  {demand.documents.length}
+                  {demand.documents.filter((d) => d.type !== "GITHUB_REPO").length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -931,9 +931,35 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
                             const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
                             const url = selectedDoc.fileUrl
-                            const isExternal = selectedDoc.type === "APP_RESULT" && url?.startsWith("http")
+                            const isExternalLink = (selectedDoc.type === "APP_RESULT" || selectedDoc.type === "GITHUB_REPO") && url?.startsWith("http")
 
-                            if (isExternal) {
+                            if (isExternalLink && selectedDoc.type === "GITHUB_REPO") {
+                              return (
+                                <div className="flex flex-col items-center justify-center gap-4 text-center">
+                                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                                    <ExternalLink className="h-8 w-8 text-muted-foreground/60" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-medium">GitHub 連結</p>
+                                    <a
+                                      href={url!}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sm text-blue-600 hover:underline break-all"
+                                    >
+                                      {url}
+                                    </a>
+                                  </div>
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a href={url!} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="h-3.5 w-3.5 mr-1.5" />前往 GitHub
+                                    </a>
+                                  </Button>
+                                </div>
+                              )
+                            }
+
+                            if (isExternalLink) {
                               return (
                                 <div className="w-full h-full min-h-[520px] flex flex-col">
                                   <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
@@ -1096,6 +1122,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       onRefresh={fetchDemand}
                       onDocumentSelect={setSelectedDoc}
                       selectedDocId={selectedDoc?.id}
+                      userRole="subsidiary"
                     />
                   </CardContent>
                 </Card>

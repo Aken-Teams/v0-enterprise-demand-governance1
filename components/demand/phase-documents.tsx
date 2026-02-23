@@ -103,7 +103,9 @@ export function PhaseDocuments({
   const [activePhase, setActivePhase] = useState<string | null>(null)
 
   const LINK_TYPES = new Set(["APP_RESULT", "GITHUB_REPO"])
+  const INTERNAL_ONLY_TYPES = new Set(["GITHUB_REPO"])
   const isLinkType = LINK_TYPES.has(uploadType)
+  const isSubsidiary = userRole === "subsidiary"
 
   // Bind external upload trigger button
   useEffect(() => {
@@ -116,19 +118,21 @@ export function PhaseDocuments({
   }, [uploadTriggerSelector])
 
   const getPhaseDocuments = (phase: string) =>
-    documents.filter((d) => d.phase === phase)
+    documents.filter((d) => d.phase === phase && !(isSubsidiary && INTERNAL_ONLY_TYPES.has(d.type)))
 
   const getUnassignedDocuments = () =>
-    documents.filter((d) => !d.phase)
+    documents.filter((d) => !d.phase && !(isSubsidiary && INTERNAL_ONLY_TYPES.has(d.type)))
 
   const getRequiredStatus = (phase: string) => {
     const config = PHASE_DOCUMENT_MAP[phase]
     if (!config) return []
-    return config.required.map((type) => ({
-      type,
-      label: DOCUMENT_TYPE_LABELS[type] || type,
-      uploaded: documents.some((d) => d.phase === phase && d.type === type),
-    }))
+    return config.required
+      .filter((type) => !(isSubsidiary && INTERNAL_ONLY_TYPES.has(type)))
+      .map((type) => ({
+        type,
+        label: DOCUMENT_TYPE_LABELS[type] || type,
+        uploaded: documents.some((d) => d.phase === phase && d.type === type),
+      }))
   }
 
   const handleUpload = async () => {
