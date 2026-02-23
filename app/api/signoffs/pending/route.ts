@@ -11,14 +11,26 @@ export async function GET(request: NextRequest) {
     let demandFilter: Record<string, unknown> = {}
 
     if (auth.role === "subsidiary") {
-      const user = await prisma.user.findUnique({
-        where: { id: auth.userId },
-        select: { organizationId: true },
-      })
-      // Subsidiary sees signoffs for demands in their org
-      demandFilter = user?.organizationId
-        ? { organizationId: user.organizationId }
-        : { submitterId: auth.userId }
+      // Check if user has restricted access (DemandAccess whitelist)
+      const [user, accessGrants] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: auth.userId },
+          select: { organizationId: true },
+        }),
+        prisma.demandAccess.findMany({
+          where: { userId: auth.userId },
+          select: { demandId: true },
+        }),
+      ])
+      if (accessGrants.length > 0) {
+        // Restricted user: only see signoffs for whitelisted demands
+        demandFilter = { id: { in: accessGrants.map((g) => g.demandId) } }
+      } else {
+        // Normal subsidiary: sees signoffs for demands in their org
+        demandFilter = user?.organizationId
+          ? { organizationId: user.organizationId }
+          : { submitterId: auth.userId }
+      }
     } else if (auth.role === "admin") {
       // Admin sees all
       demandFilter = {}

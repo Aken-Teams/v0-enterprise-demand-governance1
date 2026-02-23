@@ -54,6 +54,8 @@ const ACTION_LABELS: Record<string, string> = {
   ASSIGN: "指派",
   GRANT: "授權",
   REVOKE: "撤銷",
+  LOGIN: "登入",
+  LOGOUT: "登出",
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -69,6 +71,8 @@ const ACTION_COLORS: Record<string, string> = {
   ASSIGN: "bg-indigo-100 text-indigo-700",
   GRANT: "bg-purple-100 text-purple-700",
   REVOKE: "bg-orange-100 text-orange-700",
+  LOGIN: "bg-sky-100 text-sky-700",
+  LOGOUT: "bg-slate-100 text-slate-600",
 }
 
 function formatDetails(details: string | null): Record<string, unknown> | null {
@@ -101,6 +105,7 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   token: "分享令牌",
   expiresAt: "到期時間",
   shareId: "分享連結 ID",
+  demands: "授權需求",
   demandIds: "需求列表",
   count: "數量",
   spQuota: "SP 預算",

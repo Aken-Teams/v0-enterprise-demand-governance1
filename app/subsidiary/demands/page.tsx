@@ -198,24 +198,26 @@ export default function MyDemandsPage() {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">我的需求</h1>
             <p className="text-sm text-muted-foreground mt-0.5">追蹤您提交的所有需求狀態</p>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{remainingSp}</div>
-              <div className="text-xs text-muted-foreground">可用 SP</div>
+          {!user?.restrictedView && (
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-emerald-600">{remainingSp}</div>
+                <div className="text-xs text-muted-foreground">可用 SP</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{spSummary.committedSp}</div>
+                <div className="text-xs text-muted-foreground">已承諾 SP</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-primary">{spSummary.usedSp}</div>
+                <div className="text-xs text-muted-foreground">已使用 SP</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
+                <div className="text-xs text-muted-foreground">年度配額</div>
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{spSummary.committedSp}</div>
-              <div className="text-xs text-muted-foreground">已承諾 SP</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary">{spSummary.usedSp}</div>
-              <div className="text-xs text-muted-foreground">已使用 SP</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
-              <div className="text-xs text-muted-foreground">年度配額</div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Tabs + Search (same row) */}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
+import { logAudit } from "@/lib/audit"
 
 const JWT_SECRET = process.env.JWT_SECRET || "REDACTED-SECRET-ROTATED"
 
@@ -62,6 +63,15 @@ export async function POST(request: NextRequest) {
       })
       restrictedView = accessCount > 0
     }
+
+    logAudit({
+      userId: user.id,
+      action: "LOGIN",
+      entity: "USER",
+      entityId: user.id,
+      details: { name: user.name, email: user.email, role: user.role, organization: user.organization?.name || null },
+      request,
+    })
 
     return NextResponse.json({
       token,
