@@ -182,7 +182,7 @@ export default function AuditLogPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const limit = 30
+  const limit = 10
 
   // Filters
   const [filterEntity, setFilterEntity] = useState("")
@@ -392,7 +392,7 @@ export default function AuditLogPage() {
 
         {/* Detail Dialog */}
         <Dialog open={!!selectedLog} onOpenChange={(open) => { if (!open) setSelectedLog(null) }}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>操作詳情</DialogTitle>
             </DialogHeader>
@@ -429,25 +429,19 @@ export default function AuditLogPage() {
                     )}
                   </div>
                   {details && (
-                    <div>
-                      <span className="text-sm text-muted-foreground">詳細資料</span>
-                      <div className="mt-1.5 rounded-md bg-muted/50 p-3 overflow-x-auto">
-                        <table className="text-xs w-full">
-                          <tbody>
-                            {Object.entries(details).map(([key, value]) => (
-                              <tr key={key} className="border-b last:border-b-0">
-                                <td className="py-1.5 pr-4 font-medium text-muted-foreground whitespace-nowrap align-top">
-                                  {DETAIL_KEY_LABELS[key] || key}
-                                </td>
-                                <td className="py-1.5 break-all">
-                                  {formatDetailValue(key, value)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                    <>
+                      <div className="border-t pt-4">
+                        <span className="text-sm font-medium text-foreground">詳細資料</span>
                       </div>
-                    </div>
+                      <div className="space-y-2.5">
+                        {Object.entries(details).map(([key, value]) => (
+                          <div key={key} className="flex items-baseline justify-between gap-4 text-sm">
+                            <span className="text-muted-foreground shrink-0">{DETAIL_KEY_LABELS[key] || key}</span>
+                            <span className="text-right font-medium break-all">{formatDetailValue(key, value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               )
