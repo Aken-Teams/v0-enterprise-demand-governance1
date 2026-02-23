@@ -89,6 +89,22 @@ export const PHASE_ACTIONS: Record<string, string[]> = {
   CLOSED: [],
 }
 
+/** 需要需求者簽核的階段 */
+export const SIGNOFF_REQUIRED_PHASES = [
+  "PRD_REVIEW",
+  "SP_REVIEW",
+  "ACCEPTANCE",
+  "CLOSED",
+] as const
+
+/** 簽核狀態標籤與顏色 */
+export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  PENDING: { label: "待確認", color: "bg-amber-100 text-amber-700" },
+  APPROVED: { label: "已確認", color: "bg-emerald-100 text-emerald-700" },
+  REJECTED: { label: "已退回", color: "bg-red-100 text-red-700" },
+  SKIPPED: { label: "管理者略過", color: "bg-gray-100 text-gray-600" },
+}
+
 export const DEFAULT_SUBTASK_TEMPLATES = [
   "前端開發",
   "後端開發",

@@ -81,6 +81,13 @@ enum AcceptanceResult {
   REJECT
 }
 
+enum SignoffStatus {
+  PENDING   // 待確認
+  APPROVED  // 已確認
+  REJECTED  // 已退回
+  SKIPPED   // 管理者略過
+}
+
 // ============================================================
 // MODELS
 // ============================================================
@@ -127,6 +134,8 @@ model User {
   phasePlanPM       DemandPhasePlan[] @relation("PhasePlanPM")
   subTaskAssignee   DemandSubTask[]   @relation("SubTaskAssignee")
   demandAccessGrants DemandAccess[]
+  signoffRequests    PhaseSignoff[]  @relation("SignoffRequester")
+  signoffResponses   PhaseSignoff[]  @relation("SignoffResponder")
 
   @@map("users")
 }
@@ -204,6 +213,7 @@ model Demand {
   phasePlans        DemandPhasePlan[]
   subTasks          DemandSubTask[]
   accessGrants      DemandAccess[]
+  phaseSignoffs     PhaseSignoff[]
 
   @@index([organizationId])
   @@index([status])
@@ -238,6 +248,8 @@ model DemandDocument {
   fileSize   Int? /// bytes
   uploadedBy String /// user ID or name
   createdAt  DateTime      @default(now())
+  signoffId  String? /// 簽核附件
+  signoff    PhaseSignoff? @relation(fields: [signoffId], references: [id], onDelete: SetNull)
 
   @@index([demandId])
   @@index([demandId, phase])
@@ -353,4 +365,26 @@ model DemandAccess {
   @@index([userId])
   @@index([demandId])
   @@map("demand_access")
+}
+
+/// 階段簽核 (需求者背書確認)
+model PhaseSignoff {
+  id            String        @id @default(cuid())
+  demandId      String
+  demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  phase         DemandStatus
+  status        SignoffStatus @default(PENDING)
+  comment       String?       @db.Text
+  requestedAt   DateTime      @default(now())
+  respondedAt   DateTime?
+  requestedById String
+  requestedBy   User          @relation("SignoffRequester", fields: [requestedById], references: [id])
+  respondedById String?
+  respondedBy   User?         @relation("SignoffResponder", fields: [respondedById], references: [id])
+  documents     DemandDocument[]
+
+  @@index([demandId])
+  @@index([demandId, phase])
+  @@index([status])
+  @@map("phase_signoffs")
 }

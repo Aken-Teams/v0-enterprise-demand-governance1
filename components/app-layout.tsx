@@ -115,6 +115,8 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
   const [notifications, setNotifications] = React.useState<NotificationItem[]>(MOCK_NOTIFICATIONS)
 
+  const [pendingSignoffCount, setPendingSignoffCount] = React.useState(0)
+
   const unreadCount = notifications.filter((n) => !n.read).length
   const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
 
@@ -122,6 +124,21 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
     if (saved === "true") setSidebarCollapsed(true)
   }, [])
+
+  // Fetch pending signoff count for subsidiary users
+  React.useEffect(() => {
+    if (!user?.role || user.role !== "subsidiary") return
+    const token = localStorage.getItem("token")
+    if (!token) return
+    fetch("/api/signoffs/pending", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.count === "number") setPendingSignoffCount(data.count)
+      })
+      .catch(() => {})
+  }, [user?.role])
 
   const toggleCollapsed = React.useCallback(() => {
     setSidebarCollapsed((prev) => {
@@ -200,6 +217,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                           s.items.some((o: NavItem) => o.href !== item.href && o.href.startsWith(item.href + "/") && (pathname === o.href || pathname.startsWith(o.href + "/")))
                         )
                         const isActive = matches && !hasMoreSpecific
+                        const showSignoffBadge = item.href === "/subsidiary/demands" && pendingSignoffCount > 0
                         const linkEl = (
                           <Link
                             key={item.href}
@@ -215,6 +233,11 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                           >
                             <Icon className={cn(sidebarCollapsed ? "h-5 w-5" : "h-4 w-4")} />
                             {!sidebarCollapsed && item.title}
+                            {!sidebarCollapsed && showSignoffBadge && (
+                              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-medium text-white">
+                                {pendingSignoffCount}
+                              </span>
+                            )}
                           </Link>
                         )
 

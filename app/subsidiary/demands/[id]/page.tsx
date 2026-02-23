@@ -27,12 +27,15 @@ import {
   X,
   FileAudio,
   ShieldAlert,
+  ClipboardCheck,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
+import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
+import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { ExcelPreview } from "@/components/excel-preview"
@@ -315,6 +318,17 @@ interface DemandDetail {
     assignee: { id: string; name: string } | null
     order: number
   }[]
+  phaseSignoffs: {
+    id: string
+    phase: string
+    status: string
+    comment: string | null
+    requestedAt: string
+    respondedAt: string | null
+    requestedBy: { id: string; name: string }
+    respondedBy: { id: string; name: string } | null
+    documents?: { id: string; fileName: string; fileUrl: string | null; fileSize: number | null }[]
+  }[]
 }
 
 function fmtDate(dateStr: string | null) {
@@ -448,6 +462,11 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const currentStepIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
 
+  // Pending sign-off for current phase
+  const pendingSignoff = demand.phaseSignoffs?.find(
+    (s) => s.status === "PENDING"
+  ) || null
+
   // Project start date
   const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {
     const d = p.plannedStart || p.actualStart
@@ -512,6 +531,16 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
               此需求已於 <span className="font-medium">{fmtDateFull(demand.completedDate || demand.updatedAt)}</span> 結案完成
             </p>
           </div>
+        )}
+
+        {/* ── Sign-off Banner ── */}
+        {pendingSignoff && (
+          <PhaseSignoffBanner
+            signoff={pendingSignoff}
+            demandId={demand.id}
+            token={token}
+            onComplete={fetchDemand}
+          />
         )}
 
         {/* ── Tabs ── */}
@@ -878,6 +907,21 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Sign-off History */}
+                {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4" />
+                        簽核紀錄
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <SignoffHistory signoffs={demand.phaseSignoffs} />
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           </TabsContent>

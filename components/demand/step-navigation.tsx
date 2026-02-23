@@ -4,18 +4,26 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle } from "lucide-react"
+import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2 } from "lucide-react"
 import {
   PIPELINE_STEPS,
   STATUS_MAP,
   PHASE_DOCUMENT_MAP,
   DOCUMENT_TYPE_LABELS,
+  SIGNOFF_REQUIRED_PHASES,
 } from "@/lib/constants/demand"
+
+interface SignoffInfo {
+  id: string
+  phase: string
+  status: string
+}
 
 interface StepNavigationProps {
   currentStatus: string
@@ -24,6 +32,12 @@ interface StepNavigationProps {
   token: string | null
   completedDate: string | null
   onStatusChange: (newStatus: string) => void
+  /** Latest signoff for the current phase (if any) */
+  pendingSignoff?: SignoffInfo | null
+  /** Called after re-requesting signoff or force advance */
+  onRefresh?: () => void
+  /** Hide the signoff status indicator (when parent already shows it) */
+  hideSignoffIndicator?: boolean
 }
 
 export function StepNavigation({
@@ -33,11 +47,17 @@ export function StepNavigation({
   token,
   completedDate: existingCompletedDate,
   onStatusChange,
+  pendingSignoff,
+  onRefresh,
+  hideSignoffIndicator,
 }: StepNavigationProps) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [direction, setDirection] = useState<"next" | "prev">("next")
   const [loading, setLoading] = useState(false)
   const [inputCompletedDate, setInputCompletedDate] = useState("")
+  const [forceComment, setForceComment] = useState("")
+  const [showForceDialog, setShowForceDialog] = useState(false)
+  const [reRequesting, setReRequesting] = useState(false)
 
   const currentIdx = PIPELINE_STEPS.indexOf(currentStatus as typeof PIPELINE_STEPS[number])
   if (currentIdx < 0) return null
@@ -48,6 +68,14 @@ export function StepNavigation({
   const nextPhase = canGoNext ? PIPELINE_STEPS[currentIdx + 1] : null
   const prevPhase = canGoPrev ? PIPELINE_STEPS[currentIdx - 1] : null
 
+  const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
+  const isSignoffPhase = signoffPhases.includes(currentStatus)
+  const hasPendingSignoff = pendingSignoff?.status === "PENDING"
+  const isApproved = pendingSignoff?.status === "APPROVED"
+  const isRejected = pendingSignoff?.status === "REJECTED"
+  // Show re-request button if rejected and no new pending
+  const canReRequest = isRejected && !hasPendingSignoff
+
   // Check required documents for current phase
   const requiredDocs = PHASE_DOCUMENT_MAP[currentStatus]?.required || []
   const missingDocs = requiredDocs.filter(
@@ -55,6 +83,11 @@ export function StepNavigation({
   )
 
   const handleClick = (dir: "next" | "prev") => {
+    if (dir === "next" && hasPendingSignoff) {
+      // Show force advance dialog instead
+      setShowForceDialog(true)
+      return
+    }
     setDirection(dir)
     setShowConfirm(true)
   }
@@ -84,6 +117,51 @@ export function StepNavigation({
     }
   }
 
+  const handleForceAdvance = async () => {
+    if (!token || !forceComment.trim()) return
+    setLoading(true)
+    const targetStatus = nextPhase
+    const payload: Record<string, unknown> = {
+      status: targetStatus,
+      forceAdvance: true,
+      forceComment: forceComment.trim(),
+    }
+    if (targetStatus === "CLOSED" && inputCompletedDate) {
+      payload.completedDate = inputCompletedDate
+    }
+    try {
+      const res = await fetch(`/api/demands/${demandId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        setShowForceDialog(false)
+        setForceComment("")
+        onStatusChange(targetStatus!)
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleReRequest = async () => {
+    if (!token) return
+    setReRequesting(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/signoffs`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ phase: currentStatus }),
+      })
+      if (res.ok) {
+        onRefresh?.()
+      }
+    } catch { /* ignore */ } finally {
+      setReRequesting(false)
+    }
+  }
+
   const targetLabel =
     direction === "next"
       ? STATUS_MAP[nextPhase || ""]?.label
@@ -91,6 +169,43 @@ export function StepNavigation({
 
   return (
     <>
+      {/* Signoff status indicator */}
+      {isSignoffPhase && !hideSignoffIndicator && (
+        <div className="space-y-2">
+          {hasPendingSignoff && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm text-amber-700">
+              <ClipboardCheck className="h-4 w-4 shrink-0" />
+              <span>等待需求者簽核確認中</span>
+            </div>
+          )}
+          {isApproved && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-700">
+              <Check className="h-4 w-4 shrink-0" />
+              <span>需求者已簽核確認</span>
+            </div>
+          )}
+        </div>
+      )}
+      {/* Re-request button (always show when rejected, even if indicator is hidden) */}
+      {isSignoffPhase && canReRequest && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/50 px-3 py-2 text-sm text-red-700">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>需求者已退回簽核</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
+            onClick={handleReRequest}
+            disabled={reRequesting}
+          >
+            {reRequesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+            重新發起簽核
+          </Button>
+        </div>
+      )}
+
       {currentStatus === "CLOSED" && !existingCompletedDate && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm text-amber-700">
           <Info className="h-4 w-4 shrink-0" />
@@ -119,6 +234,7 @@ export function StepNavigation({
         </div>
       )}
 
+      {/* Normal advance dialog */}
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -130,6 +246,14 @@ export function StepNavigation({
                 <p>
                   將狀態從「{STATUS_MAP[currentStatus]?.label}」變更為「{targetLabel}」
                 </p>
+                {direction === "next" && isApproved && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-emerald-700">
+                      <Check className="h-4 w-4" />
+                      <span className="font-medium">需求者已簽核確認</span>
+                    </div>
+                  </div>
+                )}
                 {direction === "next" && missingDocs.length > 0 && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-1.5">
                     <p className="text-xs font-semibold text-amber-600">
@@ -190,6 +314,45 @@ export function StepNavigation({
             <AlertDialogCancel disabled={loading}>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirm} disabled={loading}>
               確認變更
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Force advance dialog (when signoff is pending) */}
+      <AlertDialog open={showForceDialog} onOpenChange={setShowForceDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>需求者尚未簽核</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                  <div className="flex items-center gap-2 text-sm text-amber-700">
+                    <ClipboardCheck className="h-4 w-4" />
+                    <span>此階段的簽核請求仍在等待需求者確認</span>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  如確定要強制推進，系統將記錄為「管理者略過簽核」。請填寫略過原因：
+                </p>
+                <Textarea
+                  placeholder="請說明略過簽核的原因（必填）..."
+                  value={forceComment}
+                  onChange={(e) => setForceComment(e.target.value)}
+                  rows={3}
+                  className="text-sm"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>等待簽核</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleForceAdvance}
+              disabled={loading || !forceComment.trim()}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              強制推進
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

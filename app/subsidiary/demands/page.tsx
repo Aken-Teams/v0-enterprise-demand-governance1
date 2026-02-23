@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, ChevronLeft, ChevronRight, Loader2, Inbox } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight, Loader2, Inbox, ClipboardCheck } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
@@ -42,7 +42,7 @@ function formatDateReadable(dateStr: string) {
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
 }
 
-function DemandCard({ demand }: { demand: Demand }) {
+function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingSignoff?: boolean }) {
   const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-400 text-white" }
   const sp = demand.confirmedSp ?? demand.estimatedSp
 
@@ -60,8 +60,16 @@ function DemandCard({ demand }: { demand: Demand }) {
     >
       {/* Row 1: status + demand number */}
       <div className="flex items-center justify-between mb-1.5">
-        <div className={cn("inline-block px-2 py-0.5 rounded text-[11px] font-medium", statusInfo.color)}>
-          {statusInfo.label}
+        <div className="flex items-center gap-1.5">
+          <div className={cn("inline-block px-2 py-0.5 rounded text-[11px] font-medium", statusInfo.color)}>
+            {statusInfo.label}
+          </div>
+          {hasPendingSignoff && (
+            <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-medium">
+              <ClipboardCheck className="h-3 w-3" />
+              待簽核
+            </div>
+          )}
         </div>
         <span className="text-[11px] font-mono text-muted-foreground">{demand.demandNumber}</span>
       </div>
@@ -101,11 +109,27 @@ export default function MyDemandsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
+  const [pendingSignoffIds, setPendingSignoffIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300)
     return () => clearTimeout(timer)
   }, [searchQuery])
+
+  // Fetch pending signoffs
+  useEffect(() => {
+    if (!token) return
+    fetch("/api/signoffs/pending", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.demands) {
+          setPendingSignoffIds(new Set(data.demands.map((d: { id: string }) => d.id)))
+        }
+      })
+      .catch(() => {})
+  }, [token])
 
   const fetchDemands = useCallback(async () => {
     if (!token || !user?.organizationId) return
@@ -135,8 +159,9 @@ export default function MyDemandsPage() {
   // Client-side tab filtering
   const filteredDemands = useMemo(() => {
     if (activeTab === "all") return demands
+    if (activeTab === "signoff") return demands.filter((d) => pendingSignoffIds.has(d.id))
     return demands.filter((d) => d.status === activeTab)
-  }, [demands, activeTab])
+  }, [demands, activeTab, pendingSignoffIds])
 
   const totalPages = Math.max(1, Math.ceil(filteredDemands.length / ITEMS_PER_PAGE))
   const paginatedDemands = useMemo(() => {
@@ -148,6 +173,7 @@ export default function MyDemandsPage() {
 
   const getCount = (key: string) => {
     if (key === "all") return demands.length
+    if (key === "signoff") return pendingSignoffIds.size
     return statusCounts[key] || 0
   }
 
@@ -195,9 +221,14 @@ export default function MyDemandsPage() {
         {/* Tabs + Search (same row) */}
         <div className="flex items-center gap-3 border-b border-border pb-3 overflow-x-auto">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            {[{ key: "all", label: "全部" }, ...STATUS_KEYS.map((k) => ({ key: k, label: STATUS_MAP[k].label }))].map((tab) => {
+            {[
+              { key: "all", label: "全部" },
+              ...(pendingSignoffIds.size > 0 ? [{ key: "signoff", label: "待簽核" }] : []),
+              ...STATUS_KEYS.map((k) => ({ key: k, label: STATUS_MAP[k].label })),
+            ].map((tab) => {
               const count = getCount(tab.key)
               const isActive = activeTab === tab.key
+              const isSignoff = tab.key === "signoff"
 
               return (
                 <button
@@ -205,13 +236,17 @@ export default function MyDemandsPage() {
                   onClick={() => setActiveTab(tab.key)}
                   className={cn(
                     "relative px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap shrink-0",
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                    isActive && isSignoff
+                      ? "bg-amber-500 text-white shadow-sm"
+                      : isActive
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : isSignoff
+                          ? "text-amber-600 bg-amber-50 hover:bg-amber-100"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                 >
                   {tab.label}
-                  <span className={cn("ml-1.5", isActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  <span className={cn("ml-1.5", isActive ? "text-white/80" : isSignoff ? "text-amber-600/80" : "text-muted-foreground")}>
                     {count}
                   </span>
                 </button>
@@ -240,7 +275,7 @@ export default function MyDemandsPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {paginatedDemands.map((demand) => (
-                <DemandCard key={demand.id} demand={demand} />
+                <DemandCard key={demand.id} demand={demand} hasPendingSignoff={pendingSignoffIds.has(demand.id)} />
               ))}
             </div>
 

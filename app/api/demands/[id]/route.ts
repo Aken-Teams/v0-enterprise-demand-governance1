@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { canAccessDemand } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
-import { PIPELINE_STEPS } from "@/lib/constants/demand"
+import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { updateDemandSchema } from "@/lib/validations/demand"
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
@@ -46,6 +46,14 @@ export async function GET(
             assignee: { select: { id: true, name: true } },
           },
           orderBy: { order: "asc" },
+        },
+        phaseSignoffs: {
+          include: {
+            requestedBy: { select: { id: true, name: true } },
+            respondedBy: { select: { id: true, name: true } },
+            documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true } },
+          },
+          orderBy: { requestedAt: "desc" },
         },
       },
     })
@@ -169,6 +177,33 @@ export async function PATCH(
       return NextResponse.json({ error: "狀態未變更" }, { status: 400 })
     }
 
+    // Sign-off blocking: only block FORWARD movement from a sign-off phase
+    const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
+    const currentIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
+    const targetIdx = PIPELINE_STEPS.indexOf(status as typeof PIPELINE_STEPS[number])
+    const isForward = currentIdx >= 0 && targetIdx >= 0 && targetIdx > currentIdx
+
+    if (isForward && signoffPhases.includes(demand.status)) {
+      const pendingSignoff = await prisma.phaseSignoff.findFirst({
+        where: {
+          demandId: id,
+          phase: demand.status as DemandStatus,
+          status: "PENDING",
+        },
+        orderBy: { requestedAt: "desc" },
+      })
+
+      if (pendingSignoff) {
+        if (!body.forceAdvance) {
+          return NextResponse.json(
+            { error: "此階段需要需求者簽核確認後才能推進", signoffRequired: true, signoffId: pendingSignoff.id },
+            { status: 409 }
+          )
+        }
+        // Force advance: mark sign-off as SKIPPED inside transaction below
+      }
+    }
+
     // For CLOSED: only set completedDate if explicitly provided (default stays null)
     const closedDate = status === "CLOSED" && body.completedDate
       ? new Date(body.completedDate)
@@ -221,8 +256,13 @@ export async function PATCH(
       const devIdx = PIPELINE_STEPS.indexOf("DEVELOPING")
       const closedIdx = PIPELINE_STEPS.indexOf("CLOSED")
 
-      // Forward: SP_REVIEW → DEVELOPING — lock committed SP
-      if (fromIdx <= spIdx && toIdx >= devIdx && toIdx < closedIdx) {
+      const wasCommitted = fromIdx >= devIdx && fromIdx < closedIdx  // was in DEVELOPING..ACCEPTANCE
+      const willBeCommitted = toIdx >= devIdx && toIdx < closedIdx
+      const wasClosed = fromIdx === closedIdx
+      const willBeClosed = toIdx === closedIdx
+
+      // Forward: entering committed zone (DEVELOPING..ACCEPTANCE)
+      if (!wasCommitted && !wasClosed && willBeCommitted) {
         await tx.spWallet.upsert({
           where: { organizationId_year: { organizationId: demand.organizationId, year } },
           create: { organizationId: demand.organizationId, year, totalQuota: 0, committedSp: sp },
@@ -230,8 +270,8 @@ export async function PATCH(
         })
       }
 
-      // Forward: → CLOSED — move committed to used
-      if (toIdx === closedIdx && fromIdx < closedIdx) {
+      // Forward: entering CLOSED from committed zone → move committed to used
+      if (wasCommitted && willBeClosed) {
         await tx.spWallet.upsert({
           where: { organizationId_year: { organizationId: demand.organizationId, year } },
           create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: sp },
@@ -239,20 +279,66 @@ export async function PATCH(
         })
       }
 
-      // Backward: from DEVELOPING+ back to SP_REVIEW or earlier — release committed SP
-      if (fromIdx >= devIdx && fromIdx < closedIdx && toIdx <= spIdx) {
+      // Forward: entering CLOSED from before committed zone → only add to used
+      if (!wasCommitted && !wasClosed && willBeClosed) {
+        await tx.spWallet.upsert({
+          where: { organizationId_year: { organizationId: demand.organizationId, year } },
+          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: sp },
+          update: { usedSp: { increment: sp } },
+        })
+      }
+
+      // Backward: leaving committed zone to before DEVELOPING
+      if (wasCommitted && !willBeCommitted && !willBeClosed) {
         await tx.spWallet.update({
           where: { organizationId_year: { organizationId: demand.organizationId, year } },
           data: { committedSp: { decrement: sp } },
-        }).catch(() => {}) // wallet may not exist
+        }).catch(() => {})
       }
 
-      // Backward: from CLOSED back — move used back to committed
-      if (fromIdx === closedIdx && toIdx < closedIdx && toIdx >= devIdx) {
+      // Backward: from CLOSED back to committed zone
+      if (wasClosed && willBeCommitted) {
         await tx.spWallet.update({
           where: { organizationId_year: { organizationId: demand.organizationId, year } },
           data: { usedSp: { decrement: sp }, committedSp: { increment: sp } },
         }).catch(() => {})
+      }
+
+      // Backward: from CLOSED back to before committed zone
+      if (wasClosed && !willBeCommitted && !willBeClosed) {
+        await tx.spWallet.update({
+          where: { organizationId_year: { organizationId: demand.organizationId, year } },
+          data: { usedSp: { decrement: sp } },
+        }).catch(() => {})
+      }
+
+      // Force-advance: mark pending sign-off as SKIPPED
+      if (isForward && body.forceAdvance && signoffPhases.includes(demand.status)) {
+        await tx.phaseSignoff.updateMany({
+          where: {
+            demandId: id,
+            phase: demand.status as DemandStatus,
+            status: "PENDING",
+          },
+          data: {
+            status: "SKIPPED",
+            respondedAt: now,
+            respondedById: auth.userId,
+            comment: body.forceComment || "管理者略過簽核",
+          },
+        })
+      }
+
+      // Auto-create sign-off for the target phase if required (forward only)
+      if (isForward && signoffPhases.includes(status)) {
+        await tx.phaseSignoff.create({
+          data: {
+            demandId: id,
+            phase: status as DemandStatus,
+            status: "PENDING",
+            requestedById: auth.userId,
+          },
+        })
       }
 
       return d

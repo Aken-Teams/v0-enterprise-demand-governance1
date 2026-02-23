@@ -10,13 +10,14 @@ import {
   Loader2, Pencil, Trash2, Check, ChevronDown,
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
+  Clock, SkipForward, ClipboardCheck,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -26,6 +27,7 @@ import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
+import { SignoffHistory } from "@/components/demand/signoff-history"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 import ReactMarkdown from "react-markdown"
@@ -109,6 +111,17 @@ interface DemandDetail {
     status: string
     assignee: { id: string; name: string } | null
     order: number
+  }[]
+  phaseSignoffs: {
+    id: string
+    phase: string
+    status: string
+    comment: string | null
+    requestedAt: string
+    respondedAt: string | null
+    requestedBy: { id: string; name: string }
+    respondedBy: { id: string; name: string } | null
+    documents?: { id: string; fileName: string; fileUrl: string | null; fileSize: number | null }[]
   }[]
 }
 
@@ -510,6 +523,11 @@ export default function DemandDetailPage() {
   const isClosed = demand.status === "CLOSED"
   // When CLOSED, only admin retains modification rights
   const effectiveCanManage = canManage && (!isClosed || user?.role === "admin")
+
+  // Latest signoff for current phase (for StepNavigation)
+  const currentPhaseSignoff = demand.phaseSignoffs?.find(
+    (s) => s.phase === demand.status && (s.status === "PENDING" || s.status === "APPROVED" || s.status === "REJECTED")
+  ) || null
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -583,6 +601,13 @@ export default function DemandDetailPage() {
                   const showWarning = (isPast || isCurrent) && (missingDocs.length > 0 || (isCurrent && needsAssignment))
                   const isComplete = (isPast || isCurrent) && missingDocs.length === 0 && requiredDocs.length > 0
 
+                  // Signoff status for this phase
+                  const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
+                  const isSignoffPhase = signoffPhases.includes(step)
+                  const phaseSignoff = isSignoffPhase
+                    ? demand.phaseSignoffs?.find((s) => s.phase === step && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status))
+                    : null
+
                   return (
                     <div key={step} className="flex items-center flex-1 last:flex-none">
                       <Tooltip>
@@ -603,19 +628,50 @@ export default function DemandDetailPage() {
                                 </div>
                               )}
                             </div>
-                            <span className={cn(
-                              "text-sm whitespace-nowrap",
-                              isCurrent && "font-semibold text-foreground",
-                              isPast && "text-primary",
-                              isFuture && "text-muted-foreground/50",
-                            )}>
-                              {info.label}
-                            </span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className={cn(
+                                "text-sm whitespace-nowrap",
+                                isCurrent && "font-semibold text-foreground",
+                                isPast && "text-primary",
+                                isFuture && "text-muted-foreground/50",
+                              )}>
+                                {info.label}
+                              </span>
+                              {isSignoffPhase && phaseSignoff && (
+                                <span className={cn(
+                                  "inline-flex items-center gap-0.5 text-[10px] font-medium rounded-full px-1.5 py-0",
+                                  phaseSignoff.status === "PENDING" && "text-amber-600 bg-amber-50",
+                                  phaseSignoff.status === "APPROVED" && "text-emerald-600 bg-emerald-50",
+                                  phaseSignoff.status === "REJECTED" && "text-red-600 bg-red-50",
+                                  phaseSignoff.status === "SKIPPED" && "text-gray-500 bg-gray-50",
+                                )}>
+                                  {phaseSignoff.status === "PENDING" && <Clock className="h-2.5 w-2.5" />}
+                                  {phaseSignoff.status === "APPROVED" && <Check className="h-2.5 w-2.5" />}
+                                  {phaseSignoff.status === "REJECTED" && <X className="h-2.5 w-2.5" />}
+                                  {phaseSignoff.status === "SKIPPED" && <SkipForward className="h-2.5 w-2.5" />}
+                                  {SIGNOFF_STATUS_MAP[phaseSignoff.status]?.label}
+                                </span>
+                              )}
+                              {isSignoffPhase && !phaseSignoff && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/40">
+                                  <ClipboardCheck className="h-2.5 w-2.5" />
+                                  待確認
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="max-w-xs p-3">
                           <p className="font-medium text-xs mb-1">{info.label}</p>
                           <p className="text-xs text-muted-foreground mb-2">{PHASE_DESCRIPTIONS[step]}</p>
+                          {isSignoffPhase && phaseSignoff && (
+                            <div className="mb-2 flex items-center gap-1.5">
+                              <span className="text-xs font-medium">簽核：</span>
+                              <Badge className={cn("text-[10px]", SIGNOFF_STATUS_MAP[phaseSignoff.status]?.color)}>
+                                {SIGNOFF_STATUS_MAP[phaseSignoff.status]?.label}
+                              </Badge>
+                            </div>
+                          )}
                           {requiredDocs.length > 0 && (
                             <div className="space-y-1">
                               <p className="text-xs font-medium">必要文件：</p>
@@ -659,8 +715,9 @@ export default function DemandDetailPage() {
               )
               const actions = PHASE_ACTIONS[currentPhase] || []
               const needsAssignment = (currentPhase === "PRD_REVIEW" || currentPhase === "SP_REVIEW" || currentPhase === "DEVELOPING") && !demand.manager && !demand.developer
+              const hasSignoff = currentPhaseSignoff != null
 
-              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0) return null
+              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff) return null
 
               return (
                 <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
@@ -670,22 +727,38 @@ export default function DemandDetailPage() {
                       <p className="text-xs font-medium text-blue-700">
                         {PHASE_DESCRIPTIONS[currentPhase]}
                       </p>
-                      {(missingDocs.length > 0 || needsAssignment) && (
-                        <div className="flex flex-wrap gap-2">
-                          {needsAssignment && (
-                            <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 cursor-pointer hover:bg-amber-100" onClick={() => setActiveTab("overview")}>
-                              <UserPlus className="h-3 w-3 mr-1" />
-                              待指派 PM / 工程師
-                            </Badge>
-                          )}
-                          {missingDocs.map((type) => (
-                            <Badge key={type} variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 cursor-pointer hover:bg-amber-100" onClick={() => setActiveTab("documents")}>
-                              <AlertCircle className="h-3 w-3 mr-1" />
-                              缺 {DOCUMENT_TYPE_LABELS[type] || type}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {hasSignoff && currentPhaseSignoff.status === "PENDING" && (
+                          <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200">
+                            <ClipboardCheck className="h-3 w-3 mr-1" />
+                            等待需求者簽核確認中
+                          </Badge>
+                        )}
+                        {hasSignoff && currentPhaseSignoff.status === "APPROVED" && (
+                          <Badge variant="outline" className="text-[11px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                            <Check className="h-3 w-3 mr-1" />
+                            需求者已簽核確認
+                          </Badge>
+                        )}
+                        {hasSignoff && currentPhaseSignoff.status === "REJECTED" && (
+                          <Badge variant="outline" className="text-[11px] bg-red-50 text-red-700 border-red-200">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            需求者已退回簽核
+                          </Badge>
+                        )}
+                        {needsAssignment && (
+                          <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 cursor-pointer hover:bg-amber-100" onClick={() => setActiveTab("overview")}>
+                            <UserPlus className="h-3 w-3 mr-1" />
+                            待指派 PM / 工程師
+                          </Badge>
+                        )}
+                        {missingDocs.map((type) => (
+                          <Badge key={type} variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 cursor-pointer hover:bg-amber-100" onClick={() => setActiveTab("documents")}>
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            缺 {DOCUMENT_TYPE_LABELS[type] || type}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -709,6 +782,9 @@ export default function DemandDetailPage() {
                 token={token}
                 completedDate={demand.completedDate}
                 onStatusChange={() => { setActiveTab("overview"); setDocPhaseKey((k) => k + 1); fetchDemand() }}
+                pendingSignoff={currentPhaseSignoff}
+                onRefresh={fetchDemand}
+                hideSignoffIndicator
               />
             )}
           </CardContent>
@@ -1057,6 +1133,21 @@ export default function DemandDetailPage() {
                     />
                   </CardContent>
                 </Card>
+
+                {/* 簽核紀錄 */}
+                {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4" />
+                        簽核紀錄
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <SignoffHistory signoffs={demand.phaseSignoffs} />
+                    </CardContent>
+                  </Card>
+                )}
 
               </div>
             </div>
