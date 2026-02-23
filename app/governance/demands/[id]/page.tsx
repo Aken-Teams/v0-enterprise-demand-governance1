@@ -10,7 +10,7 @@ import {
   Loader2, Pencil, Trash2, Check, ChevronDown,
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
-  Clock, SkipForward, ClipboardCheck,
+  Clock, SkipForward, ClipboardCheck, Share2, Copy, Link2,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -41,6 +41,9 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog"
 
 interface DemandDetail {
   id: string
@@ -369,6 +372,12 @@ export default function DemandDetailPage() {
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
 
+  // Share link state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareCopied, setShareCopied] = useState<string | null>(null)
+
   const canManage = user?.role === "admin" || user?.role === "delivery"
 
   // Periodically clean up stray mermaid error SVGs from the DOM
@@ -494,6 +503,54 @@ export default function DemandDetailPage() {
     } catch { /* ignore */ }
   }
 
+  // Share link functions
+  const fetchShareLinks = async () => {
+    if (!token) return
+    setShareLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/share`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setShareLinks(data.shares)
+      }
+    } catch { /* ignore */ }
+    finally { setShareLoading(false) }
+  }
+
+  const createShareLink = async () => {
+    if (!token) return
+    setShareLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/share`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) fetchShareLinks()
+    } catch { /* ignore */ }
+    finally { setShareLoading(false) }
+  }
+
+  const deleteShareLink = async (shareId: string) => {
+    if (!token) return
+    try {
+      await fetch(`/api/demands/${demandId}/share`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ shareId }),
+      })
+      fetchShareLinks()
+    } catch { /* ignore */ }
+  }
+
+  const copyShareUrl = (shareToken: string) => {
+    const url = `${window.location.origin}/share/${shareToken}`
+    navigator.clipboard.writeText(url)
+    setShareCopied(shareToken)
+    setTimeout(() => setShareCopied(null), 2000)
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -545,38 +602,113 @@ export default function DemandDetailPage() {
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground ml-11">{demand.title}</h1>
           </div>
-          {user?.role === "admin" && !isClosed && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/governance/demands/${demand.id}/edit`}>
-                  <Pencil className="mr-2 h-3.5 w-3.5" />
-                  編輯
-                </Link>
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                    刪除
+          <div className="flex items-center gap-2">
+            {/* Share button (admin + delivery) */}
+            {canManage && (
+              <Dialog open={shareDialogOpen} onOpenChange={(open) => { setShareDialogOpen(open); if (open) fetchShareLinks() }}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Share2 className="mr-2 h-3.5 w-3.5" />
+                    分享
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>確定要刪除此需求？</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      將永久刪除需求「{demand.title}」（{demand.demandNumber}）及其所有相關資料，包含文件、子任務、狀態紀錄等。此操作無法復原。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      確定刪除
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Link2 className="h-5 w-5" />
+                      分享連結管理
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-2">
+                    {shareLoading && shareLinks.length === 0 ? (
+                      <div className="flex justify-center py-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <>
+                        {shareLinks.filter((s) => new Date(s.expiresAt) > new Date()).length > 0 ? (
+                          <div className="space-y-2">
+                            {shareLinks.filter((s) => new Date(s.expiresAt) > new Date()).map((s) => (
+                              <div key={s.id} className="rounded-lg border p-3 space-y-2">
+                                <p className="text-sm font-mono text-foreground break-all">
+                                  {typeof window !== "undefined" ? `${window.location.origin}/share/${s.token}` : `/share/${s.token}`}
+                                </p>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs text-muted-foreground">
+                                    有效至 {new Date(s.expiresAt).toLocaleDateString("zh-TW")} · {s.createdBy.name} 建立
+                                  </p>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={() => copyShareUrl(s.token)}
+                                    >
+                                      {shareCopied === s.token ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      onClick={() => deleteShareLink(s.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-2">目前沒有有效的分享連結</p>
+                        )}
+                        <Button onClick={createShareLink} disabled={shareLoading} className="w-full">
+                          {shareLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Share2 className="h-4 w-4 mr-2" />}
+                          產生新的分享連結（7 天有效）
+                        </Button>
+                        <p className="text-[11px] text-muted-foreground text-center">
+                          分享連結為唯讀，登入後可執行簽核操作
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+            {/* Edit / Delete (admin only, not closed) */}
+            {user?.role === "admin" && !isClosed && (
+              <>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/governance/demands/${demand.id}/edit`}>
+                    <Pencil className="mr-2 h-3.5 w-3.5" />
+                    編輯
+                  </Link>
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                      刪除
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>確定要刪除此需求？</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        將永久刪除需求「{demand.title}」（{demand.demandNumber}）及其所有相關資料，包含文件、子任務、狀態紀錄等。此操作無法復原。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>取消</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        確定刪除
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Status Pipeline */}

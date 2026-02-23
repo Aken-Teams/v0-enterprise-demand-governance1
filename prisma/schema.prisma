@@ -136,6 +136,7 @@ model User {
   demandAccessGrants DemandAccess[]
   signoffRequests    PhaseSignoff[]  @relation("SignoffRequester")
   signoffResponses   PhaseSignoff[]  @relation("SignoffResponder")
+  createdShares      DemandShare[]
 
   @@map("users")
 }
@@ -214,6 +215,7 @@ model Demand {
   subTasks          DemandSubTask[]
   accessGrants      DemandAccess[]
   phaseSignoffs     PhaseSignoff[]
+  shares            DemandShare[]
 
   @@index([organizationId])
   @@index([status])
@@ -387,4 +389,19 @@ model PhaseSignoff {
   @@index([demandId, phase])
   @@index([status])
   @@map("phase_signoffs")
+}
+
+/// 需求分享短網址
+model DemandShare {
+  id          String   @id @default(cuid())
+  demandId    String
+  demand      Demand   @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  token       String   @unique /// nanoid 短碼 (12 字元)
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  expiresAt   DateTime /// 建立時 +7 天
+  createdAt   DateTime @default(now())
+
+  @@index([demandId])
+  @@map("demand_shares")
 }
