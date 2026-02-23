@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
+import bcrypt from "bcryptjs"
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "管理員",
   delivery: "交付團隊",
   subsidiary: "需求單位",
 }
+
+const VALID_ROLES = new Set(["admin", "delivery", "subsidiary"])
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,11 +55,55 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     verifyRole(request, ["admin"])
     const body = await request.json()
-    const { id, name, email, role, isActive, organizationId } = body
+    const { name, email, password, role, organizationId } = body
+
+    if (!name || !email || !password || !role) {
+      return NextResponse.json({ error: "姓名、電子郵件、密碼、角色皆為必填" }, { status: 400 })
+    }
+
+    if (!VALID_ROLES.has(role)) {
+      return NextResponse.json({ error: "無效的角色" }, { status: 400 })
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: "密碼至少需要 6 個字元" }, { status: 400 })
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: role as "admin" | "delivery" | "subsidiary",
+        organizationId: organizationId || null,
+      },
+    })
+
+    return NextResponse.json({ success: true, userId: user.id })
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    }
+    // Prisma unique constraint violation
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") {
+      return NextResponse.json({ error: "此電子郵件已被使用" }, { status: 409 })
+    }
+    console.error("Admin create user error:", error)
+    return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const auth = verifyRole(request, ["admin"])
+    const body = await request.json()
+    const { id, name, email, role, isActive, organizationId, password, adminPassword } = body
 
     if (!id) {
       return NextResponse.json({ error: "缺少使用者 ID" }, { status: 400 })
@@ -69,6 +116,21 @@ export async function PATCH(request: NextRequest) {
     if (isActive !== undefined) data.isActive = isActive
     if (organizationId !== undefined) data.organizationId = organizationId || null
 
+    // Password reset — requires admin's own password for verification
+    if (password && typeof password === "string" && password.length > 0) {
+      if (password.length < 6) {
+        return NextResponse.json({ error: "新密碼至少需要 6 個字元" }, { status: 400 })
+      }
+      if (!adminPassword) {
+        return NextResponse.json({ error: "修改密碼需要輸入管理員密碼確認" }, { status: 400 })
+      }
+      const admin = await prisma.user.findUnique({ where: { id: auth.userId }, select: { password: true } })
+      if (!admin || !(await bcrypt.compare(adminPassword, admin.password))) {
+        return NextResponse.json({ error: "管理員密碼驗證失敗" }, { status: 403 })
+      }
+      data.password = await bcrypt.hash(password, 10)
+    }
+
     await prisma.user.update({ where: { id }, data })
 
     return NextResponse.json({ success: true })
@@ -76,7 +138,60 @@ export async function PATCH(request: NextRequest) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })
     }
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") {
+      return NextResponse.json({ error: "此電子郵件已被使用" }, { status: 409 })
+    }
     console.error("Admin update user error:", error)
+    return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = verifyRole(request, ["admin"])
+    const body = await request.json()
+    const { id } = body
+
+    if (!id) {
+      return NextResponse.json({ error: "缺少使用者 ID" }, { status: 400 })
+    }
+
+    if (id === auth.userId) {
+      return NextResponse.json({ error: "無法刪除自己的帳號" }, { status: 400 })
+    }
+
+    // Check if user is a submitter or creator of any demand (required fields, can't nullify)
+    const demandAsSubmitter = await prisma.demand.findFirst({ where: { submitterId: id } })
+    const demandAsCreator = await prisma.demand.findFirst({ where: { creatorId: id } })
+    if (demandAsSubmitter || demandAsCreator) {
+      return NextResponse.json({
+        error: "此使用者為需求的提交者或建立者，無法刪除。建議改為停用帳號。",
+      }, { status: 400 })
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Nullify optional foreign keys pointing to this user
+      await tx.demand.updateMany({ where: { managerId: id }, data: { managerId: null } })
+      await tx.demand.updateMany({ where: { developerId: id }, data: { developerId: null } })
+      await tx.demandPhasePlan.updateMany({ where: { engineerId: id }, data: { engineerId: null } })
+      await tx.demandPhasePlan.updateMany({ where: { pmId: id }, data: { pmId: null } })
+      await tx.demandSubTask.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } })
+
+      // Delete owned records
+      await tx.notification.deleteMany({ where: { userId: id } })
+      await tx.demandComment.deleteMany({ where: { userId: id } })
+      await tx.acceptanceRecord.deleteMany({ where: { reviewerId: id } })
+
+      // Delete user
+      await tx.user.delete({ where: { id } })
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    }
+    console.error("Admin delete user error:", error)
     return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
   }
 }

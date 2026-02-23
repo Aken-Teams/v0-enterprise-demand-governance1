@@ -6,12 +6,23 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Users, Shield, UserCheck, Edit, Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { Users, Shield, UserCheck, Edit, Loader2, Search, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/hooks/use-auth"
+import { toast } from "sonner"
 
 interface UserRow {
   id: string
@@ -50,15 +61,27 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
 
 const PAGE_SIZE = 10
 
+const EMPTY_CREATE_FORM = { name: "", email: "", password: "", role: "", organizationId: "" }
+
 export default function UsersPage() {
   const { token } = useAuth()
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<UserRow[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [organizations, setOrganizations] = useState<OrgOption[]>([])
-  const [editUser, setEditUser] = useState<UserRow | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", isActive: true, organizationId: "" })
   const [saving, setSaving] = useState(false)
+
+  // Edit dialog
+  const [editUser, setEditUser] = useState<UserRow | null>(null)
+  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", isActive: true, organizationId: "", password: "" })
+
+  // Create dialog
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM)
+
+  // Delete dialog
+  const [deleteUser, setDeleteUser] = useState<UserRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Filter & pagination
   const [searchQuery, setSearchQuery] = useState("")
@@ -111,6 +134,47 @@ export default function UsersPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
+  // --- Create ---
+  const openCreate = () => {
+    setCreateForm(EMPTY_CREATE_FORM)
+    setCreateOpen(true)
+  }
+
+  const handleCreate = async () => {
+    if (!token) return
+    if (!createForm.name || !createForm.email || !createForm.password || !createForm.role) {
+      toast.error("請填寫所有必填欄位")
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: createForm.name,
+          email: createForm.email,
+          password: createForm.password,
+          role: createForm.role,
+          organizationId: createForm.organizationId || null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success("帳號建立成功")
+        setCreateOpen(false)
+        fetchData()
+      } else {
+        toast.error(data.error || "建立失敗")
+      }
+    } catch {
+      toast.error("網路錯誤")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // --- Edit ---
   const openEdit = (user: UserRow) => {
     setEditUser(user)
     setEditForm({
@@ -119,6 +183,7 @@ export default function UsersPage() {
       role: user.role,
       isActive: user.isActive,
       organizationId: user.organizationId || "",
+      password: "",
     })
   }
 
@@ -126,24 +191,59 @@ export default function UsersPage() {
     if (!token || !editUser) return
     setSaving(true)
     try {
+      const payload: Record<string, unknown> = {
+        id: editUser.id,
+        name: editForm.name,
+        email: editForm.email,
+        role: editForm.role,
+        isActive: editForm.isActive,
+        organizationId: editForm.organizationId || null,
+      }
+      if (editForm.password) {
+        payload.password = editForm.password
+      }
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editUser.id,
-          name: editForm.name,
-          email: editForm.email,
-          role: editForm.role,
-          isActive: editForm.isActive,
-          organizationId: editForm.organizationId || null,
-        }),
+        body: JSON.stringify(payload),
       })
+      const data = await res.json()
       if (res.ok) {
+        toast.success("帳號更新成功")
         setEditUser(null)
         fetchData()
+      } else {
+        toast.error(data.error || "更新失敗")
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      toast.error("網路錯誤")
+    } finally {
       setSaving(false)
+    }
+  }
+
+  // --- Delete ---
+  const handleDelete = async () => {
+    if (!token || !deleteUser) return
+    setDeleting(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deleteUser.id }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success("帳號已刪除")
+        setDeleteUser(null)
+        fetchData()
+      } else {
+        toast.error(data.error || "刪除失敗")
+      }
+    } catch {
+      toast.error("網路錯誤")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -163,9 +263,15 @@ export default function UsersPage() {
   return (
     <AppLayout userRole="admin">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">帳號管理</h1>
-          <p className="text-muted-foreground">管理系統使用者帳號與角色分配</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">帳號管理</h1>
+            <p className="text-muted-foreground">管理系統使用者帳號與角色分配</p>
+          </div>
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            新增帳號
+          </Button>
         </div>
 
         {/* Summary */}
@@ -279,9 +385,14 @@ export default function UsersPage() {
                       {new Date(user.createdAt).toLocaleDateString("zh-TW")}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(user)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(user)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteUser(user)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -318,7 +429,61 @@ export default function UsersPage() {
           </CardContent>
         </Card>
 
-        {/* Edit Dialog */}
+        {/* ===== Create Dialog ===== */}
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>新增帳號</DialogTitle>
+              <DialogDescription>建立新的系統使用者帳號</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>姓名 <span className="text-destructive">*</span></Label>
+                <Input placeholder="使用者姓名" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>電子郵件 <span className="text-destructive">*</span></Label>
+                <Input type="email" placeholder="user@example.com" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>密碼 <span className="text-destructive">*</span></Label>
+                <Input type="password" placeholder="至少 6 個字元" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>角色 <span className="text-destructive">*</span></Label>
+                <Select value={createForm.role} onValueChange={(v) => setCreateForm({ ...createForm, role: v })}>
+                  <SelectTrigger><SelectValue placeholder="選擇角色" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">管理員</SelectItem>
+                    <SelectItem value="delivery">交付團隊</SelectItem>
+                    <SelectItem value="subsidiary">需求單位</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>組織</Label>
+                <Select value={createForm.organizationId || "none"} onValueChange={(v) => setCreateForm({ ...createForm, organizationId: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="選擇組織（選填）" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">無</SelectItem>
+                    {organizations.map((org) => (
+                      <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
+                <Button onClick={handleCreate} disabled={saving}>
+                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  建立
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ===== Edit Dialog ===== */}
         <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -334,6 +499,10 @@ export default function UsersPage() {
                 <div className="space-y-2">
                   <Label>電子郵件</Label>
                   <Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>新密碼</Label>
+                  <Input type="password" placeholder="留空表示不修改" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>角色</Label>
@@ -379,6 +548,31 @@ export default function UsersPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* ===== Delete Confirm Dialog ===== */}
+        <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>確定要刪除此帳號？</AlertDialogTitle>
+              <AlertDialogDescription>
+                即將刪除使用者「<span className="font-medium text-foreground">{deleteUser?.name}</span>」（{deleteUser?.email}）。此操作無法復原。
+                <br />
+                <span className="text-xs">如果此使用者為需求的提交者或建立者，將無法刪除，建議改為停用帳號。</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                確認刪除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   )

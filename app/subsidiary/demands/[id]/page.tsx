@@ -245,8 +245,8 @@ const PIE_COLORS: Record<string, string> = {
   CLOSED: "#10b981",
 }
 
-// Confidential document types that subsidiary users cannot preview
-const CONFIDENTIAL_DOC_TYPES = new Set(["SDD", "BDD", "TDD"])
+// All document types are now visible to subsidiary users
+const CONFIDENTIAL_DOC_TYPES = new Set<string>([])
 
 interface DemandDetail {
   id: string
