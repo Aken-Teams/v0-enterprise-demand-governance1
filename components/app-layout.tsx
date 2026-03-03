@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useAuth } from "@/hooks/use-auth"
+import { NotificationCenter } from "@/components/notification-center"
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed"
 
@@ -117,6 +118,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([])
   const [unreadCount, setUnreadCount] = React.useState(0)
+  const [showNotifCenter, setShowNotifCenter] = React.useState(false)
 
   const [pendingSignoffCount, setPendingSignoffCount] = React.useState(0)
 
@@ -374,9 +376,8 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                     <p className="py-8 text-center text-sm text-muted-foreground">沒有通知</p>
                   ) : (
                     notifications.map((n) => (
-                      <Link
+                      <div
                         key={n.id}
-                        href={n.linkUrl || "/notifications"}
                         className={cn(
                           "flex gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-muted/30 transition-colors",
                           !n.isRead && "bg-muted/50",
@@ -390,14 +391,17 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                             {new Date(n.createdAt).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
-                      </Link>
+                      </div>
                     ))
                   )}
                 </div>
                 <div className="border-t px-4 py-2">
-                  <Link href="/notifications" className="block text-center text-xs text-muted-foreground hover:text-foreground">
+                  <button
+                    className="block w-full text-center text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowNotifCenter(true)}
+                  >
                     查看全部通知
-                  </Link>
+                  </button>
                 </div>
               </PopoverContent>
             </Popover>
@@ -434,6 +438,12 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
         {/* Page content */}
         <main className="flex-1 p-6 min-w-0">{children}</main>
       </div>
+
+      <NotificationCenter
+        open={showNotifCenter}
+        onOpenChange={setShowNotifCenter}
+        onRefresh={fetchNotifications}
+      />
     </div>
   )
 }
