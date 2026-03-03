@@ -58,6 +58,8 @@ export function StepNavigation({
   const [forceComment, setForceComment] = useState("")
   const [showForceDialog, setShowForceDialog] = useState(false)
   const [reRequesting, setReRequesting] = useState(false)
+  const [showReRequestDialog, setShowReRequestDialog] = useState(false)
+  const [reRequestComment, setReRequestComment] = useState("")
 
   const currentIdx = PIPELINE_STEPS.indexOf(currentStatus as typeof PIPELINE_STEPS[number])
   if (currentIdx < 0) return null
@@ -152,9 +154,11 @@ export function StepNavigation({
       const res = await fetch(`/api/demands/${demandId}/signoffs`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ phase: currentStatus }),
+        body: JSON.stringify({ phase: currentStatus, requestComment: reRequestComment.trim() || null }),
       })
       if (res.ok) {
+        setShowReRequestDialog(false)
+        setReRequestComment("")
         onRefresh?.()
       }
     } catch { /* ignore */ } finally {
@@ -168,7 +172,7 @@ export function StepNavigation({
       : STATUS_MAP[prevPhase || ""]?.label
 
   return (
-    <>
+    <div className="space-y-3">
       {/* Signoff status indicator */}
       {isSignoffPhase && !hideSignoffIndicator && (
         <div className="space-y-2">
@@ -197,10 +201,9 @@ export function StepNavigation({
             variant="outline"
             size="sm"
             className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
-            onClick={handleReRequest}
-            disabled={reRequesting}
+            onClick={() => setShowReRequestDialog(true)}
           >
-            {reRequesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+            <RefreshCw className="h-3 w-3 mr-1" />
             重新發起簽核
           </Button>
         </div>
@@ -319,6 +322,36 @@ export function StepNavigation({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Re-request signoff dialog */}
+      <AlertDialog open={showReRequestDialog} onOpenChange={setShowReRequestDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>重新發起簽核</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  請說明針對退回意見所做的調整，讓需求者了解已修改的項目。此內容可稍後補填。
+                </p>
+                <Textarea
+                  placeholder="說明已調整的內容（選填）..."
+                  value={reRequestComment}
+                  onChange={(e) => setReRequestComment(e.target.value)}
+                  rows={4}
+                  className="text-sm"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reRequesting}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReRequest} disabled={reRequesting}>
+              {reRequesting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              送出簽核
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Force advance dialog (when signoff is pending) */}
       <AlertDialog open={showForceDialog} onOpenChange={setShowForceDialog}>
         <AlertDialogContent>
@@ -357,6 +390,6 @@ export function StepNavigation({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   )
 }

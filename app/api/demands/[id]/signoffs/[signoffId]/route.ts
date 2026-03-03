@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
-import { verifyAuth, AuthError } from "@/lib/auth"
+import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers, getAdminUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
@@ -171,6 +171,40 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: error.statusCode })
     }
     console.error("Update signoff error:", error)
+    return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
+  }
+}
+
+// PUT: Update requestComment (post-hoc editing by admin/delivery)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; signoffId: string }> }
+) {
+  try {
+    const auth = verifyRole(request, ["admin", "delivery"])
+    const { id, signoffId } = await params
+    const { requestComment } = await request.json()
+
+    const signoff = await prisma.phaseSignoff.findUnique({
+      where: { id: signoffId },
+      select: { id: true, demandId: true, requestedById: true },
+    })
+
+    if (!signoff || signoff.demandId !== id) {
+      return NextResponse.json({ error: "簽核記錄不存在" }, { status: 404 })
+    }
+
+    const updated = await prisma.phaseSignoff.update({
+      where: { id: signoffId },
+      data: { requestComment: requestComment?.trim() || null },
+    })
+
+    return NextResponse.json({ success: true, requestComment: updated.requestComment })
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    }
+    console.error("Update signoff requestComment error:", error)
     return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
   }
 }

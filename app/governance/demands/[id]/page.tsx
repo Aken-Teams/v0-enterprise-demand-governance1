@@ -920,6 +920,7 @@ export default function DemandDetailPage() {
             )}
             {/* Step Navigation */}
             {canManage && !isRejected && (
+              <div className="mt-3">
               <StepNavigation
                 currentStatus={demand.status}
                 demandId={demand.id}
@@ -931,6 +932,7 @@ export default function DemandDetailPage() {
                 onRefresh={fetchDemand}
                 hideSignoffIndicator
               />
+              </div>
             )}
           </CardContent>
         </Card>

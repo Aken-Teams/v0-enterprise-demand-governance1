@@ -404,8 +404,9 @@ model PhaseSignoff {
   demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   phase         DemandStatus
   status        SignoffStatus @default(PENDING)
-  comment       String?       @db.Text
-  requestedAt   DateTime      @default(now())
+  comment        String?       @db.Text
+  requestComment String?       @db.Text @map("request_comment")
+  requestedAt    DateTime      @default(now())
   respondedAt   DateTime?
   requestedById String
   requestedBy   User          @relation("SignoffRequester", fields: [requestedById], references: [id])

@@ -14,7 +14,7 @@ export async function POST(
   try {
     const auth = verifyRole(request, ["admin", "delivery"])
     const { id } = await params
-    const { phase } = await request.json()
+    const { phase, requestComment } = await request.json()
 
     const demand = await prisma.demand.findUnique({
       where: { id },
@@ -47,6 +47,7 @@ export async function POST(
         phase: phase as DemandStatus,
         status: "PENDING",
         requestedById: auth.userId,
+        requestComment: requestComment?.trim() || null,
       },
       include: {
         requestedBy: { select: { id: true, name: true } },

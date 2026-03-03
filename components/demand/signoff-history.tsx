@@ -3,9 +3,14 @@
 import { useState, useMemo, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
-import { Check, Clock, X, SkipForward, FileIcon, Download, Filter, Paperclip, Trash2, Loader2 } from "lucide-react"
+import { Check, Clock, X, SkipForward, FileIcon, Download, Filter, Paperclip, Trash2, Loader2, Pencil, MessageSquare } from "lucide-react"
 
 interface SignoffDocument {
   id: string
@@ -19,6 +24,7 @@ interface SignoffRecord {
   phase: string
   status: string
   comment: string | null
+  requestComment?: string | null
   requestedAt: string
   respondedAt: string | null
   requestedBy: { id: string; name: string }
@@ -67,6 +73,34 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
   const [filterPhase, setFilterPhase] = useState<FilterPhase>("all")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [page, setPage] = useState(1)
+
+  // Document deletion
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
+  const [confirmDeleteDocId, setConfirmDeleteDocId] = useState<string | null>(null)
+  const [confirmDeleteDocName, setConfirmDeleteDocName] = useState("")
+
+  // Response note deletion
+  const [confirmDeleteCommentId, setConfirmDeleteCommentId] = useState<string | null>(null)
+
+  const handleDeleteDoc = async (docId: string) => {
+    if (!demandId || !token) return
+    setConfirmDeleteDocId(null)
+    setDeletingDocId(docId)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/documents/${docId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) onRefresh?.()
+    } catch { /* ignore */ } finally {
+      setDeletingDocId(null)
+    }
+  }
+
+  // Post-hoc requestComment editing
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editCommentText, setEditCommentText] = useState("")
+  const [editCommentLoading, setEditCommentLoading] = useState(false)
 
   // Post-hoc upload state per signoff
   const [uploadingId, setUploadingId] = useState<string | null>(null)
@@ -158,6 +192,35 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
       setUploadError("網路錯誤")
     } finally {
       setUploadLoading(false)
+    }
+  }
+
+  const startEditComment = (signoffId: string, existing: string | null) => {
+    setEditingCommentId(signoffId)
+    setEditCommentText(existing || "")
+  }
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null)
+    setEditCommentText("")
+  }
+
+  const saveComment = async (signoffId: string, text?: string) => {
+    if (!demandId || !token) return
+    const content = text !== undefined ? text : editCommentText.trim()
+    setEditCommentLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/signoffs/${signoffId}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requestComment: content }),
+      })
+      if (res.ok) {
+        cancelEditComment()
+        onRefresh?.()
+      }
+    } catch { /* ignore */ } finally {
+      setEditCommentLoading(false)
     }
   }
 
@@ -260,7 +323,7 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
         </p>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className="space-y-5">
             {paged.map((s) => {
               const Icon = STATUS_ICONS[s.status] || Clock
               const iconColor = STATUS_ICON_COLORS[s.status] || "text-gray-400"
@@ -302,27 +365,40 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                         {s.comment}
                       </p>
                     )}
+
                     {docs.length > 0 && (
                       <div className="mt-1.5 space-y-1">
                         {docs.map((doc) => (
-                          <a
-                            key={doc.id}
-                            href={doc.fileUrl!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 rounded bg-muted/30 px-2 py-1 text-xs hover:bg-muted/50 transition-colors group"
-                          >
-                            <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-                            <span className="truncate flex-1 text-muted-foreground group-hover:text-foreground">
-                              {doc.fileName}
-                            </span>
-                            {doc.fileSize != null && (
-                              <span className="text-muted-foreground/60 shrink-0">
-                                {formatFileSize(doc.fileSize)}
+                          <div key={doc.id} className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2 text-xs group/doc">
+                            <a
+                              href={doc.fileUrl!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 flex-1 min-w-0 hover:text-foreground transition-colors"
+                            >
+                              <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="truncate flex-1 text-muted-foreground group-hover/doc:text-foreground">
+                                {doc.fileName}
                               </span>
+                              {doc.fileSize != null && (
+                                <span className="text-muted-foreground/60 shrink-0">
+                                  {formatFileSize(doc.fileSize)}
+                                </span>
+                              )}
+                              <Download className="h-3 w-3 text-muted-foreground/40 group-hover/doc:text-foreground shrink-0" />
+                            </a>
+                            {canUpload && (
+                              <button
+                                className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground/50 hover:text-red-500 shrink-0"
+                                onClick={() => { setConfirmDeleteDocId(doc.id); setConfirmDeleteDocName(doc.fileName) }}
+                                disabled={deletingDocId === doc.id}
+                              >
+                                {deletingDocId === doc.id
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <Trash2 className="h-3 w-3" />}
+                              </button>
                             )}
-                            <Download className="h-3 w-3 text-muted-foreground/40 group-hover:text-foreground shrink-0" />
-                          </a>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -398,6 +474,57 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                         {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
                       </div>
                     )}
+
+                    {/* Response notes from manager/developer */}
+                    {editingCommentId === s.id ? (
+                      <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2.5">
+                        <textarea
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                          rows={3}
+                          placeholder="說明已調整的內容..."
+                          value={editCommentText}
+                          onChange={(e) => setEditCommentText(e.target.value)}
+                        />
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditComment} disabled={editCommentLoading}>
+                            取消
+                          </Button>
+                          <Button size="sm" className="h-6 text-xs" onClick={() => saveComment(s.id)} disabled={editCommentLoading}>
+                            {editCommentLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                            儲存
+                          </Button>
+                        </div>
+                      </div>
+                    ) : s.requestComment ? (
+                      <div className="mt-1.5 flex items-start gap-1.5 group/rc">
+                        <MessageSquare className="h-3 w-3 text-blue-400 mt-0.5 shrink-0" />
+                        <p className="text-xs text-blue-600/80 whitespace-pre-line flex-1">{s.requestComment}</p>
+                        {canUpload && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover/rc:opacity-100 transition-opacity">
+                            <button
+                              className="text-muted-foreground/50 hover:text-muted-foreground"
+                              onClick={() => startEditComment(s.id, s.requestComment ?? null)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              className="text-muted-foreground/50 hover:text-red-500"
+                              onClick={() => setConfirmDeleteCommentId(s.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : canUpload ? (
+                      <button
+                        className="mt-1.5 flex items-center gap-1 text-[11px] text-blue-400/60 hover:text-blue-500 transition-colors"
+                        onClick={() => startEditComment(s.id, null)}
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        補充回覆說明
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               )
@@ -430,6 +557,47 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
           )}
         </>
       )}
+      {/* Confirm delete document dialog */}
+      <AlertDialog open={!!confirmDeleteDocId} onOpenChange={(open) => { if (!open) setConfirmDeleteDocId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除文件</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除「{confirmDeleteDocName}」嗎？此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => confirmDeleteDocId && handleDeleteDoc(confirmDeleteDocId)}
+            >
+              刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm delete response note dialog */}
+      <AlertDialog open={!!confirmDeleteCommentId} onOpenChange={(open) => { if (!open) setConfirmDeleteCommentId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除回覆說明</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除此回覆說明嗎？此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => { if (confirmDeleteCommentId) { saveComment(confirmDeleteCommentId, ""); setConfirmDeleteCommentId(null) } }}
+            >
+              刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
