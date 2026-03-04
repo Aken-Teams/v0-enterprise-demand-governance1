@@ -331,7 +331,8 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
               const phaseLabel = STATUS_MAP[s.phase]?.label || s.phase
               const docs = s.documents?.filter((d) => d.fileUrl) || []
               const isUploading = uploadingId === s.id
-              const canAddDocs = canUpload && (s.status === "REJECTED" || s.status === "APPROVED")
+              const isPending = s.status === "PENDING"
+              const canAddDocs = canUpload && isPending
 
               return (
                 <div key={s.id} className="flex gap-3">
@@ -360,12 +361,71 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                         <> · {s.respondedBy.name} 回應 · {fmtDate(s.respondedAt)}</>
                       )}
                     </p>
+                    {/* 1. 提出說明 (manager's notes when submitting this round) */}
+                    {canUpload && editingCommentId === s.id ? (
+                      <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2.5">
+                        <textarea
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                          rows={3}
+                          placeholder="說明已調整的內容..."
+                          value={editCommentText}
+                          onChange={(e) => setEditCommentText(e.target.value)}
+                        />
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditComment} disabled={editCommentLoading}>
+                            取消
+                          </Button>
+                          <Button size="sm" className="h-6 text-xs" onClick={() => saveComment(s.id)} disabled={editCommentLoading}>
+                            {editCommentLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                            儲存
+                          </Button>
+                        </div>
+                      </div>
+                    ) : s.requestComment ? (
+                      <div className="mt-1.5 group/rc">
+                        <span className="text-[10px] font-medium text-blue-500/70">提出說明</span>
+                        <div className="flex items-start gap-1.5 mt-0.5">
+                          <MessageSquare className="h-3 w-3 text-blue-400 mt-0.5 shrink-0" />
+                          <p className="text-xs text-blue-600/80 whitespace-pre-line flex-1">{s.requestComment}</p>
+                          {canUpload && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover/rc:opacity-100 transition-opacity">
+                              <button
+                                className="text-muted-foreground/50 hover:text-muted-foreground"
+                                onClick={() => startEditComment(s.id, s.requestComment ?? null)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button
+                                className="text-muted-foreground/50 hover:text-red-500"
+                                onClick={() => setConfirmDeleteCommentId(s.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : canUpload ? (
+                      <button
+                        className="mt-1.5 flex items-center gap-1 text-[11px] text-blue-400/60 hover:text-blue-500 transition-colors"
+                        onClick={() => startEditComment(s.id, null)}
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        補充提出說明
+                      </button>
+                    ) : null}
+
+                    {/* 2. 審核回應 (reviewer's comment/rejection reason) */}
                     {s.comment && (
-                      <p className="text-xs text-muted-foreground/80 mt-1 whitespace-pre-line bg-muted/30 rounded px-2 py-1.5">
-                        {s.comment}
-                      </p>
+                      <div className="mt-1.5">
+                        <span className="text-[10px] font-medium text-muted-foreground/70">審核回應</span>
+                        <p className="text-xs text-muted-foreground/80 mt-0.5 whitespace-pre-line bg-muted/30 rounded px-2 py-1.5">
+                          {s.comment}
+                        </p>
+                      </div>
                     )}
 
+                    {/* 3. 附件 (documents) */}
                     {docs.length > 0 && (
                       <div className="mt-1.5 space-y-1">
                         {docs.map((doc) => (
@@ -387,7 +447,7 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                               )}
                               <Download className="h-3 w-3 text-muted-foreground/40 group-hover/doc:text-foreground shrink-0" />
                             </a>
-                            {canUpload && (
+                            {canUpload && isPending && (
                               <button
                                 className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground/50 hover:text-red-500 shrink-0"
                                 onClick={() => { setConfirmDeleteDocId(doc.id); setConfirmDeleteDocName(doc.fileName) }}
@@ -403,7 +463,6 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                       </div>
                     )}
 
-                    {/* Post-hoc upload area */}
                     {canAddDocs && !isUploading && (
                       <button
                         className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
@@ -416,7 +475,6 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
 
                     {isUploading && (
                       <div className="mt-2 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
-                        {/* Pending file list */}
                         {pendingFiles.length > 0 && (
                           <div className="space-y-1">
                             {pendingFiles.map((f, i) => (
@@ -435,8 +493,6 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                             ))}
                           </div>
                         )}
-
-                        {/* Action buttons */}
                         <div className="flex items-center gap-2">
                           <Button
                             type="button"
@@ -470,61 +526,10 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                             </Button>
                           </div>
                         </div>
-
                         {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
                       </div>
                     )}
 
-                    {/* Response notes from manager/developer */}
-                    {editingCommentId === s.id ? (
-                      <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2.5">
-                        <textarea
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-                          rows={3}
-                          placeholder="說明已調整的內容..."
-                          value={editCommentText}
-                          onChange={(e) => setEditCommentText(e.target.value)}
-                        />
-                        <div className="flex items-center gap-2 justify-end">
-                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditComment} disabled={editCommentLoading}>
-                            取消
-                          </Button>
-                          <Button size="sm" className="h-6 text-xs" onClick={() => saveComment(s.id)} disabled={editCommentLoading}>
-                            {editCommentLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                            儲存
-                          </Button>
-                        </div>
-                      </div>
-                    ) : s.requestComment ? (
-                      <div className="mt-1.5 flex items-start gap-1.5 group/rc">
-                        <MessageSquare className="h-3 w-3 text-blue-400 mt-0.5 shrink-0" />
-                        <p className="text-xs text-blue-600/80 whitespace-pre-line flex-1">{s.requestComment}</p>
-                        {canUpload && (
-                          <div className="flex items-center gap-1 opacity-0 group-hover/rc:opacity-100 transition-opacity">
-                            <button
-                              className="text-muted-foreground/50 hover:text-muted-foreground"
-                              onClick={() => startEditComment(s.id, s.requestComment ?? null)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                            <button
-                              className="text-muted-foreground/50 hover:text-red-500"
-                              onClick={() => setConfirmDeleteCommentId(s.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : canUpload ? (
-                      <button
-                        className="mt-1.5 flex items-center gap-1 text-[11px] text-blue-400/60 hover:text-blue-500 transition-colors"
-                        onClick={() => startEditComment(s.id, null)}
-                      >
-                        <MessageSquare className="h-3 w-3" />
-                        補充回覆說明
-                      </button>
-                    ) : null}
                   </div>
                 </div>
               )
