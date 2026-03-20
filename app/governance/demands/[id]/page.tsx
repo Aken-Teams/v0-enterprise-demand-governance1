@@ -1475,7 +1475,7 @@ export default function DemandDetailPage() {
                                 <div className="text-center space-y-3">
                                   <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
                                   <p className="text-sm font-medium">{selectedDoc.fileName}</p>
-                                  <p className="text-xs text-muted-foreground">無法轉換預覽，請確認伺服器已安裝 LibreOffice</p>
+                                  <p className="text-xs text-muted-foreground">無法轉換預覽，請確認伺服器已安裝 LibreOffice 或 Microsoft Office</p>
                                   <Button variant="outline" size="sm" asChild>
                                     <a href={url} download><Download className="h-3.5 w-3.5 mr-1.5" />下載檔案</a>
                                   </Button>
@@ -1557,7 +1557,7 @@ export default function DemandDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <SignoffHistory signoffs={demand.phaseSignoffs || []} demandId={demand.id} token={token} onRefresh={fetchDemand} />
+                <SignoffHistory signoffs={demand.phaseSignoffs || []} demandId={demand.id} token={token} userRole={user?.role} onRefresh={fetchDemand} />
               </CardContent>
             </Card>
           </TabsContent>

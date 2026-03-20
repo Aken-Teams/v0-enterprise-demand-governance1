@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,7 +10,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2, Paperclip, FileIcon, Trash2 } from "lucide-react"
 import {
   PIPELINE_STEPS,
   STATUS_MAP,
@@ -60,6 +60,8 @@ export function StepNavigation({
   const [reRequesting, setReRequesting] = useState(false)
   const [showReRequestDialog, setShowReRequestDialog] = useState(false)
   const [reRequestComment, setReRequestComment] = useState("")
+  const [reRequestFiles, setReRequestFiles] = useState<File[]>([])
+  const reRequestFileRef = useRef<HTMLInputElement>(null)
 
   const currentIdx = PIPELINE_STEPS.indexOf(currentStatus as typeof PIPELINE_STEPS[number])
   if (currentIdx < 0) return null
@@ -151,14 +153,28 @@ export function StepNavigation({
     if (!token) return
     setReRequesting(true)
     try {
-      const res = await fetch(`/api/demands/${demandId}/signoffs`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ phase: currentStatus, requestComment: reRequestComment.trim() || null }),
-      })
+      let res: Response
+      if (reRequestFiles.length > 0) {
+        const formData = new FormData()
+        formData.set("phase", currentStatus)
+        if (reRequestComment.trim()) formData.set("requestComment", reRequestComment.trim())
+        for (const file of reRequestFiles) formData.append("files", file)
+        res = await fetch(`/api/demands/${demandId}/signoffs`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        })
+      } else {
+        res = await fetch(`/api/demands/${demandId}/signoffs`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ phase: currentStatus, requestComment: reRequestComment.trim() || null }),
+        })
+      }
       if (res.ok) {
         setShowReRequestDialog(false)
         setReRequestComment("")
+        setReRequestFiles([])
         onRefresh?.()
       }
     } catch { /* ignore */ } finally {
@@ -322,8 +338,24 @@ export function StepNavigation({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Hidden file input for re-request */}
+      <input
+        ref={reRequestFileRef}
+        type="file"
+        multiple
+        className="hidden"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.jpg,.jpeg,.png,.gif,.webp"
+        onChange={(e) => {
+          if (e.target.files) {
+            const selected = Array.from(e.target.files).filter((f) => f.size <= 10 * 1024 * 1024)
+            setReRequestFiles((prev) => [...prev, ...selected])
+            e.target.value = ""
+          }
+        }}
+      />
+
       {/* Re-request signoff dialog */}
-      <AlertDialog open={showReRequestDialog} onOpenChange={setShowReRequestDialog}>
+      <AlertDialog open={showReRequestDialog} onOpenChange={(open) => { setShowReRequestDialog(open); if (!open) setReRequestFiles([]) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>重新發起簽核</AlertDialogTitle>
@@ -339,6 +371,42 @@ export function StepNavigation({
                   rows={4}
                   className="text-sm"
                 />
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">附件（選填）</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => reRequestFileRef.current?.click()}
+                      disabled={reRequesting}
+                    >
+                      <Paperclip className="h-3 w-3 mr-1" />
+                      選擇檔案
+                    </Button>
+                  </div>
+                  {reRequestFiles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {reRequestFiles.map((f, i) => (
+                        <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded bg-muted/50 border border-border/60 px-2 py-1.5 text-xs">
+                          <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="truncate flex-1">{f.name}</span>
+                          <span className="text-muted-foreground shrink-0">
+                            {f.size < 1024 ? `${f.size} B` : f.size < 1024 * 1024 ? `${(f.size / 1024).toFixed(1)} KB` : `${(f.size / (1024 * 1024)).toFixed(1)} MB`}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-red-400 hover:text-red-600 shrink-0"
+                            onClick={() => setReRequestFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -141,7 +141,7 @@ export function PhaseDocuments({
     setUploadError("")
     try {
       const formData = new FormData()
-      formData.set("phase", uploadPhase)
+      if (uploadPhase !== "OTHER") formData.set("phase", uploadPhase)
       formData.set("type", uploadType)
       for (const file of selectedFiles) {
         formData.append("files", file)
@@ -175,7 +175,7 @@ export function PhaseDocuments({
       const res = await fetch(`/api/demands/${demandId}/documents`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ phase: uploadPhase, type: uploadType, url: appResultUrl.trim() }),
+        body: JSON.stringify({ phase: uploadPhase !== "OTHER" ? uploadPhase : null, type: uploadType, url: appResultUrl.trim() }),
       })
       if (res.ok) {
         setShowUploadDialog(false)
@@ -450,6 +450,7 @@ export function PhaseDocuments({
                       {STATUS_MAP[phase]?.label}
                     </SelectItem>
                   ))}
+                  <SelectItem value="OTHER">其他</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { existsSync } from "fs"
-import { readFile, mkdir, copyFile, rm, stat } from "fs/promises"
+import { readFile, mkdir, copyFile, rm, stat, writeFile } from "fs/promises"
 import path from "path"
 import os from "os"
-import { execFile } from "child_process"
+import { execFile, exec } from "child_process"
 import { promisify } from "util"
 
 const execFileAsync = promisify(execFile)
+const execAsync = promisify(exec)
 const CONVERTIBLE = new Set([".ppt", ".pptx", ".doc", ".docx"])
 
-function findSoffice(): string {
+function findSoffice(): string | null {
   if (process.platform === "win32") {
     const candidates = [
       path.join("C:", "Program Files", "LibreOffice", "program", "soffice.exe"),
@@ -18,8 +19,97 @@ function findSoffice(): string {
     for (const c of candidates) {
       if (existsSync(c)) return c
     }
+    return null
   }
-  return process.platform === "win32" ? "soffice" : "libreoffice"
+  return "libreoffice"
+}
+
+async function convertWithLibreOffice(filePath: string, outputDir: string, baseName: string): Promise<string> {
+  const soffice = findSoffice()
+  if (!soffice) throw new Error("NO_LIBREOFFICE")
+
+  const tmpDir = path.join(os.tmpdir(), `lo-preview-${Date.now()}`)
+  await mkdir(tmpDir, { recursive: true })
+  try {
+    await execFileAsync(soffice, [
+      "--headless",
+      "--convert-to", "pdf",
+      "--outdir", tmpDir,
+      filePath,
+    ], { timeout: 60000 })
+
+    const convertedPath = path.join(tmpDir, `${baseName}.pdf`)
+    if (!existsSync(convertedPath)) throw new Error("CONVERSION_FAILED")
+    const previewPath = path.join(outputDir, `${baseName}.preview.pdf`)
+    await copyFile(convertedPath, previewPath)
+    return previewPath
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+async function convertWithPowerShell(filePath: string, outputDir: string, baseName: string, ext: string): Promise<string> {
+  if (process.platform !== "win32") throw new Error("NOT_WINDOWS")
+
+  const previewPath = path.join(outputDir, `${baseName}.preview.pdf`)
+  const absInput = path.resolve(filePath).replace(/\//g, "\\")
+  const absOutput = path.resolve(previewPath).replace(/\//g, "\\")
+
+  const isPpt = [".ppt", ".pptx"].includes(ext)
+  const isDoc = [".doc", ".docx"].includes(ext)
+
+  let script: string
+  if (isPpt) {
+    script = `
+$ErrorActionPreference = 'Stop'
+$ppt = $null
+$presentation = $null
+try {
+  $ppt = New-Object -ComObject PowerPoint.Application
+  $presentation = $ppt.Presentations.Open('${absInput}', [Microsoft.Office.Core.MsoTriState]::msoTrue, [Microsoft.Office.Core.MsoTriState]::msoFalse, [Microsoft.Office.Core.MsoTriState]::msoFalse)
+  $presentation.SaveAs('${absOutput}', 32)
+} finally {
+  if ($presentation) { $presentation.Close() }
+  if ($ppt) { $ppt.Quit() }
+  [System.Runtime.InteropServices.Marshal]::ReleaseComObject($ppt) | Out-Null
+  [System.GC]::Collect()
+}
+`
+  } else if (isDoc) {
+    script = `
+$ErrorActionPreference = 'Stop'
+$word = $null
+$doc = $null
+try {
+  $word = New-Object -ComObject Word.Application
+  $word.Visible = $false
+  $doc = $word.Documents.Open('${absInput}', $false, $true)
+  $doc.SaveAs([ref]'${absOutput}', [ref]17)
+} finally {
+  if ($doc) { $doc.Close([ref]$false) }
+  if ($word) { $word.Quit() }
+  [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
+  [System.GC]::Collect()
+}
+`
+  } else {
+    throw new Error("UNSUPPORTED")
+  }
+
+  // Write script to temp file to avoid encoding issues
+  const scriptPath = path.join(os.tmpdir(), `convert-${Date.now()}.ps1`)
+  await writeFile(scriptPath, script, "utf-8")
+  try {
+    await execAsync(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
+      { timeout: 120000 }
+    )
+  } finally {
+    await rm(scriptPath, { force: true }).catch(() => {})
+  }
+
+  if (!existsSync(previewPath)) throw new Error("CONVERSION_FAILED")
+  return previewPath
 }
 
 async function ensurePreview(demandId: string, filename: string): Promise<string> {
@@ -41,26 +131,20 @@ async function ensurePreview(demandId: string, filename: string): Promise<string
     if (prevStat.mtimeMs >= srcStat.mtimeMs) return previewPath
   }
 
-  // Convert with LibreOffice headless
-  const tmpDir = path.join(os.tmpdir(), `lo-preview-${Date.now()}`)
-  await mkdir(tmpDir, { recursive: true })
+  // Try LibreOffice first, then PowerShell COM automation
   try {
-    const soffice = findSoffice()
-    await execFileAsync(soffice, [
-      "--headless",
-      "--convert-to", "pdf",
-      "--outdir", tmpDir,
-      filePath,
-    ], { timeout: 60000 })
-
-    const convertedPath = path.join(tmpDir, `${baseName}.pdf`)
-    if (!existsSync(convertedPath)) throw new Error("CONVERSION_FAILED")
-    await copyFile(convertedPath, previewPath)
-  } finally {
-    await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
+    return await convertWithLibreOffice(filePath, uploadsDir, baseName)
+  } catch {
+    // LibreOffice not available, try PowerShell
   }
 
-  return previewPath
+  try {
+    return await convertWithPowerShell(filePath, uploadsDir, baseName, ext)
+  } catch {
+    // PowerShell conversion also failed
+  }
+
+  throw new Error("CONVERSION_FAILED")
 }
 
 export async function HEAD(
@@ -98,7 +182,7 @@ export async function GET(
     if (msg === "NOT_FOUND") return NextResponse.json({ error: "檔案不存在" }, { status: 404 })
     if (msg === "UNSUPPORTED" || msg === "INVALID") return NextResponse.json({ error: "此格式不支援轉換" }, { status: 400 })
     return NextResponse.json(
-      { error: "轉換失敗，請確認伺服器已安裝 LibreOffice", detail: msg },
+      { error: "轉換失敗，請確認伺服器已安裝 LibreOffice 或 Microsoft Office", detail: msg },
       { status: 500 }
     )
   }

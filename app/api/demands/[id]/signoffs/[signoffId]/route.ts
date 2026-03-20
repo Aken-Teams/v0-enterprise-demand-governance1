@@ -175,36 +175,64 @@ export async function PATCH(
   }
 }
 
-// PUT: Update requestComment (post-hoc editing by admin/delivery)
+// PUT: Update requestComment (admin/delivery) or comment (subsidiary)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; signoffId: string }> }
 ) {
   try {
-    const auth = verifyRole(request, ["admin", "delivery"])
+    const auth = verifyAuth(request)
     const { id, signoffId } = await params
-    const { requestComment } = await request.json()
+    const body = await request.json()
 
     const signoff = await prisma.phaseSignoff.findUnique({
       where: { id: signoffId },
-      select: { id: true, demandId: true, requestedById: true },
+      select: { id: true, demandId: true, requestedById: true, demand: { select: { submitterId: true, organizationId: true } } },
     })
 
     if (!signoff || signoff.demandId !== id) {
       return NextResponse.json({ error: "簽核記錄不存在" }, { status: 404 })
     }
 
-    const updated = await prisma.phaseSignoff.update({
-      where: { id: signoffId },
-      data: { requestComment: requestComment?.trim() || null },
-    })
+    // Determine which field is being updated based on role
+    if ("requestComment" in body) {
+      // Only admin/delivery can edit requestComment (提出說明)
+      if (auth.role !== "admin" && auth.role !== "delivery") {
+        return NextResponse.json({ error: "權限不足" }, { status: 403 })
+      }
+      const updated = await prisma.phaseSignoff.update({
+        where: { id: signoffId },
+        data: { requestComment: body.requestComment?.trim() || null },
+      })
+      return NextResponse.json({ success: true, requestComment: updated.requestComment })
+    }
 
-    return NextResponse.json({ success: true, requestComment: updated.requestComment })
+    if ("comment" in body) {
+      // Only subsidiary can edit comment (審核回應)
+      if (auth.role !== "subsidiary") {
+        return NextResponse.json({ error: "權限不足" }, { status: 403 })
+      }
+      // Verify subsidiary belongs to same org
+      const user = await prisma.user.findUnique({
+        where: { id: auth.userId },
+        select: { organizationId: true },
+      })
+      if (auth.userId !== signoff.demand.submitterId && user?.organizationId !== signoff.demand.organizationId) {
+        return NextResponse.json({ error: "您無權修改此審核回應" }, { status: 403 })
+      }
+      const updated = await prisma.phaseSignoff.update({
+        where: { id: signoffId },
+        data: { comment: body.comment?.trim() || null },
+      })
+      return NextResponse.json({ success: true, comment: updated.comment })
+    }
+
+    return NextResponse.json({ error: "缺少更新欄位" }, { status: 400 })
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })
     }
-    console.error("Update signoff requestComment error:", error)
+    console.error("Update signoff field error:", error)
     return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
   }
 }

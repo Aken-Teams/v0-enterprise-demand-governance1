@@ -36,6 +36,7 @@ interface SignoffHistoryProps {
   signoffs: SignoffRecord[]
   demandId?: string
   token?: string | null
+  userRole?: string
   onRefresh?: () => void
 }
 
@@ -69,7 +70,7 @@ type FilterStatus = "all" | string
 
 const PAGE_SIZE = 10
 
-export function SignoffHistory({ signoffs, demandId, token, onRefresh }: SignoffHistoryProps) {
+export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh }: SignoffHistoryProps) {
   const [filterPhase, setFilterPhase] = useState<FilterPhase>("all")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [page, setPage] = useState(1)
@@ -137,6 +138,43 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
   const hasFilters = filterPhase !== "all" || filterStatus !== "all"
 
   const canUpload = !!demandId && !!token
+  const canEditRequestComment = canUpload && (userRole === "admin" || userRole === "delivery")
+  const canEditComment = canUpload && userRole === "subsidiary"
+
+  // 審核回應 editing state
+  const [editingResponseId, setEditingResponseId] = useState<string | null>(null)
+  const [editResponseText, setEditResponseText] = useState("")
+  const [editResponseLoading, setEditResponseLoading] = useState(false)
+  const [confirmDeleteResponseId, setConfirmDeleteResponseId] = useState<string | null>(null)
+
+  const startEditResponse = (signoffId: string, existing: string | null) => {
+    setEditingResponseId(signoffId)
+    setEditResponseText(existing || "")
+  }
+
+  const cancelEditResponse = () => {
+    setEditingResponseId(null)
+    setEditResponseText("")
+  }
+
+  const saveResponse = async (signoffId: string, text?: string) => {
+    if (!demandId || !token) return
+    const content = text !== undefined ? text : editResponseText.trim()
+    setEditResponseLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/signoffs/${signoffId}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: content }),
+      })
+      if (res.ok) {
+        cancelEditResponse()
+        onRefresh?.()
+      }
+    } catch { /* ignore */ } finally {
+      setEditResponseLoading(false)
+    }
+  }
 
   const startUpload = (signoffId: string) => {
     setUploadingId(signoffId)
@@ -362,7 +400,7 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                       )}
                     </p>
                     {/* 1. 提出說明 (manager's notes when submitting this round) */}
-                    {canUpload && editingCommentId === s.id ? (
+                    {canEditRequestComment && editingCommentId === s.id ? (
                       <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2.5">
                         <textarea
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
@@ -387,7 +425,7 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                         <div className="flex items-start gap-1.5 mt-0.5">
                           <MessageSquare className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
                           <p className="text-sm text-blue-600/80 whitespace-pre-line flex-1">{s.requestComment}</p>
-                          {canUpload && (
+                          {canEditRequestComment && (
                             <div className="flex items-center gap-1 opacity-0 group-hover/rc:opacity-100 transition-opacity">
                               <button
                                 className="text-muted-foreground/50 hover:text-muted-foreground"
@@ -405,7 +443,7 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                           )}
                         </div>
                       </div>
-                    ) : canUpload ? (
+                    ) : canEditRequestComment ? (
                       <button
                         className="mt-1.5 flex items-center gap-1 text-xs text-blue-400/60 hover:text-blue-500 transition-colors"
                         onClick={() => startEditComment(s.id, null)}
@@ -416,14 +454,66 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
                     ) : null}
 
                     {/* 2. 審核回應 (reviewer's comment/rejection reason) */}
-                    {s.comment && (
+                    {canEditComment && editingResponseId === s.id ? (
+                      <div className="mt-2 space-y-2 rounded-lg border border-gray-200 bg-muted/20 p-2.5">
+                        <textarea
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                          rows={3}
+                          placeholder="填寫審核回應..."
+                          value={editResponseText}
+                          onChange={(e) => setEditResponseText(e.target.value)}
+                        />
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditResponse} disabled={editResponseLoading}>
+                            取消
+                          </Button>
+                          <Button size="sm" className="h-6 text-xs" onClick={() => saveResponse(s.id)} disabled={editResponseLoading}>
+                            {editResponseLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                            儲存
+                          </Button>
+                        </div>
+                      </div>
+                    ) : s.comment ? (
+                      <div className="mt-1.5 group/resp">
+                        <span className="text-[11px] font-medium text-muted-foreground/70">審核回應</span>
+                        <div className="flex items-start gap-1.5 mt-0.5">
+                          <p className="text-sm text-muted-foreground/80 whitespace-pre-line bg-muted/30 rounded px-2.5 py-2 flex-1">
+                            {s.comment}
+                          </p>
+                          {canEditComment && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover/resp:opacity-100 transition-opacity pt-2">
+                              <button
+                                className="text-muted-foreground/50 hover:text-muted-foreground"
+                                onClick={() => startEditResponse(s.id, s.comment)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button
+                                className="text-muted-foreground/50 hover:text-red-500"
+                                onClick={() => setConfirmDeleteResponseId(s.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : canEditComment ? (
+                      <button
+                        className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                        onClick={() => startEditResponse(s.id, null)}
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        補充審核回應
+                      </button>
+                    ) : s.comment ? (
                       <div className="mt-1.5">
                         <span className="text-[11px] font-medium text-muted-foreground/70">審核回應</span>
                         <p className="text-sm text-muted-foreground/80 mt-0.5 whitespace-pre-line bg-muted/30 rounded px-2.5 py-2">
                           {s.comment}
                         </p>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* 3. 附件 (documents) */}
                     {docs.length > 0 && (
@@ -583,13 +673,13 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Confirm delete response note dialog */}
+      {/* Confirm delete 提出說明 dialog */}
       <AlertDialog open={!!confirmDeleteCommentId} onOpenChange={(open) => { if (!open) setConfirmDeleteCommentId(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除回覆說明</AlertDialogTitle>
+            <AlertDialogTitle>確認刪除提出說明</AlertDialogTitle>
             <AlertDialogDescription>
-              確定要刪除此回覆說明嗎？此操作無法復原。
+              確定要刪除此提出說明嗎？此操作無法復原。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -597,6 +687,27 @@ export function SignoffHistory({ signoffs, demandId, token, onRefresh }: Signoff
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => { if (confirmDeleteCommentId) { saveComment(confirmDeleteCommentId, ""); setConfirmDeleteCommentId(null) } }}
+            >
+              刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm delete 審核回應 dialog */}
+      <AlertDialog open={!!confirmDeleteResponseId} onOpenChange={(open) => { if (!open) setConfirmDeleteResponseId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除審核回應</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除此審核回應嗎？此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => { if (confirmDeleteResponseId) { saveResponse(confirmDeleteResponseId, ""); setConfirmDeleteResponseId(null) } }}
             >
               刪除
             </AlertDialogAction>

@@ -1185,6 +1185,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                   signoffs={demand.phaseSignoffs || []}
                   demandId={isLoggedIn ? demand.id : undefined}
                   token={authToken}
+                  userRole={authUser?.role}
                   onRefresh={fetchDemand}
                 />
               </CardContent>
