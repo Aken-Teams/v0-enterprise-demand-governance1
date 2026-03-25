@@ -20,11 +20,11 @@ import {
 import {
   Search, Inbox, Plus, Loader2, Building2,
   Paperclip, User, MoreHorizontal, Eye, Trash2,
-  ClipboardList, Code2, CircleCheckBig,
+  ClipboardList, Code2, CircleCheckBig, ChevronLeft, ChevronRight,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 
@@ -77,6 +77,8 @@ export default function InboxPage() {
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
   const [deleteTarget, setDeleteTarget] = useState<Demand | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 12
 
   // Debounce search
   useEffect(() => {
@@ -129,6 +131,15 @@ export default function InboxPage() {
       if (res.ok) fetchDemands()
     } catch { /* ignore */ }
   }
+
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1) }, [filterStatus, filterSubmitter, filterDeveloper, debouncedSearch])
+
+  const totalPages = Math.max(1, Math.ceil(demands.length / ITEMS_PER_PAGE))
+  const paginatedDemands = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE
+    return demands.slice(start, start + ITEMS_PER_PAGE)
+  }, [demands, currentPage, ITEMS_PER_PAGE])
 
   const getCount = (status: string) => statusCounts[status] || 0
   const confirmStage = getCount("SUBMITTED") + getCount("PRD_REVIEW") + getCount("SP_REVIEW")
@@ -273,85 +284,127 @@ export default function InboxPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {demands.map((demand) => {
-              const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
-              return (
-                <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
-                  <CardContent className="px-4 py-3 space-y-2">
-                    {/* Row 1: number + status */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
-                      <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
-                        {statusInfo.label}
-                      </Badge>
-                    </div>
-
-                    {/* Title */}
-                    <p className="font-semibold leading-snug line-clamp-2">{demand.title}</p>
-
-                    <hr className="border-border/60" />
-
-                    {/* Meta row + actions */}
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1">
-                          <Building2 className="h-3.5 w-3.5" />
-                          {demand.organization}
-                        </span>
-                        <span>·</span>
-                        <span>{demand.estimatedSp} SP</span>
-                        {demand.documentCount > 0 && (
-                          <>
-                            <span>·</span>
-                            <span className="flex items-center gap-1">
-                              <Paperclip className="h-3.5 w-3.5" />
-                              {demand.documentCount}
-                            </span>
-                          </>
-                        )}
-                        <span>·</span>
-                        <span className="flex items-center gap-1">
-                          <User className="h-3.5 w-3.5" />
-                          {demand.developer || "尚未指派"}
-                        </span>
+          <>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {paginatedDemands.map((demand) => {
+                const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+                return (
+                  <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
+                    <CardContent className="px-4 py-3 space-y-2">
+                      {/* Row 1: number + status */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
+                        <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
+                          {statusInfo.label}
+                        </Badge>
                       </div>
 
-                      {isAdmin ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="max-h-none overflow-visible">
-                            <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
-                              <Eye className="h-3.5 w-3.5 mr-2" />
-                              查看詳情
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setDeleteTarget(demand)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />
-                              刪除需求
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" asChild>
-                          <Link href={`/governance/demands/${demand.id}`}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
+                      {/* Title */}
+                      <p className="font-semibold leading-snug line-clamp-2">{demand.title}</p>
+
+                      <hr className="border-border/60" />
+
+                      {/* Meta row + actions */}
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-1">
+                            <Building2 className="h-3.5 w-3.5" />
+                            {demand.organization}
+                          </span>
+                          <span>·</span>
+                          <span>{demand.estimatedSp} SP</span>
+                          {demand.documentCount > 0 && (
+                            <>
+                              <span>·</span>
+                              <span className="flex items-center gap-1">
+                                <Paperclip className="h-3.5 w-3.5" />
+                                {demand.documentCount}
+                              </span>
+                            </>
+                          )}
+                          <span>·</span>
+                          <span className="flex items-center gap-1">
+                            <User className="h-3.5 w-3.5" />
+                            {demand.developer || "尚未指派"}
+                          </span>
+                        </div>
+
+                        {isAdmin ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="max-h-none overflow-visible">
+                              <DropdownMenuItem onClick={() => router.push(`/governance/demands/${demand.id}`)}>
+                                <Eye className="h-3.5 w-3.5 mr-2" />
+                                查看詳情
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDeleteTarget(demand)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                刪除需求
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" asChild>
+                            <Link href={`/governance/demands/${demand.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-4">
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="h-9 px-3"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  上一頁
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="h-9 w-9 p-0"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="h-9 px-3"
+                >
+                  下一頁
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            )}
+
+            <div className="text-center text-sm text-muted-foreground">
+              顯示 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, demands.length)} 筆，共 {demands.length} 筆需求
+            </div>
+          </>
         )}
       </div>
 

@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
     // Fetch all data in parallel
-    const [demands, wallets, statusHistories, allOrgs] = await Promise.all([
+    const [demands, wallets, statusHistories, allOrgs, latestComments, latestSignoffs] = await Promise.all([
       prisma.demand.findMany({
         select: {
           id: true,
@@ -59,6 +59,16 @@ export async function GET(request: NextRequest) {
         where: { status: "active" },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
+      }),
+      // Latest comment per demand (for stale detection)
+      prisma.demandComment.groupBy({
+        by: ["demandId"],
+        _max: { createdAt: true },
+      }),
+      // Latest signoff activity per demand (for stale detection)
+      prisma.phaseSignoff.groupBy({
+        by: ["demandId"],
+        _max: { requestedAt: true, respondedAt: true },
       }),
     ])
 
@@ -245,25 +255,47 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.overdueDays - a.overdueDays)
 
-    // --- Risk: stale demands (no update in 14+ days) ---
+    // --- Risk: stale demands (no activity in 14+ days) ---
+    // Build last-activity map: max of updatedAt, latest status change, comment, signoff
+    const lastCommentMap = new Map(latestComments.map((c) => [c.demandId, c._max.createdAt]))
+    const lastSignoffMap = new Map(latestSignoffs.map((s) => [s.demandId, { requestedAt: s._max.requestedAt, respondedAt: s._max.respondedAt }]))
+
+    const getLastActivity = (demandId: string, updatedAt: Date): Date => {
+      const candidates: Date[] = [new Date(updatedAt)]
+      // Latest status history
+      const history = historyByDemand.get(demandId)
+      if (history && history.length > 0) {
+        const latest = history.reduce((max, h) => new Date(h.createdAt) > max ? new Date(h.createdAt) : max, new Date(0))
+        candidates.push(latest)
+      }
+      // Latest comment
+      const commentDate = lastCommentMap.get(demandId)
+      if (commentDate) candidates.push(new Date(commentDate))
+      // Latest signoff activity
+      const signoff = lastSignoffMap.get(demandId)
+      if (signoff?.requestedAt) candidates.push(new Date(signoff.requestedAt))
+      if (signoff?.respondedAt) candidates.push(new Date(signoff.respondedAt))
+      return new Date(Math.max(...candidates.map((d) => d.getTime())))
+    }
+
     const staleDays = 14
     const staleThreshold = new Date(now.getTime() - staleDays * 24 * 60 * 60 * 1000)
     const staleDemands = demands
-      .filter(
-        (d) =>
-          activeStatuses.has(d.status) &&
-          new Date(d.updatedAt) < staleThreshold
-      )
-      .map((d) => ({
-        demandNumber: d.demandNumber,
-        title: d.title,
-        status: d.status,
-        organization: d.organization.name,
-        lastUpdated: d.updatedAt,
-        idleDays: Math.ceil(
-          (now.getTime() - new Date(d.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
-        ),
-      }))
+      .filter((d) => activeStatuses.has(d.status))
+      .map((d) => {
+        const lastActivity = getLastActivity(d.id, d.updatedAt)
+        return {
+          demandNumber: d.demandNumber,
+          title: d.title,
+          status: d.status,
+          organization: d.organization.name,
+          lastUpdated: lastActivity,
+          idleDays: Math.ceil(
+            (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24)
+          ),
+        }
+      })
+      .filter((d) => d.idleDays >= staleDays)
       .sort((a, b) => b.idleDays - a.idleDays)
 
     // --- Phase avg duration (from status history) ---

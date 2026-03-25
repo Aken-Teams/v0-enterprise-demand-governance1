@@ -14,21 +14,8 @@ export const metadata: Metadata = {
   description: "企業 IT 需求管理 — 需求提案、資源配置、開發追蹤、交付管控",
   generator: "v0.app",
   icons: {
-    icon: [
-      {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
-      },
-    ],
-    apple: "/apple-icon.png",
+    icon: "/logo2.png",
+    apple: "/logo2.png",
   },
 }
 

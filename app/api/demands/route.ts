@@ -306,7 +306,7 @@ export async function GET(request: NextRequest) {
         : Promise.resolve([]),
       auth.role === "admin"
         ? prisma.user.findMany({
-            where: { isActive: true },
+            where: { isActive: true, role: { in: ["admin", "delivery"] } },
             select: { id: true, name: true, role: true },
             orderBy: { name: "asc" },
           })
