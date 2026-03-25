@@ -931,6 +931,9 @@ export default function DemandDetailPage() {
                 pendingSignoff={currentPhaseSignoff}
                 onRefresh={fetchDemand}
                 hideSignoffIndicator
+                estimatedSp={demand.estimatedSp}
+                confirmedSp={demand.confirmedSp}
+                phasePlans={demand.phasePlans}
               />
               </div>
             )}
@@ -994,7 +997,7 @@ export default function DemandDetailPage() {
                         <CardContent>
                           <PhasePlanInlineEditor
                             phasePlans={demand.phasePlans}
-                            totalSp={demand.estimatedSp}
+                            totalSp={demand.confirmedSp ?? demand.estimatedSp}
                             demandId={demand.id}
                             token={token}
                             staffUsers={staffUsers}
@@ -1217,15 +1220,30 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">估計 SP</span>
-                      <span className="font-medium">{demand.estimatedSp} SP</span>
+                      {demand.confirmedSp !== null && demand.confirmedSp !== demand.estimatedSp ? (
+                        <span className="font-medium">
+                          {demand.estimatedSp}
+                          <span className="text-orange-500 mx-1">→</span>
+                          <span className="text-orange-600">{demand.confirmedSp} SP</span>
+                        </span>
+                      ) : (
+                        <span className="font-medium">{demand.estimatedSp} SP</span>
+                      )}
                     </div>
-                    {demand.confirmedSp !== null && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="text-muted-foreground w-16 shrink-0">確認 SP</span>
-                        <span className="font-medium">{demand.confirmedSp} SP</span>
-                      </div>
-                    )}
+                    {demand.confirmedSp !== null && demand.confirmedSp !== demand.estimatedSp && (() => {
+                      const closedHistory = demand.statusHistory?.find(
+                        (h: { toStatus: string; comment: string | null }) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT")
+                      )
+                      if (!closedHistory?.comment) return null
+                      try {
+                        const adj = JSON.parse(closedHistory.comment)
+                        return adj.reason ? (
+                          <div className="ml-6 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5">
+                            <span className="font-medium text-foreground">調整原因：</span>{adj.reason}
+                          </div>
+                        ) : null
+                      } catch { return null }
+                    })()}
                     <hr className="border-border/60" />
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex items-center gap-1.5 text-sm">
@@ -1285,7 +1303,7 @@ export default function DemandDetailPage() {
                   <CardContent>
                     <SpAllocationChart
                       phasePlans={demand.phasePlans}
-                      totalSp={demand.estimatedSp}
+                      totalSp={demand.confirmedSp ?? demand.estimatedSp}
                     />
                   </CardContent>
                 </Card>

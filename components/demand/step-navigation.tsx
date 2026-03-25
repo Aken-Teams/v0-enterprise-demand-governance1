@@ -10,6 +10,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2, Paperclip, FileIcon, Trash2 } from "lucide-react"
 import {
   PIPELINE_STEPS,
@@ -38,6 +39,10 @@ interface StepNavigationProps {
   onRefresh?: () => void
   /** Hide the signoff status indicator (when parent already shows it) */
   hideSignoffIndicator?: boolean
+  /** SP fields for closing adjustment */
+  estimatedSp?: number
+  confirmedSp?: number | null
+  phasePlans?: { phase: string; plannedSp: number | null }[]
 }
 
 export function StepNavigation({
@@ -50,6 +55,9 @@ export function StepNavigation({
   pendingSignoff,
   onRefresh,
   hideSignoffIndicator,
+  estimatedSp,
+  confirmedSp,
+  phasePlans: propPhasePlans,
 }: StepNavigationProps) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [direction, setDirection] = useState<"next" | "prev">("next")
@@ -62,6 +70,14 @@ export function StepNavigation({
   const [reRequestComment, setReRequestComment] = useState("")
   const [reRequestFiles, setReRequestFiles] = useState<File[]>([])
   const reRequestFileRef = useRef<HTMLInputElement>(null)
+
+  // SP adjustment state
+  const [hasSpAdjustment, setHasSpAdjustment] = useState(false)
+  const [adjustedSp, setAdjustedSp] = useState("")
+  const [adjustmentReason, setAdjustmentReason] = useState("")
+  const [phaseAllocations, setPhaseAllocations] = useState<Record<string, string>>({})
+
+  const currentEffectiveSp = confirmedSp ?? estimatedSp ?? 0
 
   const currentIdx = PIPELINE_STEPS.indexOf(currentStatus as typeof PIPELINE_STEPS[number])
   if (currentIdx < 0) return null
@@ -98,6 +114,22 @@ export function StepNavigation({
 
   const isMovingToClosed = direction === "next" && nextPhase === "CLOSED"
 
+  const buildSpAdjustmentPayload = () => {
+    if (!hasSpAdjustment || !adjustedSp) return null
+    const newSp = parseInt(adjustedSp, 10)
+    if (isNaN(newSp) || newSp < 1) return null
+    const allocs: Record<string, number> = {}
+    for (const phase of PIPELINE_STEPS) {
+      const v = parseInt(phaseAllocations[phase] || "0", 10)
+      if (v > 0) allocs[phase] = v
+    }
+    return {
+      newSp,
+      reason: adjustmentReason.trim() || null,
+      phaseAllocations: Object.keys(allocs).length > 0 ? allocs : null,
+    }
+  }
+
   const handleConfirm = async () => {
     if (!token) return
     setLoading(true)
@@ -105,6 +137,10 @@ export function StepNavigation({
     const payload: Record<string, unknown> = { status: targetStatus }
     if (targetStatus === "CLOSED" && inputCompletedDate) {
       payload.completedDate = inputCompletedDate
+    }
+    if (targetStatus === "CLOSED") {
+      const spAdj = buildSpAdjustmentPayload()
+      if (spAdj) payload.spAdjustment = spAdj
     }
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
@@ -132,6 +168,10 @@ export function StepNavigation({
     }
     if (targetStatus === "CLOSED" && inputCompletedDate) {
       payload.completedDate = inputCompletedDate
+    }
+    if (targetStatus === "CLOSED") {
+      const spAdj = buildSpAdjustmentPayload()
+      if (spAdj) payload.spAdjustment = spAdj
     }
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
@@ -254,7 +294,10 @@ export function StepNavigation({
       )}
 
       {/* Normal advance dialog */}
-      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+      <AlertDialog open={showConfirm} onOpenChange={(open) => {
+        setShowConfirm(open)
+        if (!open) { setHasSpAdjustment(false); setAdjustedSp(""); setAdjustmentReason(""); setPhaseAllocations({}) }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -314,6 +357,85 @@ export function StepNavigation({
                       <li>僅管理者可補充資料</li>
                     </ul>
                   </div>
+                  {/* SP Adjustment */}
+                  <div className="rounded-lg border p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="spAdjustment"
+                        checked={hasSpAdjustment}
+                        onCheckedChange={(checked) => {
+                          setHasSpAdjustment(!!checked)
+                          if (checked && !adjustedSp) {
+                            setAdjustedSp(String(currentEffectiveSp))
+                            // Initialize phase allocations from existing plans
+                            const allocs: Record<string, string> = {}
+                            for (const phase of PIPELINE_STEPS) {
+                              const plan = propPhasePlans?.find((p) => p.phase === phase)
+                              if (plan?.plannedSp) allocs[phase] = String(plan.plannedSp)
+                            }
+                            setPhaseAllocations(allocs)
+                          }
+                        }}
+                      />
+                      <Label htmlFor="spAdjustment" className="text-sm font-medium cursor-pointer">是否有 SP 調整？</Label>
+                      <span className="text-xs text-muted-foreground ml-auto">目前 {currentEffectiveSp} SP</span>
+                    </div>
+                    {hasSpAdjustment && (
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">調整後 SP</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={adjustedSp}
+                            onChange={(e) => setAdjustedSp(e.target.value)}
+                            placeholder="輸入新的 SP"
+                            className="h-8"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">調整原因</Label>
+                          <Textarea
+                            value={adjustmentReason}
+                            onChange={(e) => setAdjustmentReason(e.target.value)}
+                            placeholder="說明 SP 調整的原因..."
+                            rows={2}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">各階段 SP 分配</Label>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                            {PIPELINE_STEPS.filter((p) => p !== "CLOSED").map((phase) => (
+                              <div key={phase} className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground w-16 shrink-0 truncate">{STATUS_MAP[phase]?.label}</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  className="h-7 text-xs"
+                                  placeholder="0"
+                                  value={phaseAllocations[phase] || ""}
+                                  onChange={(e) => setPhaseAllocations((prev) => ({ ...prev, [phase]: e.target.value }))}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          {(() => {
+                            const allocated = PIPELINE_STEPS.reduce((sum, p) => sum + (parseInt(phaseAllocations[p] || "0", 10) || 0), 0)
+                            const total = parseInt(adjustedSp, 10) || 0
+                            const diff = total - allocated
+                            return (
+                              <p className={`text-xs ${diff === 0 ? "text-emerald-600" : diff > 0 ? "text-amber-600" : "text-destructive"}`}>
+                                已分配 {allocated} / {total} SP
+                                {diff !== 0 && (diff > 0 ? ` （剩餘 ${diff}）` : ` （超出 ${Math.abs(diff)}）`)}
+                              </p>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="rounded-lg border p-3 space-y-2">
                     <Label htmlFor="completedDate" className="text-sm font-medium">實際結案日期</Label>
                     <Input
@@ -331,7 +453,7 @@ export function StepNavigation({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm} disabled={loading}>
+            <AlertDialogAction onClick={handleConfirm} disabled={loading || (isMovingToClosed && hasSpAdjustment && (!adjustedSp || parseInt(adjustedSp, 10) < 1))}>
               確認變更
             </AlertDialogAction>
           </AlertDialogFooter>

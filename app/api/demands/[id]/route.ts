@@ -244,6 +244,15 @@ export async function PATCH(
       ? new Date(body.completedDate)
       : null
 
+    // Parse SP adjustment (only when closing)
+    const spAdjustment = (status === "CLOSED" && body.spAdjustment && typeof body.spAdjustment === "object")
+      ? {
+          newSp: Number(body.spAdjustment.newSp),
+          reason: (body.spAdjustment.reason as string | null) || null,
+          phaseAllocations: (body.spAdjustment.phaseAllocations as Record<string, number> | null) || null,
+        }
+      : null
+
     const updated = await prisma.$transaction(async (tx) => {
       const d = await tx.demand.update({
         where: { id },
@@ -252,17 +261,44 @@ export async function PATCH(
           ...(status === "CLOSED" && closedDate ? { completedDate: closedDate } : {}),
           // Clear completedDate if moving back from CLOSED
           ...(demand.status === "CLOSED" && status !== "CLOSED" ? { completedDate: null } : {}),
+          // Update confirmedSp if SP adjustment provided
+          ...(spAdjustment && spAdjustment.newSp > 0 ? { confirmedSp: spAdjustment.newSp } : {}),
         },
       })
+
+      // Build status history comment
+      const historyComment = spAdjustment
+        ? JSON.stringify({
+            type: "SP_ADJUSTMENT",
+            oldSp: demand.confirmedSp ?? demand.estimatedSp,
+            newSp: spAdjustment.newSp,
+            reason: spAdjustment.reason,
+            phaseAllocations: spAdjustment.phaseAllocations,
+          })
+        : "狀態變更"
+
       await tx.demandStatusHistory.create({
         data: {
           demandId: id,
           fromStatus: demand.status,
           toStatus: status,
-          comment: "狀態變更",
+          comment: historyComment,
           changedBy: auth.userId,
         },
       })
+
+      // Update phase plan SP allocations if provided
+      if (spAdjustment?.phaseAllocations) {
+        for (const [phase, plannedSp] of Object.entries(spAdjustment.phaseAllocations)) {
+          if (PIPELINE_STEPS.includes(phase as typeof PIPELINE_STEPS[number])) {
+            await tx.demandPhasePlan.upsert({
+              where: { demandId_phase: { demandId: id, phase: phase as DemandStatus } },
+              create: { demandId: id, phase: phase as DemandStatus, plannedSp },
+              update: { plannedSp },
+            })
+          }
+        }
+      }
 
       // Auto-set actual dates on phase plans
       const now = new Date()
@@ -285,7 +321,10 @@ export async function PATCH(
       }
 
       // SP wallet: commit on entering DEVELOPING, finalize on CLOSED
-      const sp = demand.confirmedSp ?? demand.estimatedSp
+      // oldSp = what was previously committed; newSp = what to finalize with (may differ if adjusted)
+      const oldSp = demand.confirmedSp ?? demand.estimatedSp
+      const newSp = spAdjustment && spAdjustment.newSp > 0 ? spAdjustment.newSp : oldSp
+      const sp = oldSp // default for non-closing transitions
       const year = now.getFullYear()
       const spIdx = PIPELINE_STEPS.indexOf("SP_REVIEW")
       const devIdx = PIPELINE_STEPS.indexOf("DEVELOPING")
@@ -306,11 +345,12 @@ export async function PATCH(
       }
 
       // Forward: entering CLOSED from committed zone → move committed to used
+      // Use oldSp to decrement committedSp (what was committed), newSp to increment usedSp (adjusted value)
       if (wasCommitted && willBeClosed) {
         await tx.spWallet.upsert({
           where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: sp },
-          update: { committedSp: { decrement: sp }, usedSp: { increment: sp } },
+          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: newSp },
+          update: { committedSp: { decrement: oldSp }, usedSp: { increment: newSp } },
         })
       }
 
@@ -318,8 +358,8 @@ export async function PATCH(
       if (!wasCommitted && !wasClosed && willBeClosed) {
         await tx.spWallet.upsert({
           where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: sp },
-          update: { usedSp: { increment: sp } },
+          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: newSp },
+          update: { usedSp: { increment: newSp } },
         })
       }
 
