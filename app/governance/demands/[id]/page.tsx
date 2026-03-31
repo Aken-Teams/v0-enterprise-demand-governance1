@@ -1574,31 +1574,25 @@ export default function DemandDetailPage() {
                   簽核紀錄
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* SP Adjustment Record */}
-                {demand.confirmedSp !== null && demand.confirmedSp !== demand.estimatedSp && (() => {
-                  const closedHistory = demand.statusHistory?.find(
-                    (h: { toStatus: string; comment: string | null }) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT")
-                  )
-                  if (!closedHistory?.comment) return null
-                  try {
-                    const adj = JSON.parse(closedHistory.comment)
-                    return (
-                      <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[11px] border-orange-300 text-orange-700 bg-white">SP 調整</Badge>
-                          <span className="text-sm font-medium">
-                            {adj.oldSp} → {adj.newSp} SP
-                          </span>
-                        </div>
-                        {adj.reason && (
-                          <p className="text-sm text-muted-foreground">{adj.reason}</p>
-                        )}
-                      </div>
+              <CardContent>
+                <SignoffHistory
+                  signoffs={demand.phaseSignoffs || []}
+                  demandId={demand.id}
+                  token={token}
+                  userRole={user?.role}
+                  onRefresh={fetchDemand}
+                  spAdjustment={(() => {
+                    if (demand.confirmedSp === null || demand.confirmedSp === demand.estimatedSp) return null
+                    const closedHistory = demand.statusHistory?.find(
+                      (h: { toStatus: string; comment: string | null }) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT")
                     )
-                  } catch { return null }
-                })()}
-                <SignoffHistory signoffs={demand.phaseSignoffs || []} demandId={demand.id} token={token} userRole={user?.role} onRefresh={fetchDemand} />
+                    if (!closedHistory?.comment) return null
+                    try {
+                      const adj = JSON.parse(closedHistory.comment)
+                      return { oldSp: adj.oldSp, newSp: adj.newSp, reason: adj.reason }
+                    } catch { return null }
+                  })()}
+                />
               </CardContent>
             </Card>
           </TabsContent>

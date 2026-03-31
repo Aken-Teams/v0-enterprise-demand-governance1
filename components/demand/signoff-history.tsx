@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import React, { useState, useMemo, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
-import { Check, Clock, X, SkipForward, FileIcon, Download, Filter, Paperclip, Trash2, Loader2, Pencil, MessageSquare } from "lucide-react"
+import { Check, Clock, X, SkipForward, FileIcon, Download, Filter, Paperclip, Trash2, Loader2, Pencil, MessageSquare, Coins } from "lucide-react"
 
 interface SignoffDocument {
   id: string
@@ -32,12 +32,19 @@ interface SignoffRecord {
   documents?: SignoffDocument[]
 }
 
+interface SpAdjustment {
+  oldSp: number
+  newSp: number
+  reason?: string
+}
+
 interface SignoffHistoryProps {
   signoffs: SignoffRecord[]
   demandId?: string
   token?: string | null
   userRole?: string
   onRefresh?: () => void
+  spAdjustment?: SpAdjustment | null
 }
 
 const STATUS_ICONS: Record<string, typeof Check> = {
@@ -70,7 +77,7 @@ type FilterStatus = "all" | string
 
 const PAGE_SIZE = 10
 
-export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh }: SignoffHistoryProps) {
+export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh, spAdjustment }: SignoffHistoryProps) {
   const [filterPhase, setFilterPhase] = useState<FilterPhase>("all")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [page, setPage] = useState(1)
@@ -362,7 +369,10 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh 
       ) : (
         <>
           <div className="space-y-5">
-            {paged.map((s) => {
+            {(() => {
+              const showSpAdj = spAdjustment && (filterPhase === "all" || filterPhase === "CLOSED")
+              let spAdjRendered = false
+              return paged.map((s) => {
               const Icon = STATUS_ICONS[s.status] || Clock
               const iconColor = STATUS_ICON_COLORS[s.status] || "text-gray-400"
               const statusInfo = SIGNOFF_STATUS_MAP[s.status]
@@ -372,8 +382,31 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh 
               const isPending = s.status === "PENDING"
               const canAddDocs = canUpload && isPending
 
+              const renderSpAdj = showSpAdj && s.phase === "CLOSED" && !spAdjRendered
+              if (renderSpAdj) spAdjRendered = true
+
               return (
-                <div key={s.id} className="flex gap-3">
+                <React.Fragment key={s.id}>
+                {renderSpAdj && (
+                  <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 bg-orange-50">
+                        <Coins className="h-3.5 w-3.5 text-orange-500" />
+                      </div>
+                      <div className="w-px flex-1 bg-border/60 mt-1" />
+                    </div>
+                    <div className="flex-1 min-w-0 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[11px] border-orange-300 text-orange-700 bg-white">SP 調整</Badge>
+                        <span className="text-sm font-medium">{spAdjustment!.oldSp} → {spAdjustment!.newSp} SP</span>
+                      </div>
+                      {spAdjustment!.reason && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{spAdjustment!.reason}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <div className={cn("h-6 w-6 rounded-full flex items-center justify-center shrink-0",
                       s.status === "PENDING" ? "bg-amber-50" :
@@ -622,8 +655,9 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh 
 
                   </div>
                 </div>
+                </React.Fragment>
               )
-            })}
+            })})()}
           </div>
 
           {/* Pagination */}

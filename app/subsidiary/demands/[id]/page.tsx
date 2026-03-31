@@ -1179,7 +1179,24 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <SignoffHistory signoffs={demand.phaseSignoffs || []} demandId={demand.id} token={token} userRole={user?.role} onRefresh={fetchDemand} />
+                <SignoffHistory
+                  signoffs={demand.phaseSignoffs || []}
+                  demandId={demand.id}
+                  token={token}
+                  userRole={user?.role}
+                  onRefresh={fetchDemand}
+                  spAdjustment={(() => {
+                    if (demand.confirmedSp === null || demand.confirmedSp === demand.estimatedSp) return null
+                    const closedHistory = demand.statusHistory?.find(
+                      (h: { toStatus: string; comment: string | null }) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT")
+                    )
+                    if (!closedHistory?.comment) return null
+                    try {
+                      const adj = JSON.parse(closedHistory.comment)
+                      return { oldSp: adj.oldSp, newSp: adj.newSp, reason: adj.reason }
+                    } catch { return null }
+                  })()}
+                />
               </CardContent>
             </Card>
           </TabsContent>

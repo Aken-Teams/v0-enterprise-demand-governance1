@@ -1187,6 +1187,17 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                   token={authToken}
                   userRole={authUser?.role}
                   onRefresh={fetchDemand}
+                  spAdjustment={(() => {
+                    if (demand.confirmedSp === null || demand.confirmedSp === demand.estimatedSp) return null
+                    const closedHistory = demand.statusHistory?.find(
+                      (h: { toStatus: string; comment: string | null }) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT")
+                    )
+                    if (!closedHistory?.comment) return null
+                    try {
+                      const adj = JSON.parse(closedHistory.comment)
+                      return { oldSp: adj.oldSp, newSp: adj.newSp, reason: adj.reason }
+                    } catch { return null }
+                  })()}
                 />
               </CardContent>
             </Card>
