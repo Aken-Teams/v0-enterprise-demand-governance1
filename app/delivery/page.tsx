@@ -457,9 +457,7 @@ export default function DeliveryDashboardPage() {
                             <span className="flex items-center gap-1">
                               <Building2 className="h-3 w-3" />{demand.organization.name}
                             </span>
-                            {demand.confirmedSp != null && (
-                              <span>{demand.confirmedSp} SP</span>
-                            )}
+                            <span>{demand.confirmedSp ?? demand.estimatedSp} SP</span>
                           </div>
                           {totalTasks > 0 && (
                             <span className="text-xs text-muted-foreground tabular-nums">{completedTasks}/{totalTasks}</span>

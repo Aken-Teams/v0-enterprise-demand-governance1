@@ -16,7 +16,7 @@ export async function GET() {
         orderBy: { name: "asc" },
       }),
       prisma.user.findMany({
-        where: { isActive: true, role: { in: ["admin", "delivery"] } },
+        where: { isActive: true, role: { in: ["admin", "delivery", "viewer"] } },
         select: { id: true, name: true, email: true, role: true },
         orderBy: { name: "asc" },
       }),

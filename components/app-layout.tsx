@@ -37,7 +37,7 @@ import { NotificationCenter } from "@/components/notification-center"
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed"
 
-type UserRole = "subsidiary" | "admin" | "delivery"
+type UserRole = "subsidiary" | "admin" | "delivery" | "viewer"
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -93,10 +93,18 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    title: "共用",
-    roles: ["subsidiary", "admin", "delivery"],
+    title: "董事會",
+    roles: ["viewer"],
     items: [
-      { title: "使用指南", href: "/documents", icon: BookOpen, roles: ["subsidiary", "admin", "delivery"] },
+      { title: "需求列表", href: "/governance/inbox", icon: Inbox, roles: ["viewer"] },
+      { title: "報表分析", href: "/governance/analytics", icon: BarChart3, roles: ["viewer"] },
+    ],
+  },
+  {
+    title: "共用",
+    roles: ["subsidiary", "admin", "delivery", "viewer"],
+    items: [
+      { title: "使用指南", href: "/documents", icon: BookOpen, roles: ["subsidiary", "admin", "delivery", "viewer"] },
     ],
   },
 ]
@@ -190,7 +198,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
 
   const detectedRole = React.useMemo((): UserRole => {
     // Use actual user role when available (handles shared pages like /governance/inbox for delivery users)
-    if (user?.role && ["admin", "delivery", "subsidiary"].includes(user.role)) {
+    if (user?.role && ["admin", "delivery", "subsidiary", "viewer"].includes(user.role)) {
       return user.role as UserRole
     }
     // Fallback: detect from URL path before auth loads

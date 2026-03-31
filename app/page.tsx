@@ -34,12 +34,14 @@ interface OrgWithUsers {
 const ADMIN_ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
   delivery: "交付團隊",
+  viewer: "董事會",
 }
 
 const ROLE_ROUTES: Record<string, string> = {
   admin: "/governance/inbox",
   delivery: "/delivery",
   subsidiary: "/subsidiary",
+  viewer: "/governance/inbox",
 }
 
 export default function HomePage() {

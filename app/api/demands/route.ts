@@ -296,15 +296,15 @@ export async function GET(request: NextRequest) {
         where: finalCountWhere,
         _count: { _all: true },
       }),
-      // Only admin gets full filter options; others don't need them
-      auth.role === "admin"
+      // Admin and viewer get full filter options; others don't need them
+      (auth.role === "admin" || auth.role === "viewer")
         ? prisma.user.findMany({
             where: { isActive: true, role: "subsidiary" },
             select: { id: true, name: true },
             orderBy: { name: "asc" },
           })
         : Promise.resolve([]),
-      auth.role === "admin"
+      (auth.role === "admin" || auth.role === "viewer")
         ? prisma.user.findMany({
             where: { isActive: true, role: { in: ["admin", "delivery"] } },
             select: { id: true, name: true, role: true },

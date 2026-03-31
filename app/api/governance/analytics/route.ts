@@ -4,7 +4,7 @@ import { verifyRole, AuthError } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    verifyRole(request, ["admin"])
+    verifyRole(request, ["admin", "viewer"])
 
     const currentYear = new Date().getFullYear()
     const now = new Date()

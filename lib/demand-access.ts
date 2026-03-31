@@ -17,7 +17,7 @@ interface AuthPayload {
 export async function buildDemandVisibilityFilter(
   auth: AuthPayload,
 ): Promise<Record<string, unknown> | null> {
-  if (auth.role === "admin") return null
+  if (auth.role === "admin" || auth.role === "viewer") return null
 
   const grants = await prisma.demandAccess.findMany({
     where: { userId: auth.userId },
@@ -43,7 +43,7 @@ export async function canAccessDemand(
   auth: AuthPayload,
   demand: { id: string; organizationId: string; developerId: string | null },
 ): Promise<boolean> {
-  if (auth.role === "admin") return true
+  if (auth.role === "admin" || auth.role === "viewer") return true
 
   // Check whitelist
   const grants = await prisma.demandAccess.findMany({

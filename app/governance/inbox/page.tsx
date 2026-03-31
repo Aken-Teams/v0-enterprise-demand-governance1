@@ -65,6 +65,8 @@ export default function InboxPage() {
   const { token, user } = useAuth()
   const router = useRouter()
   const isAdmin = user?.role === "admin"
+  const isViewer = user?.role === "viewer"
+  const canSeeAll = isAdmin || isViewer
   const [demands, setDemands] = useState<Demand[]>([])
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
@@ -91,10 +93,10 @@ export default function InboxPage() {
     if (showLoading) setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (!isAdmin && user?.id) params.set("developerId", user.id)
+      if (!canSeeAll && user?.id) params.set("developerId", user.id)
       if (filterStatus !== "all") params.set("status", filterStatus)
-      if (isAdmin && filterSubmitter !== "all") params.set("submitterId", filterSubmitter)
-      if (isAdmin && filterDeveloper !== "all") params.set("developerId", filterDeveloper)
+      if (canSeeAll && filterSubmitter !== "all") params.set("submitterId", filterSubmitter)
+      if (canSeeAll && filterDeveloper !== "all") params.set("developerId", filterDeveloper)
       if (debouncedSearch) params.set("search", debouncedSearch)
 
       const res = await fetch(`/api/demands?${params}`, {
@@ -152,10 +154,10 @@ export default function InboxPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              {isAdmin ? "需求管理" : "需求列表"}
+              {canSeeAll ? "需求管理" : "需求列表"}
             </h1>
             <p className="text-muted-foreground">
-              {isAdmin ? "建立與追蹤所有需求的開案流程" : "查看指派給您的需求與開發進度"}
+              {isViewer ? "查看所有需求與開發進度" : isAdmin ? "建立與追蹤所有需求的開案流程" : "查看指派給您的需求與開發進度"}
             </p>
           </div>
           {isAdmin && (
@@ -171,7 +173,7 @@ export default function InboxPage() {
         {/* Summary Cards */}
         <div className="grid gap-3 md:grid-cols-4">
           {[
-            { label: "全部需求", sub: isAdmin ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
+            { label: "全部需求", sub: canSeeAll ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
             { label: "確認階段", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
             { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
@@ -214,7 +216,7 @@ export default function InboxPage() {
                 ))}
               </SelectContent>
             </Select>
-            {isAdmin && (
+            {canSeeAll && (
               <Select value={filterSubmitter} onValueChange={setFilterSubmitter}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="需求者" />
@@ -227,7 +229,7 @@ export default function InboxPage() {
                 </SelectContent>
               </Select>
             )}
-            {isAdmin && (
+            {canSeeAll && (
               <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="開發者" />
@@ -312,7 +314,7 @@ export default function InboxPage() {
                             {demand.organization}
                           </span>
                           <span>·</span>
-                          <span>{demand.estimatedSp} SP</span>
+                          <span>{demand.confirmedSp ?? demand.estimatedSp} SP</span>
                           {demand.documentCount > 0 && (
                             <>
                               <span>·</span>

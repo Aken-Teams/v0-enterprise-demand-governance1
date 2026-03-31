@@ -6,7 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "REDACTED-SECRET-ROTATED"
 export interface JwtPayload {
   userId: string
   email: string
-  role: "subsidiary" | "admin" | "delivery"
+  role: "subsidiary" | "admin" | "delivery" | "viewer"
 }
 
 export class AuthError extends Error {

@@ -10,6 +10,9 @@ export async function POST(
 ) {
   try {
     const auth = verifyAuth(request)
+    if (auth.role === "viewer") {
+      return NextResponse.json({ error: "唯讀帳號無法留言" }, { status: 403 })
+    }
     const { id } = await params
     const { content, isInternal } = await request.json()
 

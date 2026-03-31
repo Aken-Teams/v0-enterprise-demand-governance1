@@ -60,12 +60,14 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "管理員",
   delivery: "交付團隊",
   subsidiary: "需求單位",
+  viewer: "董事會",
 }
 
 const ROLE_BADGE_COLORS: Record<string, string> = {
   admin: "border-amber-300 text-amber-600",
   delivery: "border-emerald-300 text-emerald-600",
   subsidiary: "border-blue-300 text-blue-600",
+  viewer: "border-purple-300 text-purple-600",
 }
 
 const PAGE_SIZE = 10
@@ -437,6 +439,7 @@ export default function UsersPage() {
                 <SelectItem value="admin">管理員</SelectItem>
                 <SelectItem value="delivery">交付團隊</SelectItem>
                 <SelectItem value="subsidiary">需求單位</SelectItem>
+                <SelectItem value="viewer">董事會</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterOrg} onValueChange={setFilterOrg}>
@@ -619,6 +622,7 @@ export default function UsersPage() {
                     <SelectItem value="admin">管理員</SelectItem>
                     <SelectItem value="delivery">交付團隊</SelectItem>
                     <SelectItem value="subsidiary">需求單位</SelectItem>
+                    <SelectItem value="viewer">董事會</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -681,6 +685,7 @@ export default function UsersPage() {
                       <SelectItem value="admin">管理員</SelectItem>
                       <SelectItem value="delivery">交付團隊</SelectItem>
                       <SelectItem value="subsidiary">需求單位</SelectItem>
+                      <SelectItem value="viewer">董事會</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

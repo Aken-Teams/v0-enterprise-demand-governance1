@@ -15,6 +15,7 @@ enum UserRole {
   subsidiary
   admin
   delivery
+  viewer
 }
 
 enum OrgStatus {
