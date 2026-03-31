@@ -68,7 +68,7 @@ async function main() {
     panjitXuzhou: await bcrypt.hash("xuzhou123", 10),
     panjitShandong: await bcrypt.hash("shandong123", 10),
     hge: await bcrypt.hash("hge123", 10),
-    admin: await bcrypt.hash("admin123", 10),
+    admin: await bcrypt.hash("zhaoi1023", 10),
     jv: await bcrypt.hash("jvteam123", 10),
     zhaoi: await bcrypt.hash("zhaoi123", 10),
   }
