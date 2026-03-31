@@ -103,7 +103,7 @@ export default function MyDemandsPage() {
   const [loading, setLoading] = useState(true)
   const [demands, setDemands] = useState<Demand[]>([])
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
-  const [spSummary, setSpSummary] = useState({ totalQuota: 0, committedSp: 0, usedSp: 0 })
+  const [spSummary, setSpSummary] = useState({ totalQuota: 0, usedSp: 0 })
 
   const [activeTab, setActiveTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -177,7 +177,7 @@ export default function MyDemandsPage() {
     return statusCounts[key] || 0
   }
 
-  const remainingSp = spSummary.totalQuota - spSummary.committedSp - spSummary.usedSp
+  const remainingSp = spSummary.totalQuota - spSummary.usedSp
 
   if (loading) {
     return (
@@ -203,10 +203,6 @@ export default function MyDemandsPage() {
               <div className="text-center">
                 <div className="text-2xl font-bold text-emerald-600">{remainingSp}</div>
                 <div className="text-xs text-muted-foreground">可用 SP</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{spSummary.committedSp}</div>
-                <div className="text-xs text-muted-foreground">已承諾 SP</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-primary">{spSummary.usedSp}</div>

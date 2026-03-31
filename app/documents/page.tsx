@@ -95,15 +95,11 @@ function SubsidiaryGuide() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已使用</span> — 已結案需求消耗的 SP</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已承諾</span> — 進行中需求佔用的 SP</span>
+                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（需求確認 50%、MVP 確認後 80%、結案 100%）</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">可用餘額</span> — 還能用於新需求的 SP</span>
+                  <span><span className="font-medium text-foreground">可用餘額</span> — 配額 − 已使用</span>
                 </li>
               </ul>
             </div>
@@ -293,15 +289,11 @@ function AdminDeliveryGuide() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已使用</span> — 已結案需求消耗的 SP</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已承諾</span> — 開發中與驗收中需求佔用的 SP</span>
+                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（需求確認 50%、MVP 確認後 80%、結案 100%）</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">可用餘額</span> — 配額 − 已使用 − 已承諾</span>
+                  <span><span className="font-medium text-foreground">可用餘額</span> — 配額 − 已使用</span>
                 </li>
               </ul>
             </div>

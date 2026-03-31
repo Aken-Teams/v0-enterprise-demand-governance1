@@ -14,7 +14,7 @@ export default function SPManagementPage() {
         </div>
 
         {/* Overview */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">總配額</CardTitle>
@@ -34,17 +34,6 @@ export default function SPManagementPage() {
             <CardContent>
               <div className="text-2xl font-bold text-foreground">0</div>
               <p className="text-xs text-muted-foreground">使用率 —</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">已承諾</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">進行中</p>
             </CardContent>
           </Card>
 

@@ -157,21 +157,13 @@ export default function RisksPage() {
                   <div className="h-2 overflow-hidden rounded-full bg-secondary">
                     <div className="h-full bg-chart-1" style={{ width: "51.4%" }} />
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">已承諾 (進行中)</span>
-                    <span className="font-semibold text-foreground">85 SP (24.3%)</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full bg-chart-4" style={{ width: "24.3%" }} />
-                  </div>
                 </div>
 
                 <div className="space-y-2 text-sm">
                   <div>
                     <span className="font-medium text-foreground">風險分析: </span>
                     <span className="text-muted-foreground">
-                      目前使用率 51.4%，加上已承諾的 24.3%，總計已分配 75.7%。若維持目前消耗速度，預計 Q3
-                      中旬將耗盡配額。
+                      目前漸進式使用率 51.4%。若維持目前消耗速度，預計 Q3 中旬將耗盡配額。
                     </span>
                   </div>
                   <div className="rounded-lg border border-chart-4/50 bg-background p-2">

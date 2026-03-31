@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
+import { calcUsedSp } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -176,20 +177,16 @@ export async function GET(request: NextRequest) {
       const w = walletMap.get(org.id)
       const orgDemands = demands.filter((d) => d.organizationId === org.id)
       let usedSp = 0
-      let committedSp = 0
       for (const d of orgDemands) {
-        if (d.status === "REJECTED") continue
         const sp = d.confirmedSp ?? d.estimatedSp
-        if (d.status === "CLOSED") usedSp += sp
-        else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") committedSp += sp
+        usedSp += calcUsedSp(d.status, sp)
       }
       const totalQuota = w?.totalQuota ?? 0
       return {
         name: org.name,
         totalQuota,
         usedSp,
-        committedSp,
-        availableSp: totalQuota - usedSp - committedSp,
+        availableSp: totalQuota - usedSp,
         demandCount: orgDemands.length,
       }
     })
@@ -197,7 +194,6 @@ export async function GET(request: NextRequest) {
     // Global SP totals
     const totalQuota = wallets.reduce((s, w) => s + w.totalQuota, 0)
     const totalUsedSp = orgSpData.reduce((s, o) => s + o.usedSp, 0)
-    const totalCommittedSp = orgSpData.reduce((s, o) => s + o.committedSp, 0)
 
     // --- On-time delivery rate ---
     // Include ACCEPTANCE + CLOSED (development is complete for both)
@@ -325,20 +321,15 @@ export async function GET(request: NextRequest) {
     })
 
     // --- Developer workload ---
-    const devWorkload: Record<string, { name: string; count: number; completedSp: number; committedSp: number; pendingSp: number }> = {}
+    const devWorkload: Record<string, { name: string; count: number; usedSp: number; totalSp: number }> = {}
     for (const d of demands) {
       if (d.status === "REJECTED" || !d.developer) continue
       const key = d.developer.name
-      if (!devWorkload[key]) devWorkload[key] = { name: key, count: 0, completedSp: 0, committedSp: 0, pendingSp: 0 }
+      if (!devWorkload[key]) devWorkload[key] = { name: key, count: 0, usedSp: 0, totalSp: 0 }
       devWorkload[key].count++
       const sp = d.confirmedSp ?? d.estimatedSp ?? 0
-      if (d.status === "CLOSED") {
-        devWorkload[key].completedSp += sp
-      } else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") {
-        devWorkload[key].committedSp += sp
-      } else {
-        devWorkload[key].pendingSp += sp
-      }
+      devWorkload[key].totalSp += sp
+      devWorkload[key].usedSp += calcUsedSp(d.status, sp)
     }
 
     return NextResponse.json({
@@ -357,8 +348,7 @@ export async function GET(request: NextRequest) {
       sp: {
         totalQuota,
         totalUsedSp,
-        totalCommittedSp,
-        totalAvailable: totalQuota - totalUsedSp - totalCommittedSp,
+        totalAvailable: totalQuota - totalUsedSp,
         byOrganization: orgSpData,
       },
       performance: {
@@ -374,7 +364,7 @@ export async function GET(request: NextRequest) {
         staleDemands,
       },
       phaseAvgDays,
-      devWorkload: Object.values(devWorkload).sort((a, b) => (b.completedSp + b.committedSp + b.pendingSp) - (a.completedSp + a.committedSp + a.pendingSp)),
+      devWorkload: Object.values(devWorkload).sort((a, b) => b.usedSp - a.usedSp),
     })
   } catch (error) {
     if (error instanceof AuthError) {

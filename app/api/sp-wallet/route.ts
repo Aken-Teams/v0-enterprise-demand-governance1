@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
+import { calcUsedSp } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,32 +61,30 @@ export async function GET(request: NextRequest) {
 
     const totalQuota = wallet?.totalQuota ?? 0
 
-    // Calculate from actual demands for accuracy
+    // Calculate progressive SP consumption from actual demands
     let usedSp = 0
-    let committedSp = 0
     const demandBreakdown: {
       id: string; demandNumber: string; title: string
-      status: string; sp: number; updatedAt: Date
+      status: string; sp: number; spUsed: number; updatedAt: Date
     }[] = []
 
     for (const d of demands) {
       if (d.status === "REJECTED") continue
       const sp = d.confirmedSp ?? d.estimatedSp
-      if (d.status === "CLOSED") usedSp += sp
-      else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") committedSp += sp
+      const spUsed = calcUsedSp(d.status, sp)
+      usedSp += spUsed
       demandBreakdown.push({
         id: d.id, demandNumber: d.demandNumber, title: d.title,
-        status: d.status, sp, updatedAt: d.updatedAt,
+        status: d.status, sp, spUsed, updatedAt: d.updatedAt,
       })
     }
 
-    const availableSp = totalQuota - usedSp - committedSp
+    const availableSp = totalQuota - usedSp
 
     return NextResponse.json({
       year: currentYear,
       totalQuota,
       usedSp,
-      committedSp,
       availableSp,
       demands: demandBreakdown,
     })

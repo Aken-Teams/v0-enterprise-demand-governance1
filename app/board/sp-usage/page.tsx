@@ -23,12 +23,12 @@ import {
 
 export default function SPUsagePage() {
   const burnRateData = [
-    { month: "2023-08", burned: 128, committed: 85, target: 140 },
-    { month: "2023-09", burned: 134, committed: 76, target: 140 },
-    { month: "2023-10", burned: 156, committed: 88, target: 140 },
-    { month: "2023-11", burned: 125, committed: 82, target: 140 },
-    { month: "2023-12", burned: 142, committed: 95, target: 140 },
-    { month: "2024-01", burned: 158, committed: 89, target: 140 },
+    { month: "2023-08", burned: 128, target: 140 },
+    { month: "2023-09", burned: 134, target: 140 },
+    { month: "2023-10", burned: 156, target: 140 },
+    { month: "2023-11", burned: 125, target: 140 },
+    { month: "2023-12", burned: 142, target: 140 },
+    { month: "2024-01", burned: 158, target: 140 },
   ]
 
   const subsidiaryEfficiency = [
@@ -106,7 +106,7 @@ export default function SPUsagePage() {
         <Card>
           <CardHeader>
             <CardTitle>SP 消耗趨勢</CardTitle>
-            <CardDescription>月度 Story Points 使用與承諾情況</CardDescription>
+            <CardDescription>月度 Story Points 消耗趨勢</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={350}>
@@ -123,7 +123,6 @@ export default function SPUsagePage() {
                 />
                 <Legend />
                 <Bar dataKey="burned" name="消耗 SP" fill={CHART_COLORS.primary} />
-                <Bar dataKey="committed" name="已承諾 SP" fill={CHART_COLORS.success} />
                 <Line type="monotone" dataKey="target" name="目標" stroke={CHART_COLORS.warning} strokeWidth={2} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -143,7 +142,6 @@ export default function SPUsagePage() {
                   name: "子公司 A",
                   allocation: 500,
                   used: 244,
-                  committed: 100,
                   efficiency: 92,
                   avgCycle: 28,
                   onTime: 94,
@@ -152,7 +150,6 @@ export default function SPUsagePage() {
                   name: "子公司 B",
                   allocation: 350,
                   used: 180,
-                  committed: 85,
                   efficiency: 88,
                   avgCycle: 31,
                   onTime: 89,
@@ -161,7 +158,6 @@ export default function SPUsagePage() {
                   name: "子公司 C",
                   allocation: 250,
                   used: 120,
-                  committed: 50,
                   efficiency: 95,
                   avgCycle: 26,
                   onTime: 96,
@@ -187,11 +183,7 @@ export default function SPUsagePage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">已承諾</p>
-                      <p className="font-semibold text-foreground">{sub.committed} SP</p>
-                    </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-muted-foreground">平均週期</p>
                       <p className="font-semibold text-foreground">{sub.avgCycle} 天</p>

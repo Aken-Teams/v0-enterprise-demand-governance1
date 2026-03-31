@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { canAccessDemand } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
-import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP } from "@/lib/constants/demand"
+import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import { updateDemandSchema } from "@/lib/validations/demand"
 import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
@@ -322,71 +322,25 @@ export async function PATCH(
         })
       }
 
-      // SP wallet: commit on entering DEVELOPING, finalize on CLOSED
-      // oldSp = what was previously committed; newSp = what to finalize with (may differ if adjusted)
+      // SP wallet: progressive consumption based on phase
+      // oldSp = previous effective SP; newSp = adjusted (only differs when closing with SP adjustment)
       const oldSp = demand.confirmedSp ?? demand.estimatedSp
       const newSp = spAdjustment && spAdjustment.newSp > 0 ? spAdjustment.newSp : oldSp
-      const sp = oldSp // default for non-closing transitions
       const year = now.getFullYear()
-      const spIdx = PIPELINE_STEPS.indexOf("SP_REVIEW")
-      const devIdx = PIPELINE_STEPS.indexOf("DEVELOPING")
-      const closedIdx = PIPELINE_STEPS.indexOf("CLOSED")
 
-      const wasCommitted = fromIdx >= devIdx && fromIdx < closedIdx  // was in DEVELOPING..ACCEPTANCE
-      const willBeCommitted = toIdx >= devIdx && toIdx < closedIdx
-      const wasClosed = fromIdx === closedIdx
-      const willBeClosed = toIdx === closedIdx
+      // Calculate delta between old and new progressive consumption
+      const oldRate = SP_PROGRESS_RATE[demand.status] ?? 0
+      const newRate = SP_PROGRESS_RATE[status as string] ?? 0
+      const oldUsed = Math.round(oldSp * oldRate)
+      const newUsed = Math.round(newSp * newRate)
+      const delta = newUsed - oldUsed
 
-      // Forward: entering committed zone (DEVELOPING..ACCEPTANCE)
-      if (!wasCommitted && !wasClosed && willBeCommitted) {
+      if (delta !== 0) {
         await tx.spWallet.upsert({
           where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          create: { organizationId: demand.organizationId, year, totalQuota: 0, committedSp: sp },
-          update: { committedSp: { increment: sp } },
+          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0 },
+          update: { usedSp: { increment: delta } },
         })
-      }
-
-      // Forward: entering CLOSED from committed zone → move committed to used
-      // Use oldSp to decrement committedSp (what was committed), newSp to increment usedSp (adjusted value)
-      if (wasCommitted && willBeClosed) {
-        await tx.spWallet.upsert({
-          where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: newSp },
-          update: { committedSp: { decrement: oldSp }, usedSp: { increment: newSp } },
-        })
-      }
-
-      // Forward: entering CLOSED from before committed zone → only add to used
-      if (!wasCommitted && !wasClosed && willBeClosed) {
-        await tx.spWallet.upsert({
-          where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: newSp },
-          update: { usedSp: { increment: newSp } },
-        })
-      }
-
-      // Backward: leaving committed zone to before DEVELOPING
-      if (wasCommitted && !willBeCommitted && !willBeClosed) {
-        await tx.spWallet.update({
-          where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          data: { committedSp: { decrement: sp } },
-        }).catch(() => {})
-      }
-
-      // Backward: from CLOSED back to committed zone
-      if (wasClosed && willBeCommitted) {
-        await tx.spWallet.update({
-          where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          data: { usedSp: { decrement: sp }, committedSp: { increment: sp } },
-        }).catch(() => {})
-      }
-
-      // Backward: from CLOSED back to before committed zone
-      if (wasClosed && !willBeCommitted && !willBeClosed) {
-        await tx.spWallet.update({
-          where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          data: { usedSp: { decrement: sp } },
-        }).catch(() => {})
       }
 
       // Force-advance: mark pending sign-off as SKIPPED

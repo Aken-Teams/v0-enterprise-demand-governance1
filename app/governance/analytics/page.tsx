@@ -33,13 +33,11 @@ interface AnalyticsData {
   sp: {
     totalQuota: number
     totalUsedSp: number
-    totalCommittedSp: number
     totalAvailable: number
     byOrganization: {
       name: string
       totalQuota: number
       usedSp: number
-      committedSp: number
       availableSp: number
       demandCount: number
     }[]
@@ -71,7 +69,7 @@ interface AnalyticsData {
     }[]
   }
   phaseAvgDays: { phase: string; avgDays: number; count: number }[]
-  devWorkload: { name: string; count: number; completedSp: number; committedSp: number; pendingSp: number }[]
+  devWorkload: { name: string; count: number; usedSp: number; totalSp: number }[]
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -155,7 +153,6 @@ export default function GovernanceAnalyticsPage() {
     .map((o) => ({
       name: o.name,
       已使用: o.usedSp,
-      已承諾: o.committedSp,
       可用: o.availableSp,
       _total: o.totalQuota,
     }))
@@ -163,7 +160,6 @@ export default function GovernanceAnalyticsPage() {
 
   const spPieData = [
     { name: "已使用", value: d?.sp.totalUsedSp ?? 0, fill: "#8b5cf6" },
-    { name: "已承諾", value: d?.sp.totalCommittedSp ?? 0, fill: "#f59e0b" },
     { name: "可用", value: d?.sp.totalAvailable ?? 0, fill: "#22c55e" },
   ].filter((i) => i.value > 0)
 
@@ -178,7 +174,6 @@ export default function GovernanceAnalyticsPage() {
 
   const spAllocationConfig = {
     已使用: { label: "已使用", color: "#8b5cf6" },
-    已承諾: { label: "已承諾", color: "#f59e0b" },
     可用: { label: "可用", color: "#22c55e" },
   }
 
@@ -198,7 +193,7 @@ export default function GovernanceAnalyticsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <KpiCard color="#6366f1" icon={FileText} title="活躍需求" value={d.kpi.activeDemands} sub={`共 ${d.kpi.totalDemands} 筆`} />
           <KpiCard color="#f59e0b" icon={CheckCircle} title="本月交付" value={d.kpi.thisMonthClosed} sub="本月結案" />
-          <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.kpi.ytdUsedSp} / ${d.sp.totalQuota}`} sub={`已承諾 ${d.sp.totalCommittedSp}`} />
+          <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.sp.totalUsedSp} / ${d.sp.totalQuota}`} sub={`可用 ${d.sp.totalAvailable}`} />
           <KpiCard color="#10b981" icon={TrendingUp} title="交付率" value={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"} sub={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeCount} / ${d.performance.deliverableTotal} 準時交付` : "尚無驗收/結案需求"} />
         </div>
 
@@ -364,27 +359,20 @@ export default function GovernanceAnalyticsPage() {
                 </div>
                 <div className="divide-y">
                   {d.devWorkload.map((dev) => {
-                    const total = dev.completedSp + dev.committedSp + dev.pendingSp
-                    const barW = total > 0 ? 100 : 0
-                    const completedPct = total > 0 ? (dev.completedSp / total) * barW : 0
-                    const committedPct = total > 0 ? (dev.committedSp / total) * barW : 0
+                    const usedPct = dev.totalSp > 0 ? (dev.usedSp / dev.totalSp) * 100 : 0
                     return (
                       <div key={dev.name} className="px-4 py-2.5 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium">{dev.name}</span>
-                          <span className="text-xs text-muted-foreground tabular-nums">{dev.count} 筆 · {total} SP</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">{dev.count} 筆 · {dev.totalSp} SP</span>
                         </div>
-                        {total > 0 && (
+                        {dev.totalSp > 0 && (
                           <>
                             <div className="flex h-2 rounded-full overflow-hidden bg-muted">
-                              {dev.completedSp > 0 && <div className="bg-emerald-500" style={{ width: `${completedPct}%` }} />}
-                              {dev.committedSp > 0 && <div className="bg-blue-500" style={{ width: `${committedPct}%` }} />}
-                              {dev.pendingSp > 0 && <div className="bg-amber-400" style={{ width: `${100 - completedPct - committedPct}%` }} />}
+                              {dev.usedSp > 0 && <div className="bg-violet-500" style={{ width: `${usedPct}%` }} />}
                             </div>
                             <div className="flex gap-3 text-[11px] text-muted-foreground">
-                              {dev.completedSp > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />已完成 {dev.completedSp}</span>}
-                              {dev.committedSp > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-blue-500" />已承諾 {dev.committedSp}</span>}
-                              {dev.pendingSp > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" />預估 {dev.pendingSp}</span>}
+                              <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-violet-500" />已使用 {dev.usedSp} / {dev.totalSp} SP</span>
                             </div>
                           </>
                         )}
@@ -514,7 +502,6 @@ export default function GovernanceAnalyticsPage() {
                         <YAxis />
                         <ChartTooltip content={<ChartTooltipContent />} />
                         <Bar dataKey="已使用" stackId="a" fill="#8b5cf6" />
-                        <Bar dataKey="已承諾" stackId="a" fill="#f59e0b" />
                         <Bar dataKey="可用" stackId="a" fill="#22c55e" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ChartContainer>
@@ -539,7 +526,6 @@ export default function GovernanceAnalyticsPage() {
                           <th className="pb-2 font-medium">組織</th>
                           <th className="pb-2 font-medium text-right">配額</th>
                           <th className="pb-2 font-medium text-right">已使用</th>
-                          <th className="pb-2 font-medium text-right">已承諾</th>
                           <th className="pb-2 font-medium text-right">可用</th>
                           <th className="pb-2 font-medium text-right">需求數</th>
                         </tr>
@@ -550,7 +536,6 @@ export default function GovernanceAnalyticsPage() {
                             <td className="py-2 font-medium">{org.name}</td>
                             <td className="py-2 text-right">{org.totalQuota}</td>
                             <td className="py-2 text-right">{org.usedSp}</td>
-                            <td className="py-2 text-right">{org.committedSp}</td>
                             <td className="py-2 text-right">{org.availableSp}</td>
                             <td className="py-2 text-right">{org.demandCount}</td>
                           </tr>

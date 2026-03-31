@@ -28,7 +28,6 @@ import { useAuth } from "@/hooks/use-auth"
 /** SP donut chart config for Recharts + shadcn ChartContainer */
 const spChartConfig = {
   used: { label: "已使用", color: "#3b82f6" },
-  committed: { label: "已承諾", color: "#f59e0b" },
   available: { label: "可用", color: "#e5e7eb" },
 } satisfies ChartConfig
 
@@ -44,7 +43,6 @@ interface DashboardData {
   sp: {
     totalQuota: number
     usedSp: number
-    committedSp: number
     availableSp: number
     availablePercent: number
   }
@@ -101,7 +99,7 @@ export default function SubsidiaryDashboard() {
   }
 
   const kpi = data?.kpi ?? { totalDemands: 0, inProgress: 0, completed: 0, completionRate: 0 }
-  const sp = data?.sp ?? { totalQuota: 0, usedSp: 0, committedSp: 0, availableSp: 0, availablePercent: 0 }
+  const sp = data?.sp ?? { totalQuota: 0, usedSp: 0, availableSp: 0, availablePercent: 0 }
   const perf = data?.performance ?? { deliveryRate: 0, deliveryOnTime: 0, deliveryTotal: 0, passRate: 0, passClosed: 0, passTotal: 0, avgProcessingDays: 0 }
   const monthlyTrends = data?.monthlyTrends ?? []
   const recentChanges = data?.recentChanges ?? []
@@ -109,7 +107,6 @@ export default function SubsidiaryDashboard() {
   // Recharts data for SP donut — include all three segments
   const spDonutData = [
     { key: "used", label: "已使用", value: sp.usedSp, fill: "#3b82f6" },
-    { key: "committed", label: "已承諾", value: sp.committedSp, fill: "#f59e0b" },
     { key: "available", label: "可用", value: sp.availableSp, fill: "#e5e7eb" },
   ]
 
@@ -182,11 +179,6 @@ export default function SubsidiaryDashboard() {
                   <span className="font-medium">{sp.usedSp}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-amber-500" />
-                  <span className="text-muted-foreground">已承諾</span>
-                  <span className="font-medium">{sp.committedSp}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
                   <div className="h-2 w-2 rounded-full bg-green-500" />
                   <span className="text-muted-foreground">可用</span>
                   <span className="font-medium">{sp.availableSp}</span>
@@ -256,16 +248,11 @@ export default function SubsidiaryDashboard() {
                   </Pie>
                 </PieChart>
               </ChartContainer>
-              <div className="grid grid-cols-3 gap-4 w-full text-center">
+              <div className="grid grid-cols-2 gap-4 w-full text-center">
                 <div className="space-y-1">
                   <div className="flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /></div>
                   <div className="text-sm font-medium">{sp.usedSp}</div>
                   <div className="text-xs text-muted-foreground">已使用</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-amber-500" /></div>
-                  <div className="text-sm font-medium">{sp.committedSp}</div>
-                  <div className="text-xs text-muted-foreground">已承諾</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-gray-300" /></div>

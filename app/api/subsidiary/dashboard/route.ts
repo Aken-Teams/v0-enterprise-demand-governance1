@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
+import { calcUsedSp } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
         where: {
           organizationId_year: { organizationId: orgId, year: currentYear },
         },
-        select: { totalQuota: true, usedSp: true, committedSp: true },
+        select: { totalQuota: true, usedSp: true },
       }),
       // All demands for this org
       prisma.demand.findMany({
@@ -71,17 +72,14 @@ export async function GET(request: NextRequest) {
     const inProgress = demands.filter((d) => inProgressStatuses.has(d.status)).length
     const completed = demands.filter((d) => d.status === "CLOSED").length
 
-    // SP data
+    // SP data (progressive consumption)
     const totalQuota = wallet?.totalQuota ?? 0
     let usedSp = 0
-    let committedSp = 0
     for (const d of demands) {
-      if (d.status === "REJECTED") continue
       const sp = d.confirmedSp ?? d.estimatedSp
-      if (d.status === "CLOSED") usedSp += sp
-      else if (d.status === "DEVELOPING" || d.status === "ACCEPTANCE") committedSp += sp
+      usedSp += calcUsedSp(d.status, sp)
     }
-    const availableSp = totalQuota - usedSp - committedSp
+    const availableSp = totalQuota - usedSp
 
     // Completion rate (completed / total excluding rejected)
     const nonRejected = demands.filter((d) => d.status !== "REJECTED").length
@@ -217,7 +215,6 @@ export async function GET(request: NextRequest) {
       sp: {
         totalQuota,
         usedSp,
-        committedSp,
         availableSp,
         availablePercent: totalQuota > 0 ? Math.round((availableSp / totalQuota) * 1000) / 10 : 0,
       },

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { notifyUsers, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
+import { calcUsedSp } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,26 +23,22 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       }),
       prisma.demand.findMany({
-        where: { status: { in: ["DEVELOPING", "ACCEPTANCE", "CLOSED"] } },
+        where: { status: { not: "REJECTED" } },
         select: { organizationId: true, status: true, confirmedSp: true, estimatedSp: true },
       }),
     ])
 
-    // Compute committed / used SP from actual demand statuses
-    const spByOrg: Record<string, { committed: number; used: number }> = {}
+    // Compute progressive used SP from actual demand statuses
+    const spByOrg: Record<string, { used: number }> = {}
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
-      if (!spByOrg[d.organizationId]) spByOrg[d.organizationId] = { committed: 0, used: 0 }
-      if (d.status === "CLOSED") {
-        spByOrg[d.organizationId].used += sp
-      } else {
-        spByOrg[d.organizationId].committed += sp
-      }
+      if (!spByOrg[d.organizationId]) spByOrg[d.organizationId] = { used: 0 }
+      spByOrg[d.organizationId].used += calcUsedSp(d.status, sp)
     }
 
     const result = organizations.map((org) => {
       const wallet = org.spWallets[0]
-      const sp = spByOrg[org.id] ?? { committed: 0, used: 0 }
+      const sp = spByOrg[org.id] ?? { used: 0 }
       return {
         id: org.id,
         code: org.code,
@@ -52,14 +49,12 @@ export async function GET(request: NextRequest) {
         demandCount: org._count.demands,
         spQuota: wallet?.totalQuota ?? 0,
         spUsed: sp.used,
-        spCommitted: sp.committed,
       }
     })
 
     const totalUsers = result.reduce((s, o) => s + o.userCount, 0)
     const totalSpQuota = result.reduce((s, o) => s + o.spQuota, 0)
     const totalSpUsed = result.reduce((s, o) => s + o.spUsed, 0)
-    const totalSpCommitted = result.reduce((s, o) => s + o.spCommitted, 0)
 
     return NextResponse.json({
       organizations: result,
@@ -68,7 +63,6 @@ export async function GET(request: NextRequest) {
         totalUsers,
         totalSpQuota,
         totalSpUsed,
-        totalSpCommitted,
         year: currentYear,
       },
     })

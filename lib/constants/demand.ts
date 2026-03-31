@@ -105,6 +105,23 @@ export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }
   SKIPPED: { label: "管理者略過", color: "bg-gray-100 text-gray-600" },
 }
 
+/** SP 漸進消耗比例：需求確認 50% → MVP 確認 80% → 結案 100% */
+export const SP_PROGRESS_RATE: Record<string, number> = {
+  SUBMITTED: 0.5,
+  PRD_REVIEW: 0.8,
+  SP_REVIEW: 0.8,
+  DEVELOPING: 0.8,
+  ACCEPTANCE: 0.8,
+  CLOSED: 1.0,
+}
+
+/** 依據狀態計算漸進已使用 SP */
+export function calcUsedSp(status: string, effectiveSp: number): number {
+  if (status === "REJECTED") return 0
+  const rate = SP_PROGRESS_RATE[status] ?? 0
+  return Math.round(effectiveSp * rate)
+}
+
 export const DEFAULT_SUBTASK_TEMPLATES = [
   "前端開發",
   "後端開發",

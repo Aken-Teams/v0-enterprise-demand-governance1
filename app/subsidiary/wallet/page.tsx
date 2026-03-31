@@ -11,20 +11,19 @@ import { useAuth } from "@/hooks/use-auth"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
-const STATUS_LABEL: Record<string, { label: string; color: string; spCategory: string }> = {
-  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700", spCategory: "pending" },
-  PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-100 text-amber-700", spCategory: "pending" },
-  SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700", spCategory: "pending" },
-  DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700", spCategory: "committed" },
-  ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700", spCategory: "committed" },
-  CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700", spCategory: "used" },
+const STATUS_LABEL: Record<string, { label: string; color: string; rate: string }> = {
+  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700", rate: "50%" },
+  PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-100 text-amber-700", rate: "80%" },
+  SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700", rate: "80%" },
+  DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700", rate: "80%" },
+  ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700", rate: "80%" },
+  CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700", rate: "100%" },
 }
 
 interface WalletData {
   year: number
   totalQuota: number
   usedSp: number
-  committedSp: number
   availableSp: number
   demands: {
     id: string
@@ -32,6 +31,7 @@ interface WalletData {
     title: string
     status: string
     sp: number
+    spUsed: number
     updatedAt: string
   }[]
 }
@@ -71,18 +71,10 @@ export default function WalletPage() {
   const year = data?.year ?? new Date().getFullYear()
   const demands = data?.demands ?? []
 
-  // Group demands by SP category
-  const committedDemands = demands.filter((d) => STATUS_LABEL[d.status]?.spCategory === "committed")
-  const usedDemands = demands.filter((d) => STATUS_LABEL[d.status]?.spCategory === "used")
-  const pendingDemands = demands.filter((d) => STATUS_LABEL[d.status]?.spCategory === "pending")
-
-  // Calculate from demands for guaranteed accuracy
-  const usedSp = usedDemands.reduce((sum, d) => sum + d.sp, 0)
-  const committedSp = committedDemands.reduce((sum, d) => sum + d.sp, 0)
-  const availableSp = totalQuota - usedSp - committedSp
+  const usedSp = data?.usedSp ?? 0
+  const availableSp = data?.availableSp ?? (totalQuota - usedSp)
 
   const pctUsed = totalQuota > 0 ? (usedSp / totalQuota) * 100 : 0
-  const pctCommitted = totalQuota > 0 ? (committedSp / totalQuota) * 100 : 0
   const pctAvailable = totalQuota > 0 ? (availableSp / totalQuota) * 100 : 0
 
   return (
@@ -112,11 +104,6 @@ export default function WalletPage() {
                 <span className="text-xl font-semibold tabular-nums">{usedSp}</span>
                 <span className="text-sm text-muted-foreground ml-1.5">已使用</span>
               </div>
-              <span className="text-muted-foreground/30">/</span>
-              <div>
-                <span className="text-xl font-semibold tabular-nums">{committedSp}</span>
-                <span className="text-sm text-muted-foreground ml-1.5">已承諾</span>
-              </div>
             </div>
 
             {/* Stacked bar */}
@@ -126,16 +113,10 @@ export default function WalletPage() {
                   {pctUsed > 0 && (
                     <div className="h-full bg-chart-1 transition-all" style={{ width: `${pctUsed}%` }} />
                   )}
-                  {pctCommitted > 0 && (
-                    <div className="h-full bg-chart-4 transition-all" style={{ width: `${pctCommitted}%` }} />
-                  )}
                 </div>
                 <div className="flex items-center gap-5 mt-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="inline-block h-2 w-2 rounded-sm bg-chart-1" />已使用 {pctUsed.toFixed(0)}%
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-chart-4" />已承諾 {pctCommitted.toFixed(0)}%
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="inline-block h-2 w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
@@ -168,13 +149,12 @@ export default function WalletPage() {
                       <TableHead className="text-center">需求名稱</TableHead>
                       <TableHead className="text-center">狀態</TableHead>
                       <TableHead className="text-center">SP</TableHead>
-                      <TableHead className="text-center">SP 狀態</TableHead>
+                      <TableHead className="text-center">已消耗</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[...committedDemands, ...usedDemands, ...pendingDemands].map((d) => {
+                    {demands.map((d) => {
                       const si = STATUS_LABEL[d.status]
-                      const spCat = si?.spCategory
                       return (
                         <TableRow key={d.id}>
                           <TableCell className="text-center">
@@ -193,17 +173,8 @@ export default function WalletPage() {
                           </TableCell>
                           <TableCell className="text-center font-semibold tabular-nums">{d.sp}</TableCell>
                           <TableCell className="text-center">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-[11px]",
-                                spCat === "used" && "border-emerald-300 text-emerald-700 bg-emerald-50",
-                                spCat === "committed" && "border-violet-300 text-violet-700 bg-violet-50",
-                                spCat === "pending" && "border-muted-foreground/30 text-muted-foreground",
-                              )}
-                            >
-                              {spCat === "used" ? "已扣除" : spCat === "committed" ? "已承諾" : "未鎖定"}
-                            </Badge>
+                            <span className="text-sm font-medium tabular-nums">{d.spUsed}</span>
+                            <span className="text-xs text-muted-foreground ml-1">({si?.rate})</span>
                           </TableCell>
                         </TableRow>
                       )

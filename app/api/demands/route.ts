@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
+import { calcUsedSp } from "@/lib/constants/demand"
 import { createDemandSchema } from "@/lib/validations/demand"
 import { generateDemandNumber } from "@/lib/demand-number"
 import { buildDemandVisibilityFilter } from "@/lib/demand-access"
@@ -319,18 +320,24 @@ export async function GET(request: NextRequest) {
       statusCounts[c.status] = c._count._all
     }
 
-    // SP wallet summary for organization-scoped queries
-    let spSummary: { totalQuota: number; committedSp: number; usedSp: number } | undefined
+    // SP wallet summary for organization-scoped queries (progressive consumption)
+    let spSummary: { totalQuota: number; usedSp: number } | undefined
     if (organizationId) {
       const currentYear = new Date().getFullYear()
-      const wallet = await prisma.spWallet.findFirst({
-        where: { organizationId, year: currentYear },
-        select: { totalQuota: true, committedSp: true, usedSp: true },
-      })
+      const [wallet, orgDemands] = await Promise.all([
+        prisma.spWallet.findFirst({
+          where: { organizationId, year: currentYear },
+          select: { totalQuota: true },
+        }),
+        prisma.demand.findMany({
+          where: { organizationId, status: { not: "REJECTED" } },
+          select: { status: true, estimatedSp: true, confirmedSp: true },
+        }),
+      ])
+      const usedSp = orgDemands.reduce((sum, d) => sum + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp), 0)
       spSummary = {
         totalQuota: wallet?.totalQuota ?? 0,
-        committedSp: wallet?.committedSp ?? 0,
-        usedSp: wallet?.usedSp ?? 0,
+        usedSp,
       }
     }
 

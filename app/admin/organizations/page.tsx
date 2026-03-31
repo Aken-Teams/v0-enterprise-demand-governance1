@@ -23,7 +23,6 @@ interface OrgRow {
   demandCount: number
   spQuota: number
   spUsed: number
-  spCommitted: number
 }
 
 interface Summary {
@@ -31,7 +30,6 @@ interface Summary {
   totalUsers: number
   totalSpQuota: number
   totalSpUsed: number
-  totalSpCommitted: number
   year: number
 }
 
@@ -95,7 +93,7 @@ export default function SpManagementPage() {
     )
   }
 
-  const totalAvailable = (summary?.totalSpQuota ?? 0) - (summary?.totalSpUsed ?? 0) - (summary?.totalSpCommitted ?? 0)
+  const totalAvailable = (summary?.totalSpQuota ?? 0) - (summary?.totalSpUsed ?? 0)
 
   return (
     <AppLayout userRole="admin">
@@ -112,7 +110,7 @@ export default function SpManagementPage() {
               { label: "子公司數", sub: "活躍組織", value: summary.orgCount, color: "border-blue-500", icon: Building2 },
               { label: "使用者總數", sub: "跨所有組織", value: summary.totalUsers, color: "border-amber-500", icon: Users },
               { label: "SP 配額", sub: `${summary.year} 年度`, value: summary.totalSpQuota, color: "border-violet-500", icon: Coins },
-              { label: "可用 SP", sub: `已用 ${summary.totalSpUsed} / 進行中 ${summary.totalSpCommitted}`, value: totalAvailable, color: "border-emerald-500", icon: Wallet },
+              { label: "可用 SP", sub: `已用 ${summary.totalSpUsed}`, value: totalAvailable, color: "border-emerald-500", icon: Wallet },
             ].map((item) => (
               <div key={item.label} className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}>
                 <span className="text-3xl font-bold">{item.value}</span>
@@ -143,7 +141,6 @@ export default function SpManagementPage() {
                   <TableHead className="text-center">需求數</TableHead>
                   <TableHead className="text-center">SP 配額</TableHead>
                   <TableHead className="text-center">已使用</TableHead>
-                  <TableHead className="text-center">進行中</TableHead>
                   <TableHead className="text-center w-[180px]">使用率</TableHead>
                   <TableHead className="text-center">狀態</TableHead>
                   <TableHead className="text-center">操作</TableHead>
@@ -151,9 +148,8 @@ export default function SpManagementPage() {
               </TableHeader>
               <TableBody>
                 {organizations.map((org) => {
-                  const used = org.spUsed + org.spCommitted
-                  const pct = org.spQuota > 0 ? Math.round((used / org.spQuota) * 100) : 0
-                  const remaining = org.spQuota - used
+                  const pct = org.spQuota > 0 ? Math.round((org.spUsed / org.spQuota) * 100) : 0
+                  const remaining = org.spQuota - org.spUsed
                   return (
                     <TableRow key={org.id}>
                       <TableCell>
@@ -171,7 +167,6 @@ export default function SpManagementPage() {
                       <TableCell className="text-center">{org.demandCount}</TableCell>
                       <TableCell className="text-center font-semibold">{org.spQuota}</TableCell>
                       <TableCell className="text-center">{org.spUsed}</TableCell>
-                      <TableCell className="text-center">{org.spCommitted}</TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <Progress value={pct} className="h-2" />
@@ -213,18 +208,14 @@ export default function SpManagementPage() {
             </DialogHeader>
             {editOrg && (
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-lg bg-muted/50 p-3 text-center">
                     <div className="text-muted-foreground text-xs">已使用</div>
                     <div className="font-bold text-lg">{editOrg.spUsed}</div>
                   </div>
                   <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <div className="text-muted-foreground text-xs">進行中</div>
-                    <div className="font-bold text-lg">{editOrg.spCommitted}</div>
-                  </div>
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
                     <div className="text-muted-foreground text-xs">剩餘</div>
-                    <div className="font-bold text-lg">{(parseInt(editQuota) || 0) - editOrg.spUsed - editOrg.spCommitted}</div>
+                    <div className="font-bold text-lg">{(parseInt(editQuota) || 0) - editOrg.spUsed}</div>
                   </div>
                 </div>
                 <div className="space-y-2">
