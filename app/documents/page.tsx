@@ -113,6 +113,84 @@ function SubsidiaryGuide() {
         </Card>
       </div>
 
+      {/* SP 漸進消耗機制 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">SP 漸進消耗機制</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-4">
+          <p>
+            為使 SP 使用更加透明、讓各階段進度清晰可追蹤，系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制 —
+            需求一旦提出即開始扣除 SP，隨著階段推進逐步增加消耗比例。
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium text-foreground">階段</th>
+                  <th className="pb-2 font-medium text-foreground text-center">消耗比例</th>
+                  <th className="pb-2 font-medium text-foreground">說明</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                <tr>
+                  <td className="py-2.5"><Badge className="bg-blue-100 text-blue-700">需求確認</Badge></td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">50%</td>
+                  <td className="py-2.5">需求提出後立即消耗一半 SP，確保需求者審慎提出需求</td>
+                </tr>
+                <tr>
+                  <td className="py-2.5"><Badge className="bg-amber-100 text-amber-700">MVP 確認</Badge></td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">80%</td>
+                  <td className="py-2.5">MVP 架構確認後累計消耗 80%，避免消極確認導致專案停擺</td>
+                </tr>
+                <tr>
+                  <td className="py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      <Badge className="bg-orange-100 text-orange-700">開案確認</Badge>
+                      <Badge className="bg-violet-100 text-violet-700">開發中</Badge>
+                      <Badge className="bg-purple-100 text-purple-700">驗收中</Badge>
+                    </div>
+                  </td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">80%</td>
+                  <td className="py-2.5">維持 80% 消耗直到結案，開發期間不額外增加消耗</td>
+                </tr>
+                <tr>
+                  <td className="py-2.5"><Badge className="bg-emerald-100 text-emerald-700">已結案</Badge></td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">100%</td>
+                  <td className="py-2.5">結案後完整消耗全部 SP</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <p className="font-medium text-foreground text-xs">計算範例</p>
+            <p className="text-xs">
+              假設一筆需求預估 <span className="font-semibold text-foreground">20 SP</span>：
+            </p>
+            <ul className="text-xs space-y-1">
+              <li className="flex items-center gap-2">
+                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
+                提出需求 → 立即消耗 <span className="font-semibold text-foreground">10 SP</span>（20 × 50%）
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
+                MVP 確認後 → 累計消耗 <span className="font-semibold text-foreground">16 SP</span>（20 × 80%）
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
+                結案後 → 完整消耗 <span className="font-semibold text-foreground">20 SP</span>（20 × 100%）
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-xs text-muted-foreground/70">
+            ※ 需求被駁回（取消／暫緩）時，已消耗的 SP 會全數退還。結案時若有 SP 調整（增減），以調整後的 SP 為準計算。
+          </p>
+        </CardContent>
+      </Card>
+
       {/* 如何使用系統 */}
       <Card>
         <CardHeader>
@@ -306,6 +384,66 @@ function AdminDeliveryGuide() {
           </CardContent>
         </Card>
       </div>
+
+      {/* SP 漸進消耗機制 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">SP 漸進消耗機制</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-4">
+          <p>
+            系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，需求提出即開始消耗 SP，
+            避免需求者在 MVP 確認或驗收階段消極配合、不斷追加需求導致專案停擺。
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium text-foreground">階段</th>
+                  <th className="pb-2 font-medium text-foreground text-center">消耗比例</th>
+                  <th className="pb-2 font-medium text-foreground">說明</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                <tr>
+                  <td className="py-2.5"><Badge className="bg-blue-100 text-blue-700">需求確認</Badge></td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">50%</td>
+                  <td className="py-2.5">需求提出後立即消耗一半，確保需求者審慎提出</td>
+                </tr>
+                <tr>
+                  <td className="py-2.5"><Badge className="bg-amber-100 text-amber-700">MVP 確認</Badge></td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">80%</td>
+                  <td className="py-2.5">MVP 架構確認後累計 80%，促進積極確認</td>
+                </tr>
+                <tr>
+                  <td className="py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      <Badge className="bg-orange-100 text-orange-700">開案確認</Badge>
+                      <Badge className="bg-violet-100 text-violet-700">開發中</Badge>
+                      <Badge className="bg-purple-100 text-purple-700">驗收中</Badge>
+                    </div>
+                  </td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">80%</td>
+                  <td className="py-2.5">維持 80% 直到結案</td>
+                </tr>
+                <tr>
+                  <td className="py-2.5"><Badge className="bg-emerald-100 text-emerald-700">已結案</Badge></td>
+                  <td className="py-2.5 text-center font-semibold text-foreground">100%</td>
+                  <td className="py-2.5">完整消耗，結案時可進行 SP 調整</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-xs">
+            <p className="font-medium text-foreground">Wallet 計算邏輯</p>
+            <p>已使用 SP = Σ（各需求確認 SP × 該階段消耗比例）</p>
+            <p>可用 SP = 年度配額 − 已使用 SP</p>
+            <p>狀態變更時自動計算差額（delta）並更新錢包，支援前進與倒退。駁回時全額退還。</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 常見問題 */}
       <Card>
