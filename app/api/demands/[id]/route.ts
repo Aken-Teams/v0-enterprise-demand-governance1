@@ -288,16 +288,17 @@ export async function PATCH(
         },
       })
 
-      // Update phase plan SP allocations if provided
+      // Update phase plan SP allocations
       if (spAdjustment?.phaseAllocations) {
-        for (const [phase, plannedSp] of Object.entries(spAdjustment.phaseAllocations)) {
-          if (PIPELINE_STEPS.includes(phase as typeof PIPELINE_STEPS[number])) {
-            await tx.demandPhasePlan.upsert({
-              where: { demandId_phase: { demandId: id, phase: phase as DemandStatus } },
-              create: { demandId: id, phase: phase as DemandStatus, plannedSp },
-              update: { plannedSp },
-            })
-          }
+        // User provided explicit phase allocations — update all phases
+        for (const step of PIPELINE_STEPS) {
+          if (step === "CLOSED") continue
+          const plannedSp = spAdjustment.phaseAllocations[step] ?? 0
+          await tx.demandPhasePlan.upsert({
+            where: { demandId_phase: { demandId: id, phase: step as DemandStatus } },
+            create: { demandId: id, phase: step as DemandStatus, plannedSp },
+            update: { plannedSp },
+          })
         }
       }
 

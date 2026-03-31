@@ -120,8 +120,9 @@ export function StepNavigation({
     if (isNaN(newSp) || newSp < 1) return null
     const allocs: Record<string, number> = {}
     for (const phase of PIPELINE_STEPS) {
+      if (phase === "CLOSED") continue
       const v = parseInt(phaseAllocations[phase] || "0", 10)
-      if (v > 0) allocs[phase] = v
+      allocs[phase] = Math.max(0, v)
     }
     return {
       newSp,
