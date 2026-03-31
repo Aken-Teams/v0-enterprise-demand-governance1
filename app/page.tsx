@@ -34,7 +34,6 @@ interface OrgWithUsers {
 const ADMIN_ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
   delivery: "交付團隊",
-  viewer: "董事會",
 }
 
 const ROLE_ROUTES: Record<string, string> = {
@@ -283,6 +282,9 @@ export default function HomePage() {
                                     {orgUsers.map((user) => (
                                       <SelectItem key={user.id} value={user.email}>
                                         <span>{user.name}</span>
+                                        {user.role === "viewer" && (
+                                          <span className="ml-1.5 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">董事會</span>
+                                        )}
                                         <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
                                       </SelectItem>
                                     ))}

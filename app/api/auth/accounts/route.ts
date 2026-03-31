@@ -8,15 +8,15 @@ export async function GET() {
       prisma.organization.findMany({
         include: {
           users: {
-            where: { isActive: true, role: "subsidiary" },
-            select: { id: true, name: true, email: true },
+            where: { isActive: true, role: { in: ["subsidiary", "viewer"] } },
+            select: { id: true, name: true, email: true, role: true },
             orderBy: { name: "asc" },
           },
         },
         orderBy: { name: "asc" },
       }),
       prisma.user.findMany({
-        where: { isActive: true, role: { in: ["admin", "delivery", "viewer"] } },
+        where: { isActive: true, role: { in: ["admin", "delivery"] } },
         select: { id: true, name: true, email: true, role: true },
         orderBy: { name: "asc" },
       }),

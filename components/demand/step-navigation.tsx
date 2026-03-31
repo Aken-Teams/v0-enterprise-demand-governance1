@@ -299,13 +299,13 @@ export function StepNavigation({
         setShowConfirm(open)
         if (!open) { setHasSpAdjustment(false); setAdjustedSp(""); setAdjustmentReason(""); setPhaseAllocations({}) }
       }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col">
           <AlertDialogHeader>
             <AlertDialogTitle>
               {direction === "next" ? "確認進入下一階段" : "確認回到上一階段"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-3">
+              <div className="space-y-3 overflow-y-auto max-h-[60vh] pr-1">
                 <p>
                   將狀態從「{STATUS_MAP[currentStatus]?.label}」變更為「{targetLabel}」
                 </p>
