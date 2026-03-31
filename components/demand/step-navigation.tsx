@@ -11,7 +11,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2, Paperclip, FileIcon, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2, Paperclip, FileIcon, Trash2, ShieldCheck, X } from "lucide-react"
 import {
   PIPELINE_STEPS,
   STATUS_MAP,
@@ -19,6 +19,8 @@ import {
   DOCUMENT_TYPE_LABELS,
   SIGNOFF_REQUIRED_PHASES,
 } from "@/lib/constants/demand"
+
+const CLOSING_STEP_TITLES = ["簽核確認", "文件確認", "SP 調整", "確認結案"]
 
 interface SignoffInfo {
   id: string
@@ -77,7 +79,19 @@ export function StepNavigation({
   const [adjustmentReason, setAdjustmentReason] = useState("")
   const [phaseAllocations, setPhaseAllocations] = useState<Record<string, string>>({})
 
+  // Closing wizard state
+  const [showClosingWizard, setShowClosingWizard] = useState(false)
+  const [closingStep, setClosingStep] = useState(0)
+
   const currentEffectiveSp = confirmedSp ?? estimatedSp ?? 0
+
+  // All-phase document status for closing wizard
+  const allPhaseDocs = PIPELINE_STEPS.filter(p => p !== "CLOSED").map(phase => {
+    const required = PHASE_DOCUMENT_MAP[phase]?.required || []
+    const missing = required.filter(type => !documents.some(d => d.phase === phase && d.type === type))
+    return { phase, required, missing, allUploaded: missing.length === 0 }
+  }).filter(p => p.required.length > 0)
+  const hasAnyMissingDocs = allPhaseDocs.some(p => !p.allUploaded)
 
   const currentIdx = PIPELINE_STEPS.indexOf(currentStatus as typeof PIPELINE_STEPS[number])
   if (currentIdx < 0) return null
@@ -108,11 +122,15 @@ export function StepNavigation({
       setShowForceDialog(true)
       return
     }
+    if (dir === "next" && nextPhase === "CLOSED") {
+      setDirection("next")
+      setClosingStep(0)
+      setShowClosingWizard(true)
+      return
+    }
     setDirection(dir)
     setShowConfirm(true)
   }
-
-  const isMovingToClosed = direction === "next" && nextPhase === "CLOSED"
 
   const buildSpAdjustmentPayload = () => {
     if (!hasSpAdjustment || !adjustedSp) return null
@@ -152,6 +170,28 @@ export function StepNavigation({
       if (res.ok) {
         setShowConfirm(false)
         onStatusChange(targetStatus!)
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleClosingConfirm = async () => {
+    if (!token) return
+    setLoading(true)
+    const payload: Record<string, unknown> = { status: "CLOSED" }
+    if (inputCompletedDate) payload.completedDate = inputCompletedDate
+    const spAdj = buildSpAdjustmentPayload()
+    if (spAdj) payload.spAdjustment = spAdj
+    try {
+      const res = await fetch(`/api/demands/${demandId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        setShowClosingWizard(false)
+        onStatusChange("CLOSED")
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
@@ -295,10 +335,7 @@ export function StepNavigation({
       )}
 
       {/* Normal advance dialog */}
-      <AlertDialog open={showConfirm} onOpenChange={(open) => {
-        setShowConfirm(open)
-        if (!open) { setHasSpAdjustment(false); setAdjustedSp(""); setAdjustmentReason(""); setPhaseAllocations({}) }
-      }}>
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent className="max-h-[85vh] flex flex-col">
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -344,120 +381,354 @@ export function StepNavigation({
                     ))}
                   </div>
                 )}
-              {isMovingToClosed && (
-                <>
-                  <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
-                      <p className="text-xs font-semibold text-red-600">結案後注意事項</p>
-                    </div>
-                    <ul className="text-xs text-red-600 space-y-0.5 ml-6 list-disc">
-                      <li>結案後先前內容將不可再修改</li>
-                      <li>PM、工程師欄位與甘特圖將鎖定</li>
-                      <li>已上傳的文件將無法刪除或修改</li>
-                      <li>僅管理者可補充資料</li>
-                    </ul>
-                  </div>
-                  {/* SP Adjustment */}
-                  <div className="rounded-lg border p-3 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="spAdjustment"
-                        checked={hasSpAdjustment}
-                        onCheckedChange={(checked) => {
-                          setHasSpAdjustment(!!checked)
-                          if (checked && !adjustedSp) {
-                            setAdjustedSp(String(currentEffectiveSp))
-                            // Initialize phase allocations from existing plans
-                            const allocs: Record<string, string> = {}
-                            for (const phase of PIPELINE_STEPS) {
-                              const plan = propPhasePlans?.find((p) => p.phase === phase)
-                              if (plan?.plannedSp) allocs[phase] = String(plan.plannedSp)
-                            }
-                            setPhaseAllocations(allocs)
-                          }
-                        }}
-                      />
-                      <Label htmlFor="spAdjustment" className="text-sm font-medium cursor-pointer">是否有 SP 調整？</Label>
-                      <span className="text-xs text-muted-foreground ml-auto">目前 {currentEffectiveSp} SP</span>
-                    </div>
-                    {hasSpAdjustment && (
-                      <div className="space-y-3 pt-1">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">調整後 SP</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={adjustedSp}
-                            onChange={(e) => setAdjustedSp(e.target.value)}
-                            placeholder="輸入新的 SP"
-                            className="h-8"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">調整原因</Label>
-                          <Textarea
-                            value={adjustmentReason}
-                            onChange={(e) => setAdjustmentReason(e.target.value)}
-                            placeholder="說明 SP 調整的原因..."
-                            rows={2}
-                            className="text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">各階段 SP 分配</Label>
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                            {PIPELINE_STEPS.filter((p) => p !== "CLOSED").map((phase) => (
-                              <div key={phase} className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground w-16 shrink-0 truncate">{STATUS_MAP[phase]?.label}</span>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  className="h-7 text-xs"
-                                  placeholder="0"
-                                  value={phaseAllocations[phase] || ""}
-                                  onChange={(e) => setPhaseAllocations((prev) => ({ ...prev, [phase]: e.target.value }))}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                          {(() => {
-                            const allocated = PIPELINE_STEPS.reduce((sum, p) => sum + (parseInt(phaseAllocations[p] || "0", 10) || 0), 0)
-                            const total = parseInt(adjustedSp, 10) || 0
-                            const diff = total - allocated
-                            return (
-                              <p className={`text-xs ${diff === 0 ? "text-emerald-600" : diff > 0 ? "text-amber-600" : "text-destructive"}`}>
-                                已分配 {allocated} / {total} SP
-                                {diff !== 0 && (diff > 0 ? ` （剩餘 ${diff}）` : ` （超出 ${Math.abs(diff)}）`)}
-                              </p>
-                            )
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-lg border p-3 space-y-2">
-                    <Label htmlFor="completedDate" className="text-sm font-medium">實際結案日期</Label>
-                    <Input
-                      id="completedDate"
-                      type="date"
-                      value={inputCompletedDate}
-                      onChange={(e) => setInputCompletedDate(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">此日期將用於交付率計算，可稍後於基本資訊中補填</p>
-                  </div>
-                </>
-              )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm} disabled={loading || (isMovingToClosed && hasSpAdjustment && (!adjustedSp || parseInt(adjustedSp, 10) < 1))}>
+            <AlertDialogAction onClick={handleConfirm} disabled={loading}>
               確認變更
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Closing wizard dialog */}
+      <AlertDialog open={showClosingWizard} onOpenChange={(open) => {
+        setShowClosingWizard(open)
+        if (!open) {
+          setClosingStep(0)
+          setHasSpAdjustment(false)
+          setAdjustedSp("")
+          setAdjustmentReason("")
+          setPhaseAllocations({})
+          setInputCompletedDate("")
+        }
+      }}>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col p-0 gap-0 sm:max-w-xl">
+          <AlertDialogTitle className="sr-only">結案確認</AlertDialogTitle>
+          {/* Header with step indicator */}
+          <div className="border-b px-6 pt-5 pb-4 shrink-0 relative">
+            <button
+              type="button"
+              onClick={() => setShowClosingWizard(false)}
+              className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 transition-opacity"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <p className="text-sm text-muted-foreground mb-3 pr-6">
+              將狀態從「{STATUS_MAP[currentStatus]?.label}」變更為「{STATUS_MAP["CLOSED"]?.label}」
+            </p>
+            {/* Step indicator */}
+            <div className="flex items-center gap-0.5">
+              {CLOSING_STEP_TITLES.map((title, i) => {
+                const isActive = i === closingStep
+                const isDone = i < closingStep
+                return (
+                  <div key={i} className="flex items-center gap-0.5 flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => i <= closingStep && setClosingStep(i)}
+                      disabled={i > closingStep}
+                      className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors w-full
+                        ${isActive ? "bg-primary text-primary-foreground" : isDone ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer" : "bg-muted text-muted-foreground/50"}
+                      `}
+                    >
+                      <span className={`flex items-center justify-center h-4 w-4 rounded-full text-[10px] font-bold shrink-0
+                        ${isActive ? "bg-primary-foreground/20 text-primary-foreground" : isDone ? "bg-emerald-600 text-white" : "bg-muted-foreground/20 text-muted-foreground/50"}
+                      `}>
+                        {isDone ? <Check className="h-2.5 w-2.5" /> : i + 1}
+                      </span>
+                      <span className="whitespace-nowrap">{title}</span>
+                    </button>
+                    {i < CLOSING_STEP_TITLES.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Step content — scrollable */}
+          <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">
+            {/* Step 1: 簽核與注意事項 */}
+            {closingStep === 0 && (
+              <div className="space-y-3">
+                {isApproved ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-emerald-700">
+                      <Check className="h-4 w-4 shrink-0" />
+                      <span className="font-medium">需求者已簽核確認</span>
+                    </div>
+                  </div>
+                ) : isRejected ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-red-700">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span className="font-medium">需求者已退回簽核，尚未重新發起</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-amber-700">
+                      <ClipboardCheck className="h-4 w-4 shrink-0" />
+                      <span className="font-medium">尚未取得需求者簽核</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                    <p className="text-sm font-semibold text-red-600">結案後注意事項</p>
+                  </div>
+                  <ul className="text-sm text-red-600 space-y-0.5 ml-6 list-disc">
+                    <li>結案後先前內容將不可再修改</li>
+                    <li>PM、工程師欄位與甘特圖將鎖定</li>
+                    <li>已上傳的文件將無法刪除或修改</li>
+                    <li>僅管理者可補充資料</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: 文件確認 */}
+            {closingStep === 1 && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">請確認各階段所需的文件是否已上傳完成：</p>
+                {allPhaseDocs.map((pd, idx) => (
+                  <div
+                    key={pd.phase}
+                    className={`rounded-lg border p-3 space-y-1.5 ${pd.allUploaded ? "border-emerald-200 bg-emerald-50/30" : "border-amber-200 bg-amber-50/30"}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold shrink-0 ${pd.allUploaded ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"}`}>
+                        {idx + 1}
+                      </span>
+                      <p className={`text-xs font-semibold ${pd.allUploaded ? "text-emerald-600" : "text-amber-600"}`}>
+                        {STATUS_MAP[pd.phase]?.label}
+                      </p>
+                    </div>
+                    {pd.required.map(type => {
+                      const uploaded = documents.some(d => d.phase === pd.phase && d.type === type)
+                      return (
+                        <div key={type} className={`flex items-center gap-2 text-sm ml-7 ${uploaded ? "text-emerald-700" : "text-amber-700"}`}>
+                          {uploaded ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Circle className="h-3 w-3 shrink-0" />}
+                          {DOCUMENT_TYPE_LABELS[type] || type}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+                {hasAnyMissingDocs && (
+                  <p className="text-xs text-muted-foreground">部分文件尚未上傳，您仍然可以繼續結案，但建議先補齊。</p>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: SP 與結案日期 */}
+            {closingStep === 2 && (
+              <div className="space-y-4">
+                {/* SP Adjustment */}
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="spAdjustment"
+                      checked={hasSpAdjustment}
+                      onCheckedChange={(checked) => {
+                        setHasSpAdjustment(!!checked)
+                        if (checked && !adjustedSp) {
+                          setAdjustedSp(String(currentEffectiveSp))
+                          const allocs: Record<string, string> = {}
+                          for (const phase of PIPELINE_STEPS) {
+                            const plan = propPhasePlans?.find((p) => p.phase === phase)
+                            if (plan?.plannedSp) allocs[phase] = String(plan.plannedSp)
+                          }
+                          setPhaseAllocations(allocs)
+                        }
+                      }}
+                    />
+                    <Label htmlFor="spAdjustment" className="text-sm font-medium cursor-pointer">是否有 SP 調整？</Label>
+                    <span className="text-xs text-muted-foreground ml-auto">目前 {currentEffectiveSp} SP</span>
+                  </div>
+                  {hasSpAdjustment && (
+                    <div className="space-y-3 pt-1">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">調整後 SP</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={adjustedSp}
+                          onChange={(e) => setAdjustedSp(e.target.value)}
+                          placeholder="輸入新的 SP"
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">調整原因</Label>
+                        <Textarea
+                          value={adjustmentReason}
+                          onChange={(e) => setAdjustmentReason(e.target.value)}
+                          placeholder="說明 SP 調整的原因..."
+                          rows={2}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">各階段 SP 分配</Label>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                          {PIPELINE_STEPS.filter((p) => p !== "CLOSED").map((phase) => (
+                            <div key={phase} className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground w-16 shrink-0 truncate">{STATUS_MAP[phase]?.label}</span>
+                              <Input
+                                type="number"
+                                min={0}
+                                className="h-7 text-xs"
+                                placeholder="0"
+                                value={phaseAllocations[phase] || ""}
+                                onChange={(e) => setPhaseAllocations((prev) => ({ ...prev, [phase]: e.target.value }))}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        {(() => {
+                          const allocated = PIPELINE_STEPS.reduce((sum, p) => sum + (parseInt(phaseAllocations[p] || "0", 10) || 0), 0)
+                          const total = parseInt(adjustedSp, 10) || 0
+                          const diff = total - allocated
+                          return (
+                            <p className={`text-xs ${diff === 0 ? "text-emerald-600" : diff > 0 ? "text-amber-600" : "text-destructive"}`}>
+                              已分配 {allocated} / {total} SP
+                              {diff !== 0 && (diff > 0 ? ` （剩餘 ${diff}）` : ` （超出 ${Math.abs(diff)}）`)}
+                            </p>
+                          )
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Completed Date */}
+                <div className="rounded-lg border p-3 space-y-2">
+                  <Label htmlFor="completedDate" className="text-sm font-medium">實際結案日期</Label>
+                  <Input
+                    id="completedDate"
+                    type="date"
+                    value={inputCompletedDate}
+                    onChange={(e) => setInputCompletedDate(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">此日期將用於交付率計算，可稍後於基本資訊中補填</p>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: 確認結案 */}
+            {closingStep === 3 && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground mb-2">請確認以下結案資訊無誤後，按下「確認結案」完成操作。</p>
+
+                {/* Summary: 簽核 */}
+                <div className="rounded-lg border p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">簽核狀態</span>
+                    <button type="button" onClick={() => setClosingStep(0)} className="text-xs text-primary hover:underline font-medium">修改</button>
+                  </div>
+                  {isApproved ? (
+                    <div className="flex items-center gap-1.5 text-sm text-emerald-700">
+                      <Check className="h-3.5 w-3.5" />
+                      需求者已簽核確認
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-sm text-amber-700">
+                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      {isRejected ? "需求者已退回簽核" : "尚未取得需求者簽核"}
+                    </div>
+                  )}
+                </div>
+
+                {/* Summary: 文件 */}
+                <div className="rounded-lg border p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">文件狀態</span>
+                    <button type="button" onClick={() => setClosingStep(1)} className="text-xs text-primary hover:underline font-medium">查看</button>
+                  </div>
+                  <div className={`flex items-center gap-1.5 text-sm ${hasAnyMissingDocs ? "text-amber-700" : "text-emerald-700"}`}>
+                    {hasAnyMissingDocs ? <AlertTriangle className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                    {hasAnyMissingDocs ? "部分階段文件尚未上傳" : "全部階段必要文件已齊全"}
+                  </div>
+                </div>
+
+                {/* Summary: SP */}
+                <div className="rounded-lg border p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">SP 點數</span>
+                    <button type="button" onClick={() => setClosingStep(2)} className="text-xs text-primary hover:underline font-medium">修改</button>
+                  </div>
+                  {hasSpAdjustment ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground line-through">{currentEffectiveSp} SP</span>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                        <span className="font-semibold text-primary">{adjustedSp} SP</span>
+                      </div>
+                      {adjustmentReason && <p className="text-xs text-muted-foreground">原因：{adjustmentReason}</p>}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                        {PIPELINE_STEPS.filter(p => p !== "CLOSED").map(phase => {
+                          const v = parseInt(phaseAllocations[phase] || "0", 10) || 0
+                          if (v <= 0) return null
+                          return (
+                            <span key={phase} className="text-xs text-muted-foreground">
+                              {STATUS_MAP[phase]?.label}: <span className="font-medium text-foreground">{v}</span>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm">{currentEffectiveSp} SP（未調整）</p>
+                  )}
+                </div>
+
+                {/* Summary: 結案日期 */}
+                <div className="rounded-lg border p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">實際結案日期</span>
+                    <button type="button" onClick={() => setClosingStep(2)} className="text-xs text-primary hover:underline font-medium">修改</button>
+                  </div>
+                  <p className="text-sm">
+                    {inputCompletedDate || <span className="text-muted-foreground">未填寫（可稍後補填）</span>}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer with navigation */}
+          <div className="border-t px-6 py-3 flex items-center justify-between shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loading}
+              onClick={() => { if (closingStep === 0) setShowClosingWizard(false); else setClosingStep(closingStep - 1) }}
+            >
+              {closingStep === 0 ? "取消" : <><ChevronLeft className="h-4 w-4 mr-1" />上一步</>}
+            </Button>
+            <span className="text-xs text-muted-foreground">{closingStep + 1} / {CLOSING_STEP_TITLES.length}</span>
+            {closingStep < CLOSING_STEP_TITLES.length - 1 ? (
+              <Button size="sm" onClick={() => setClosingStep(closingStep + 1)}>
+                下一步<ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="default"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={handleClosingConfirm}
+                disabled={loading || (hasSpAdjustment && (!adjustedSp || parseInt(adjustedSp, 10) < 1))}
+              >
+                {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-1" />}
+                確認結案
+              </Button>
+            )}
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
