@@ -46,11 +46,11 @@ export default function EditDemandPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [demand, setDemand] = useState<DemandForEdit | null>(null)
-  const [orgUsers, setOrgUsers] = useState<{ id: string; name: string }[]>([])
+  const [allOrgs, setAllOrgs] = useState<{ id: string; name: string; users: { id: string; name: string }[] }[]>([])
 
   // Form state
   const [title, setTitle] = useState("")
-  const [submitterId, setSubmitterId] = useState("")
+  const [organizationId, setOrganizationId] = useState("")
   const [description, setDescription] = useState("")
   const [painPoint, setPainPoint] = useState("")
   const [expectedBenefit, setExpectedBenefit] = useState("")
@@ -69,7 +69,7 @@ export default function EditDemandPage() {
         const d = data.demand as DemandForEdit
         setDemand(d)
         setTitle(d.title)
-        setSubmitterId(d.submitter.id)
+        setOrganizationId(d.organization.id)
         setDescription(d.description)
         setPainPoint(d.painPoint || "")
         setExpectedBenefit(d.expectedBenefit || "")
@@ -86,21 +86,18 @@ export default function EditDemandPage() {
     fetchDemand()
   }, [fetchDemand])
 
-  // Fetch organization users for submitter dropdown
+  // Fetch all organizations for org & submitter dropdowns
   useEffect(() => {
-    if (!token || !demand) return
+    if (!token) return
     fetch("/api/organizations", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.organizations) {
-          const org = data.organizations.find((o: { id: string }) => o.id === demand.organization.id)
-          if (org?.users) setOrgUsers(org.users)
-        }
+        if (data.organizations) setAllOrgs(data.organizations)
       })
       .catch(() => {})
-  }, [token, demand])
+  }, [token])
 
   const handleSave = async () => {
     if (!token || !demand) return
@@ -112,7 +109,7 @@ export default function EditDemandPage() {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          submitterId,
+          organizationId,
           description,
           painPoint,
           expectedBenefit,
@@ -189,22 +186,17 @@ export default function EditDemandPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>需求者</Label>
-              <Select value={submitterId} onValueChange={setSubmitterId}>
+              <Label>需求單位</Label>
+              <Select value={organizationId} onValueChange={setOrganizationId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="選擇需求者" />
+                  <SelectValue placeholder="選擇需求單位" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Always show current submitter even if not in org users list */}
-                  {!orgUsers.some((u) => u.id === demand.submitter.id) && (
-                    <SelectItem value={demand.submitter.id}>{demand.submitter.name}</SelectItem>
-                  )}
-                  {orgUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  {allOrgs.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">所屬子公司：{demand.organization.name}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

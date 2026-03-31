@@ -21,6 +21,7 @@ export type CreateDemandInput = z.infer<typeof createDemandSchema>
 
 export const updateDemandSchema = z.object({
   title: z.string().min(1, "請輸入需求標題").max(200, "標題不得超過200字"),
+  organizationId: z.string().optional(),
   submitterId: z.string().optional(),
   description: z.string().min(1, "請輸入需求說明"),
   painPoint: z.string().min(1, "請輸入痛點說明"),
