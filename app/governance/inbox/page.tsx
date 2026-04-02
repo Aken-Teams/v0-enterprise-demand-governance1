@@ -42,6 +42,7 @@ interface Demand {
   submitter: string
   creator: string
   developer: string | null
+  contactPerson: string | null
   documentCount: number
   commentCount: number
 }
@@ -313,17 +314,14 @@ export default function InboxPage() {
                             <Building2 className="h-3.5 w-3.5" />
                             {demand.organization}
                           </span>
-                          <span>·</span>
-                          <span>{demand.confirmedSp ?? demand.estimatedSp} SP</span>
-                          {demand.documentCount > 0 && (
+                          {demand.contactPerson && (
                             <>
                               <span>·</span>
-                              <span className="flex items-center gap-1">
-                                <Paperclip className="h-3.5 w-3.5" />
-                                {demand.documentCount}
-                              </span>
+                              <span>{demand.contactPerson}</span>
                             </>
                           )}
+                          <span>·</span>
+                          <span>{demand.confirmedSp ?? demand.estimatedSp} SP</span>
                           <span>·</span>
                           <span className="flex items-center gap-1">
                             <User className="h-3.5 w-3.5" />

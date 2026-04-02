@@ -358,6 +358,7 @@ export async function GET(request: NextRequest) {
         creator: d.creator.name,
         manager: d.manager?.name || null,
         developer: d.developer?.name || null,
+        contactPerson: d.contactPerson || null,
         documentCount: d._count.documents,
         commentCount: d._count.comments,
       })),
