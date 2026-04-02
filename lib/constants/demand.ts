@@ -36,7 +36,7 @@ export const PHASE_DOCUMENT_MAP: Record<
   },
   PRD_REVIEW: {
     required: ["PRD"],
-    optional: ["ATTACHMENT"],
+    optional: ["APP_RESULT", "ATTACHMENT"],
   },
   SP_REVIEW: {
     required: ["SP_PLAN"],

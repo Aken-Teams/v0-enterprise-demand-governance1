@@ -61,6 +61,7 @@ interface DemandDetail {
   completedDate: string | null
   rejectReason: string | null
   adminNotes: string | null
+  contactPerson: string | null
   createdAt: string
   updatedAt: string
   organization: { id: string; name: string }
@@ -431,7 +432,7 @@ export default function DemandDetailPage() {
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.filters?.developers) setStaffUsers(data.filters.developers)
+        if (data.filters?.assignableUsers) setStaffUsers(data.filters.assignableUsers)
       })
       .catch(() => {})
   }, [token, canManage])
@@ -1213,6 +1214,34 @@ export default function DemandDetailPage() {
                       ) : (
                         <span className={cn("font-medium", !demand.developer && "text-muted-foreground")}>
                           {demand.developer?.name || "尚未指派"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-16 shrink-0">需求窗口</span>
+                      {user?.role === "admin" && !isClosed ? (
+                        <input
+                          className="flex-1 h-9 text-xs rounded-md border border-input bg-transparent px-3 shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] placeholder:text-muted-foreground"
+                          placeholder="填寫需求者窗口..."
+                          defaultValue={demand.contactPerson || ""}
+                          onBlur={async (e) => {
+                            const v = e.target.value.trim()
+                            if (v === (demand.contactPerson || "")) return
+                            try {
+                              const res = await fetch(`/api/demands/${demand.id}`, {
+                                method: "PATCH",
+                                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                                body: JSON.stringify({ contactPerson: v }),
+                              })
+                              if (res.ok) fetchDemand()
+                            } catch { /* ignore */ }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
+                        />
+                      ) : (
+                        <span className={cn("font-medium", !demand.contactPerson && "text-muted-foreground")}>
+                          {demand.contactPerson || "未填寫"}
                         </span>
                       )}
                     </div>

@@ -199,6 +199,7 @@ model Demand {
   completedDate   DateTime? /// 實際完成時間
   rejectReason    String?        @db.Text
   adminNotes      String?        @db.Text /// 管理者備註 (內部)
+  contactPerson   String?        @db.Text /// 需求者窗口 (自由填寫)
   organizationId  String
   organization    Organization   @relation(fields: [organizationId], references: [id])
   submitterId     String

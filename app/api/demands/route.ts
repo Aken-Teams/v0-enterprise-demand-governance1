@@ -367,6 +367,10 @@ export async function GET(request: NextRequest) {
       filters: {
         submitters: submitters.map((u) => ({ id: u.id, name: u.name })),
         developers: developers.map((u) => ({ id: u.id, name: u.name, role: u.role })),
+        assignableUsers: [
+          ...developers.map((u) => ({ id: u.id, name: u.name, role: u.role })),
+          ...submitters.map((u) => ({ id: u.id, name: u.name, role: "subsidiary" as const })),
+        ],
       },
     })
   } catch (error) {

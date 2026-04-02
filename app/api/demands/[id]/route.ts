@@ -151,6 +151,18 @@ export async function PATCH(
       })
     }
 
+    // Handle contactPerson update — admin only
+    if (body.contactPerson !== undefined) {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可編輯" }, { status: 403 })
+      }
+      await prisma.demand.update({
+        where: { id },
+        data: { contactPerson: body.contactPerson || null },
+      })
+      return NextResponse.json({ success: true })
+    }
+
     // Handle field editing (title, description, etc.) — admin only
     if (body.title !== undefined) {
       if (auth.role !== "admin") {

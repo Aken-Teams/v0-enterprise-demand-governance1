@@ -196,6 +196,7 @@ interface DemandDetail {
   completedDate: string | null
   rejectReason: string | null
   adminNotes: string | null
+  contactPerson: string | null
   createdAt: string
   updatedAt: string
   organization: { id: string; name: string }
@@ -896,6 +897,21 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                         </div>
                       </div>
                     </div>
+                    {demand.contactPerson && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                          <span className="text-[11px] font-medium text-amber-600">
+                            {demand.contactPerson[0]}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-tight">
+                            {demand.contactPerson}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">需求窗口</p>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
