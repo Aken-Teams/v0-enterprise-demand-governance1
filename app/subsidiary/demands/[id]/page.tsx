@@ -28,6 +28,7 @@ import {
   FileAudio,
   ShieldAlert,
   ClipboardCheck,
+  Package,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -555,6 +556,20 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
               <BarChart3 className="h-3.5 w-3.5" />
               甘特圖
             </TabsTrigger>
+            <TabsTrigger value="deliverables" className="gap-1.5">
+              <Package className="h-3.5 w-3.5" />
+              交付成果
+              {(() => {
+                const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
+                const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
+                const count = devLinks.length > 0 ? devLinks.length : prdLinks.length
+                return count > 0 ? (
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
+                    {count}
+                  </Badge>
+                ) : null
+              })()}
+            </TabsTrigger>
             <TabsTrigger value="documents" className="gap-1.5">
               <Paperclip className="h-3.5 w-3.5" />
               文件
@@ -960,6 +975,48 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ══════ Tab: 交付成果 ══════ */}
+          <TabsContent value="deliverables" className="mt-5">
+            {(() => {
+              const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
+              const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
+              const deliverables = devLinks.length > 0 ? devLinks : prdLinks
+
+              if (deliverables.length === 0) {
+                return (
+                  <Card>
+                    <CardContent className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground">
+                      <Package className="h-12 w-12 mb-3 opacity-20" />
+                      <p className="text-sm">尚無交付成果</p>
+                      <p className="text-xs mt-1">在「開發中」或「MVP 架構確認」階段上傳 APP 成果連結後會自動顯示</p>
+                    </CardContent>
+                  </Card>
+                )
+              }
+
+              return (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="relative min-h-[520px]">
+                      <div className="w-full min-h-[520px] flex flex-col">
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
+                          <p className="text-xs text-muted-foreground truncate flex-1">{deliverables[0].fileUrl}</p>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" asChild>
+                            <a href={deliverables[0].fileUrl!} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-3 w-3 mr-1" />新分頁
+                            </a>
+                          </Button>
+                        </div>
+                        <iframe src={deliverables[0].fileUrl!} className="flex-1 w-full min-h-[490px] border-0" title="APP 預覽" />
+                      </div>
+                      <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })()}
           </TabsContent>
 
           {/* ══════ Tab: 文件 ══════ */}
