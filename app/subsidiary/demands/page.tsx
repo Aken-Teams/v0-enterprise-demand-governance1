@@ -25,14 +25,14 @@ interface Demand {
   developer: string | null
 }
 
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  SUBMITTED: { label: "需求確認", color: "bg-blue-500 text-white" },
-  PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-500 text-white" },
-  SP_REVIEW: { label: "開案確認", color: "bg-orange-500 text-white" },
-  DEVELOPING: { label: "開發中", color: "bg-violet-500 text-white" },
-  ACCEPTANCE: { label: "驗收中", color: "bg-purple-500 text-white" },
-  CLOSED: { label: "已結案", color: "bg-gray-400 text-white" },
-  REJECTED: { label: "已駁回", color: "bg-red-500 text-white" },
+const STATUS_MAP: Record<string, { label: string; color: string; badge: string }> = {
+  SUBMITTED: { label: "需求確認", color: "bg-blue-500 text-white", badge: "bg-blue-50 text-blue-700 ring-blue-200" },
+  PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-500 text-white", badge: "bg-amber-50 text-amber-700 ring-amber-200" },
+  SP_REVIEW: { label: "開案確認", color: "bg-orange-500 text-white", badge: "bg-orange-50 text-orange-700 ring-orange-200" },
+  DEVELOPING: { label: "開發中", color: "bg-violet-500 text-white", badge: "bg-violet-50 text-violet-700 ring-violet-200" },
+  ACCEPTANCE: { label: "驗收中", color: "bg-purple-500 text-white", badge: "bg-purple-50 text-purple-700 ring-purple-200" },
+  CLOSED: { label: "已結案", color: "bg-gray-400 text-white", badge: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  REJECTED: { label: "已駁回", color: "bg-red-500 text-white", badge: "bg-red-50 text-red-700 ring-red-200" },
 }
 
 const STATUS_KEYS = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED", "REJECTED"]
@@ -43,7 +43,7 @@ function formatDateReadable(dateStr: string) {
 }
 
 function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingSignoff?: boolean }) {
-  const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-400 text-white" }
+  const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-400 text-white", badge: "bg-gray-50 text-gray-600 ring-gray-200" }
   const sp = demand.confirmedSp ?? demand.estimatedSp
 
   const ownerInfo = (() => {
@@ -58,24 +58,24 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
       href={`/subsidiary/demands/${demand.id}`}
       className="group block rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:border-primary/30"
     >
-      {/* Row 1: status + demand number */}
-      <div className="flex items-center justify-between mb-1.5">
+      {/* Row 1: status + signoff + demand number */}
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
-          <div className={cn("inline-block px-2 py-0.5 rounded text-[11px] font-medium", statusInfo.color)}>
+          <span className={cn("inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold ring-1 ring-inset", statusInfo.badge)}>
             {statusInfo.label}
-          </div>
+          </span>
           {hasPendingSignoff && (
-            <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-medium">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 text-[10px] font-semibold">
               <ClipboardCheck className="h-3 w-3" />
               待簽核
-            </div>
+            </span>
           )}
         </div>
         <span className="text-[11px] font-mono text-muted-foreground">{demand.demandNumber}</span>
       </div>
 
       {/* Title */}
-      <h3 className="font-semibold text-foreground text-sm leading-snug mb-1 group-hover:text-primary transition-colors">
+      <h3 className="font-semibold text-foreground text-sm leading-snug mb-2 group-hover:text-primary transition-colors">
         {demand.title}
       </h3>
 

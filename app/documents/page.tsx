@@ -9,6 +9,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { FileSearch } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import {
   STATUS_MAP,
@@ -33,6 +41,144 @@ const DOC_DESCRIPTIONS: Record<string, string> = {
   VIDEO: "影片檔案",
 }
 
+/** 必填文件的標準格式說明 */
+const DOC_STANDARD_FORMAT: Record<string, { sections: { title: string; content: string }[] }> = {
+  MEETING_NOTES: {
+    sections: [
+      { title: "會議基本資訊", content: "日期、時間、地點、與會人員" },
+      { title: "需求背景", content: "需求提出的原因、目前遇到的問題" },
+      { title: "核心需求", content: "需求者期望的功能與目標，依優先級排列" },
+      { title: "預期效益", content: "預計帶來的效益或改善" },
+      { title: "待確認事項", content: "需進一步釐清的問題" },
+      { title: "下一步行動", content: "雙方的後續行動與時程" },
+    ],
+  },
+  PRD: {
+    sections: [
+      { title: "需求概述", content: "需求背景、目標與範圍定義" },
+      { title: "使用者故事", content: "以使用者角度描述功能需求（As a... I want... So that...）" },
+      { title: "功能規格", content: "詳細的功能描述、頁面流程、欄位定義" },
+      { title: "非功能需求", content: "效能、安全性、相容性等要求" },
+      { title: "驗收標準", content: "每個功能的驗收條件，明確且可衡量" },
+      { title: "附錄", content: "UI 原型、流程圖、參考資料" },
+    ],
+  },
+  SP_PLAN: {
+    sections: [
+      { title: "SP 總點數", content: "需求的總 SP 點數與分配依據" },
+      { title: "各階段 SP 分配", content: "每個開發階段的 SP 點數" },
+      { title: "甘特圖時程", content: "各階段的計畫開始與結束時間" },
+      { title: "人力配置", content: "PM、工程師等角色分配" },
+    ],
+  },
+  SDD: {
+    sections: [
+      { title: "系統架構", content: "整體架構圖、技術棧選擇" },
+      { title: "資料庫設計", content: "ER 圖、資料表結構與關聯" },
+      { title: "API 規格", content: "API 端點、請求/回應格式" },
+      { title: "模組設計", content: "各模組職責與介面定義" },
+    ],
+  },
+  BDD: {
+    sections: [
+      { title: "格式", content: "以 Given-When-Then 格式撰寫" },
+      { title: "Given（前置條件）", content: "描述測試場景的初始狀態" },
+      { title: "When（操作動作）", content: "使用者執行的操作" },
+      { title: "Then（預期結果）", content: "操作後系統應產生的結果" },
+      { title: "涵蓋範圍", content: "應涵蓋所有主要功能流程與邊界情境" },
+    ],
+  },
+  TDD: {
+    sections: [
+      { title: "測試範圍", content: "單元測試與整合測試的涵蓋範圍" },
+      { title: "測試案例", content: "每個功能模組的測試案例清單" },
+      { title: "測試結果", content: "各測試案例的通過/失敗狀態" },
+      { title: "覆蓋率", content: "程式碼覆蓋率統計" },
+    ],
+  },
+  TEST_REPORT: {
+    sections: [
+      { title: "測試摘要", content: "測試環境、測試日期、測試人員" },
+      { title: "測試範圍", content: "本次測試涵蓋的功能模組" },
+      { title: "測試結果", content: "總測試數、通過數、失敗數、通過率" },
+      { title: "缺陷清單", content: "未通過項目的描述、嚴重程度、修復狀態" },
+      { title: "結論與建議", content: "是否建議上線、待修復項目" },
+    ],
+  },
+}
+
+/** 需求者簽核階段的審核指引 */
+const SIGNOFF_REVIEW_GUIDE: Record<string, { summary: string; points: string[] }> = {
+  PRD_REVIEW: {
+    summary: "確認 PRD 內容與 MVP 架構方向是否符合您的需求",
+    points: [
+      "功能範圍是否與您的需求一致",
+      "驗收標準是否明確且可衡量",
+      "使用者流程是否符合實際操作情境",
+      "是否有遺漏的功能需求",
+      "MVP 架構方向是否符合期望",
+    ],
+  },
+  SP_REVIEW: {
+    summary: "確認 SP 點數與開發時程是否可接受",
+    points: [
+      "確認 SP 點數是否在預算範圍內",
+      "各階段時程安排是否合理",
+      "甘特圖的里程碑是否可接受",
+    ],
+  },
+  ACCEPTANCE: {
+    summary: "驗收開發成果是否符合需求規格與品質標準",
+    points: [
+      "實際操作 APP 確認所有功能正常運作",
+      "對照 PRD 驗收標準逐項確認",
+      "測試報告通過率是否達標",
+      "是否有未修復的重大缺陷",
+      "BDD 測試場景是否涵蓋主要功能",
+    ],
+  },
+  CLOSED: {
+    summary: "最終確認交付成果完整，同意結案",
+    points: [
+      "確認所有需求功能皆已完成",
+      "確認 APP 運行正常無重大問題",
+      "確認 SP 點數結算正確",
+    ],
+  },
+}
+
+const SUBSIDIARY_PHASE_DETAIL: Record<string, { desc: string; actions: string[]; note?: string }> = {
+  SUBMITTED: {
+    desc: "管理者與您面談確認需求內容",
+    actions: ["與管理者進行需求訪談", "確認需求範圍與期望目標"],
+    note: "此階段會開始消耗 50% SP，請確保需求明確後再提出。",
+  },
+  PRD_REVIEW: {
+    desc: "PM 撰寫需求規格書，工程師進行架構設計",
+    actions: ["收到 PRD 後審閱需求規格是否正確", "確認 MVP 架構方向", "簽核確認 PRD 內容"],
+    note: "簽核通過後 SP 消耗提升至 80%。",
+  },
+  SP_REVIEW: {
+    desc: "管理者確認 SP 點數與開發時程",
+    actions: ["查看管理者核定的確認 SP 與時程", "簽核確認開案"],
+  },
+  DEVELOPING: {
+    desc: "工程師進行開發，產出系統設計與成果",
+    actions: ["可隨時查看甘特圖追蹤進度", "查看交付成果頁面預覽 APP"],
+    note: "開發期間如有問題可聯繫需求者窗口。",
+  },
+  ACCEPTANCE: {
+    desc: "您驗收開發成果，確認是否符合需求",
+    actions: ["查看測試報告與 BDD/TDD 文件", "實際操作 APP 確認功能", "簽核通過或退回修正"],
+    note: "驗收不通過會退回開發階段重新修正。",
+  },
+  CLOSED: {
+    desc: "需求完成結案，SP 點數結算",
+    actions: [],
+    note: "結案後 SP 完整消耗 100%，若有 SP 調整以調整後為準。",
+  },
+}
+
 /* ─── 需求者（subsidiary）看到的內容 ─── */
 function SubsidiaryGuide() {
   return (
@@ -41,33 +187,118 @@ function SubsidiaryGuide() {
         {/* 需求處理流程 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">需求處理流程</CardTitle>
+            <CardTitle className="text-base">各階段說明</CardTitle>
+            <p className="text-sm text-muted-foreground">您提交的需求會依序經過以下階段，點擊可查看詳細說明</p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              您提交的需求會依序經過以下階段，每個階段完成後自動推進至下一階段：
-            </p>
-            <div className="divide-y">
-              {PIPELINE_STEPS.map((step, idx) => {
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {PIPELINE_STEPS.map((step) => {
                 const info = STATUS_MAP[step]
-                const desc: Record<string, string> = {
-                  SUBMITTED: "管理者與您面談確認需求內容",
-                  PRD_REVIEW: "PM 撰寫需求規格書，工程師進行架構設計",
-                  SP_REVIEW: "管理者確認 SP 點數與開發時程",
-                  DEVELOPING: "工程師進行開發，產出系統設計與成果",
-                  ACCEPTANCE: "您驗收開發成果，確認是否符合需求",
-                  CLOSED: "需求完成結案，SP 點數結算",
-                }
+                const detail = SUBSIDIARY_PHASE_DETAIL[step]
                 return (
-                  <div key={step} className={`flex items-center gap-3 ${idx === 0 ? "pb-3" : idx === PIPELINE_STEPS.length - 1 ? "pt-3" : "py-3"}`}>
-                    <span className="text-xs font-medium text-muted-foreground/60 w-4 shrink-0 text-center">{idx + 1}</span>
-                    <Badge className={`${info.color} shrink-0`}>{info.label}</Badge>
-                    <span className="text-sm text-muted-foreground">{desc[step]}</span>
-                  </div>
+                  <AccordionItem key={step} value={step}>
+                    <AccordionTrigger>
+                      <div className="flex items-center gap-3">
+                        <Badge className={info.color}>{info.label}</Badge>
+                        <span className="text-sm text-muted-foreground font-normal">
+                          {detail.desc}
+                        </span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      {(() => {
+                        const docs = PHASE_DOCUMENT_MAP[step]
+                        const allDocs = docs ? [...docs.required, ...docs.optional] : []
+                        const reviewGuide = SIGNOFF_REVIEW_GUIDE[step]
+                        return (
+                          <div className="space-y-3 pl-2">
+                            {detail.actions.length > 0 && (
+                              <div>
+                                <p className="text-sm font-medium text-foreground mb-2">您需要做的事</p>
+                                <ul className="space-y-1 text-sm text-muted-foreground">
+                                  {detail.actions.map((a, i) => (
+                                    <li key={i} className="flex items-center gap-2">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                                      {a}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {allDocs.length > 0 && (
+                              <div className={detail.actions.length > 0 ? "border-t pt-3" : ""}>
+                                <p className="text-sm font-medium text-foreground mb-2">相關文件</p>
+                                <div className="space-y-1.5">
+                                  {allDocs.map((d) => {
+                                    const isRequired = docs!.required.includes(d)
+                                    return (
+                                      <div key={d} className="flex items-baseline gap-2 text-sm">
+                                        <span className="font-medium text-foreground shrink-0">
+                                          {DOCUMENT_TYPE_LABELS[d] ?? d}
+                                        </span>
+                                        {isRequired ? (
+                                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">必填</Badge>
+                                        ) : (
+                                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">選填</Badge>
+                                        )}
+                                        {DOC_DESCRIPTIONS[d] && (
+                                          <span className="text-muted-foreground text-xs">{DOC_DESCRIPTIONS[d]}</span>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {reviewGuide && (
+                              <div className="border-t pt-3">
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <button className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors">
+                                      <FileSearch className="h-4 w-4" />
+                                      需求者審核指引
+                                    </button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-md">
+                                    <DialogHeader>
+                                      <DialogTitle className="flex items-center gap-2">
+                                        <Badge className={info.color}>{info.label}</Badge>
+                                        審核指引
+                                      </DialogTitle>
+                                    </DialogHeader>
+                                    <div className="mt-2 space-y-3">
+                                      <p className="text-sm text-muted-foreground">{reviewGuide.summary}</p>
+                                      <div className="bg-muted/40 rounded-lg p-3">
+                                        <p className="text-xs font-medium text-foreground mb-2">審核重點</p>
+                                        <ul className="space-y-1.5">
+                                          {reviewGuide.points.map((point, pi) => (
+                                            <li key={pi} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                              <span className="h-1 w-1 rounded-full bg-blue-400 shrink-0 mt-1.5" />
+                                              {point}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              </div>
+                            )}
+                            {detail.note && (
+                              <p className="text-xs text-muted-foreground/70 border-t pt-2">※ {detail.note}</p>
+                            )}
+                            {detail.actions.length === 0 && allDocs.length === 0 && !reviewGuide && (
+                              <p className="text-sm text-muted-foreground">此階段為結案狀態，無需額外操作。</p>
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </AccordionContent>
+                  </AccordionItem>
                 )
               })}
-            </div>
-            <p className="text-xs text-muted-foreground">
+            </Accordion>
+            <p className="text-xs text-muted-foreground mt-4">
               ※ 需求在任何階段都可能被駁回。駁回後需重新建立新需求。
             </p>
           </CardContent>
