@@ -327,7 +327,10 @@ interface DemandDetail {
     id: string
     phase: string
     status: string
+    targetUserId: string | null
+    targetRole: string | null
     comment: string | null
+    requestComment: string | null
     requestedAt: string
     respondedAt: string | null
     requestedBy: { id: string; name: string }
@@ -469,9 +472,13 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const currentStepIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
 
-  // Pending sign-off for current phase
-  const pendingSignoff = demand.phaseSignoffs?.find(
-    (s) => s.status === "PENDING"
+  // Pending sign-off(s) for current phase — find the one targeting current user
+  const myPendingSignoff = demand.phaseSignoffs?.find(
+    (s) => s.status === "PENDING" && s.targetUserId === user?.id
+  ) || null
+  // Fallback for legacy signoffs (no targetUserId) — any pending one
+  const pendingSignoff = myPendingSignoff || demand.phaseSignoffs?.find(
+    (s) => s.status === "PENDING" && !s.targetUserId
   ) || null
 
   // Project start date
@@ -540,8 +547,20 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
-        {/* ── Sign-off Banner (only show if user's signoff role matches phase) ── */}
+        {/* ── Sign-off Banner (show if a pending signoff targets the current user) ── */}
         {pendingSignoff && (() => {
+          // If signoff has targetUserId, only show to that user
+          if (pendingSignoff.targetUserId) {
+            return pendingSignoff.targetUserId === user?.id ? (
+              <PhaseSignoffBanner
+                signoff={pendingSignoff}
+                demandId={demand.id}
+                token={token}
+                onComplete={fetchDemand}
+              />
+            ) : null
+          }
+          // Legacy signoff (no targetUserId): fall back to role-based check
           const allowedRoles = PHASE_SIGNOFF_ROLES[pendingSignoff.phase] || []
           const canSign = mySignoffRole && allowedRoles.includes(mySignoffRole)
           return canSign ? (
@@ -791,34 +810,38 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                         </div>
                       </div>
                     </div>
-                    {demand.contactPerson && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                          <span className="text-[11px] font-medium text-amber-600">
-                            {demand.contactPerson.name[0]}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium leading-tight">
-                            {demand.contactPerson.name}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">需求窗口</p>
-                        </div>
-                      </div>
-                    )}
-                    {demand.demandManager && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
-                          <span className="text-[11px] font-medium text-teal-600">
-                            {demand.demandManager.name[0]}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium leading-tight">
-                            {demand.demandManager.name}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">需求主管</p>
-                        </div>
+                    {(demand.contactPerson || demand.demandManager) && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {demand.contactPerson && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                              <span className="text-[11px] font-medium text-amber-600">
+                                {demand.contactPerson.name[0]}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium leading-tight truncate">
+                                {demand.contactPerson.name}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">需求窗口</p>
+                            </div>
+                          </div>
+                        )}
+                        {demand.demandManager && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
+                              <span className="text-[11px] font-medium text-teal-600">
+                                {demand.demandManager.name[0]}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium leading-tight truncate">
+                                {demand.demandManager.name}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">需求主管</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>

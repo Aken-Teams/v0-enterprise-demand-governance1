@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
       isActive: u.isActive,
       organizationId: u.organizationId,
       organizationName: u.organization?.name || null,
+      ldapUsername: u.ldapUsername,
+      ldapDomain: u.ldapDomain,
       accessCount: u._count.demandAccessGrants,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
@@ -63,21 +65,26 @@ export async function POST(request: NextRequest) {
   try {
     const auth = verifyRole(request, ["admin"])
     const body = await request.json()
-    const { name, email, password, role, organizationId } = body
+    const { name, email, password, role, organizationId, ldapUsername, ldapDomain } = body
 
-    if (!name || !email || !password || !role) {
-      return NextResponse.json({ error: "姓名、電子郵件、密碼、角色皆為必填" }, { status: 400 })
+    if (!name || !email || !role) {
+      return NextResponse.json({ error: "姓名、電子郵件、角色皆為必填" }, { status: 400 })
     }
 
     if (!VALID_ROLES.has(role)) {
       return NextResponse.json({ error: "無效的角色" }, { status: 400 })
     }
 
-    if (password.length < 6) {
+    // Password is required unless LDAP-bound
+    if (!ldapUsername && !password) {
+      return NextResponse.json({ error: "非 AD 帳號必須設定密碼" }, { status: 400 })
+    }
+
+    if (password && password.length < 6) {
       return NextResponse.json({ error: "密碼至少需要 6 個字元" }, { status: 400 })
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10)
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : ""
 
     // Optional: demand access + signoff role assignments from Step 2
     const assignments: { demandId: string; signoffRole?: string }[] = body.assignments ?? []
@@ -94,8 +101,10 @@ export async function POST(request: NextRequest) {
           name,
           email,
           password: hashedPassword,
-          role: role as "admin" | "delivery" | "subsidiary",
+          role: role as "admin" | "delivery" | "subsidiary" | "viewer",
           organizationId: organizationId || null,
+          ldapUsername: ldapUsername || null,
+          ldapDomain: ldapDomain || null,
         },
         include: { organization: { select: { name: true } } },
       })
@@ -148,7 +157,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const auth = verifyRole(request, ["admin"])
     const body = await request.json()
-    const { id, name, email, role, isActive, organizationId, password, adminPassword } = body
+    const { id, name, email, role, isActive, organizationId, password, adminPassword, ldapUsername, ldapDomain } = body
 
     if (!id) {
       return NextResponse.json({ error: "缺少使用者 ID" }, { status: 400 })
@@ -160,6 +169,8 @@ export async function PATCH(request: NextRequest) {
     if (role !== undefined) data.role = role
     if (isActive !== undefined) data.isActive = isActive
     if (organizationId !== undefined) data.organizationId = organizationId || null
+    if (ldapUsername !== undefined) data.ldapUsername = ldapUsername || null
+    if (ldapDomain !== undefined) data.ldapDomain = ldapDomain || null
 
     // Password reset — requires admin's own password for verification
     if (password && typeof password === "string" && password.length > 0) {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Network, X as XIcon, ChevronLeft, ChevronRight, Check, User, FolderOpen, ShieldCheck } from "lucide-react"
+import { Loader2, Network, X as XIcon, ChevronLeft, ChevronRight, Check, User, FolderOpen, ShieldCheck, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { LdapTreePicker, type LdapSelectedMember } from "@/components/admin/ldap-tree-picker"
@@ -33,6 +33,8 @@ interface UserRow {
   isActive: boolean
   organizationId: string | null
   organizationName: string | null
+  ldapUsername: string | null
+  ldapDomain: string | null
   accessCount: number
   createdAt: string
 }
@@ -92,6 +94,8 @@ export function UserFormDialog({
   const [form, setForm] = useState<BasicForm>(EMPTY_FORM)
   const [ldapPickerOpen, setLdapPickerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showAdminPassword, setShowAdminPassword] = useState(false)
 
   // Step 2 state
   const [assignments, setAssignments] = useState<DemandAssignment[]>([])
@@ -110,8 +114,8 @@ export function UserFormDialog({
           organizationId: initialUser.organizationId || "",
           isActive: initialUser.isActive,
           adminPassword: "",
-          ldapUsername: "",
-          ldapDomain: "",
+          ldapUsername: initialUser.ldapUsername || "",
+          ldapDomain: initialUser.ldapDomain || "",
           ldapDepartment: "",
         })
         // If initialStep=2 but role isn't subsidiary, fall back to step 1
@@ -123,6 +127,8 @@ export function UserFormDialog({
       }
       setAssignments([])
       setAllDemands([])
+      setShowPassword(false)
+      setShowAdminPassword(false)
     }
   }, [open, mode, initialUser, initialStep])
 
@@ -175,14 +181,20 @@ export function UserFormDialog({
     }
   }, [token, mode, initialUser])
 
+  const hasLdap = !!form.ldapUsername
   const goToStep2 = () => {
     // Validate Step 1 for create mode
     if (mode === "create") {
-      if (!form.name || !form.email || !form.password || !form.role) {
+      if (!form.name || !form.email || !form.role) {
         toast.error("請先填寫所有必填欄位")
         return
       }
-      if (form.password.length < 6) {
+      // Password required only when no LDAP binding
+      if (!hasLdap && !form.password) {
+        toast.error("非 AD 帳號必須設定密碼")
+        return
+      }
+      if (form.password && form.password.length < 6) {
         toast.error("密碼至少需要 6 個字元")
         return
       }
@@ -241,9 +253,11 @@ export function UserFormDialog({
           body: JSON.stringify({
             name: form.name,
             email: form.email,
-            password: form.password,
+            password: form.password || undefined,
             role: form.role,
             organizationId: form.organizationId || null,
+            ldapUsername: form.ldapUsername || null,
+            ldapDomain: form.ldapDomain || null,
             assignments: assignments.map((a) => ({
               demandId: a.demandId,
               signoffRole: a.signoffRole,
@@ -267,6 +281,8 @@ export function UserFormDialog({
           role: form.role,
           isActive: form.isActive,
           organizationId: form.organizationId || null,
+          ldapUsername: form.ldapUsername || null,
+          ldapDomain: form.ldapDomain || null,
         }
         if (form.password) {
           if (!form.adminPassword) {
@@ -322,7 +338,7 @@ export function UserFormDialog({
 
   const isStep1Valid =
     mode === "create"
-      ? !!(form.name && form.email && form.password && form.role && form.password.length >= 6)
+      ? !!(form.name && form.email && form.role && (hasLdap || (form.password && form.password.length >= 6)))
       : !!(form.name && form.email && form.role)
 
   // Only "subsidiary" role needs Step 2 (project + signoff role assignment)
@@ -490,41 +506,79 @@ export function UserFormDialog({
                 {mode === "create" ? (
                   <div className="space-y-2">
                     <Label>
-                      密碼 <span className="text-destructive">*</span>
+                      密碼 {!hasLdap && <span className="text-destructive">*</span>}
                     </Label>
-                    <Input
-                      type="password"
-                      placeholder="至少 6 個字元"
-                      value={form.password}
-                      onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder={hasLdap ? "留空則使用 AD 密碼登入" : "至少 6 個字元"}
+                        value={form.password}
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPassword(!showPassword)}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {hasLdap && (
+                      <p className="text-[11px] text-muted-foreground">
+                        已綁定 AD，可留空（使用 AD 密碼登入）或設定本地備用密碼
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <>
                     <div className="space-y-2">
                       <Label>新密碼</Label>
-                      <Input
-                        type="password"
-                        placeholder="留空表示不修改"
-                        value={form.password}
-                        onChange={(e) =>
-                          setForm({ ...form, password: e.target.value, adminPassword: "" })
-                        }
-                      />
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="留空表示不修改"
+                          value={form.password}
+                          onChange={(e) =>
+                            setForm({ ...form, password: e.target.value, adminPassword: "" })
+                          }
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowPassword(!showPassword)}
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                     {form.password && (
                       <div className="space-y-2">
                         <Label>
                           管理員密碼確認 <span className="text-destructive">*</span>
                         </Label>
-                        <Input
-                          type="password"
-                          placeholder="請輸入您自己的密碼以確認身份"
-                          value={form.adminPassword}
-                          onChange={(e) =>
-                            setForm({ ...form, adminPassword: e.target.value })
-                          }
-                        />
+                        <div className="relative">
+                          <Input
+                            type={showAdminPassword ? "text" : "password"}
+                            placeholder="請輸入您自己的密碼以確認身份"
+                            value={form.adminPassword}
+                            onChange={(e) =>
+                              setForm({ ...form, adminPassword: e.target.value })
+                            }
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setShowAdminPassword(!showAdminPassword)}
+                            tabIndex={-1}
+                          >
+                            {showAdminPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
                         <p className="text-xs text-muted-foreground">修改密碼需要驗證管理員身份</p>
                       </div>
                     )}
@@ -713,11 +767,15 @@ export function UserFormDialog({
                     } else {
                       // Validate then skip to confirmation
                       if (mode === "create") {
-                        if (!form.name || !form.email || !form.password || !form.role) {
+                        if (!form.name || !form.email || !form.role) {
                           toast.error("請先填寫所有必填欄位")
                           return
                         }
-                        if (form.password.length < 6) {
+                        if (!hasLdap && !form.password) {
+                          toast.error("非 AD 帳號必須設定密碼")
+                          return
+                        }
+                        if (form.password && form.password.length < 6) {
                           toast.error("密碼至少需要 6 個字元")
                           return
                         }

@@ -32,6 +32,8 @@ interface UserRow {
   isActive: boolean
   organizationId: string | null
   organizationName: string | null
+  ldapUsername: string | null
+  ldapDomain: string | null
   accessCount: number
   createdAt: string
 }

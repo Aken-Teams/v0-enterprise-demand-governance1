@@ -23,6 +23,8 @@ interface SignoffRecord {
   id: string
   phase: string
   status: string
+  targetUserId: string | null
+  targetRole: string | null
   comment: string | null
   requestComment?: string | null
   requestedAt: string
@@ -30,6 +32,12 @@ interface SignoffRecord {
   requestedBy: { id: string; name: string }
   respondedBy: { id: string; name: string } | null
   documents?: SignoffDocument[]
+}
+
+const TARGET_ROLE_LABELS: Record<string, string> = {
+  REQUESTER: "需求窗口",
+  MANAGER: "需求主管",
+  BOARD: "董事會",
 }
 
 interface SpAdjustment {
@@ -420,6 +428,11 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
                   <div className="flex-1 min-w-0 pb-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{phaseLabel}</span>
+                      {s.targetRole && (
+                        <Badge variant="outline" className="text-[10px] border-violet-200 text-violet-600 bg-violet-50">
+                          {TARGET_ROLE_LABELS[s.targetRole] || s.targetRole}
+                        </Badge>
+                      )}
                       {statusInfo && (
                         <Badge className={cn("text-[10px]", statusInfo.color)}>
                           {statusInfo.label}

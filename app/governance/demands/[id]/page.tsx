@@ -123,7 +123,10 @@ interface DemandDetail {
     id: string
     phase: string
     status: string
+    targetUserId: string | null
+    targetRole: string | null
     comment: string | null
+    requestComment: string | null
     requestedAt: string
     respondedAt: string | null
     requestedBy: { id: string; name: string }
@@ -589,10 +592,22 @@ export default function DemandDetailPage() {
   // When CLOSED, only admin retains modification rights
   const effectiveCanManage = canManage && (!isClosed || user?.role === "admin")
 
-  // Latest signoff for current phase (for StepNavigation)
-  const currentPhaseSignoff = demand.phaseSignoffs?.find(
-    (s) => s.phase === demand.status && (s.status === "PENDING" || s.status === "APPROVED" || s.status === "REJECTED")
-  ) || null
+  // Latest round of signoffs for current phase (ignore historical rounds)
+  const allCurrentSignoffs = demand.phaseSignoffs?.filter(
+    (s) => s.phase === demand.status && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status)
+  ) || []
+  const latestRoundTime = allCurrentSignoffs.length > 0
+    ? Math.max(...allCurrentSignoffs.map(s => new Date(s.requestedAt).getTime()))
+    : 0
+  const currentPhaseSignoffs = allCurrentSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestRoundTime)
+  const currentPhaseSignoff = currentPhaseSignoffs.length > 0
+    ? currentPhaseSignoffs.find(s => s.status === "PENDING")
+      || currentPhaseSignoffs.find(s => s.status === "REJECTED")
+      || currentPhaseSignoffs[0]
+    : null
+  const curHasPending = currentPhaseSignoffs.some(s => s.status === "PENDING")
+  const curAllApproved = currentPhaseSignoffs.length > 0 && currentPhaseSignoffs.every(s => s.status === "APPROVED")
+  const curHasRejected = currentPhaseSignoffs.some(s => s.status === "REJECTED")
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -754,12 +769,23 @@ export default function DemandDetailPage() {
                   const showWarning = (isPast || isCurrent) && (missingDocs.length > 0 || (isCurrent && needsAssignment))
                   const isComplete = (isPast || isCurrent) && missingDocs.length === 0 && requiredDocs.length > 0
 
-                  // Signoff status for this phase
+                  // Signoff status for this phase — only show latest round result
                   const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
                   const isSignoffPhase = signoffPhases.includes(step)
-                  const phaseSignoff = isSignoffPhase
-                    ? demand.phaseSignoffs?.find((s) => s.phase === step && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status))
-                    : null
+                  const allStepSignoffs = isSignoffPhase
+                    ? demand.phaseSignoffs?.filter((s) => s.phase === step && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status)) || []
+                    : []
+                  // Latest round = signoffs with the newest requestedAt (same batch)
+                  const latestTime = allStepSignoffs.length > 0
+                    ? Math.max(...allStepSignoffs.map(s => new Date(s.requestedAt).getTime()))
+                    : 0
+                  const stepSignoffs = allStepSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestTime)
+                  // Aggregate status of latest round
+                  const stepHasPending = stepSignoffs.some(s => s.status === "PENDING")
+                  const stepAllApproved = stepSignoffs.length > 0 && stepSignoffs.every(s => s.status === "APPROVED")
+                  const stepHasRejected = stepSignoffs.some(s => s.status === "REJECTED")
+                  const stepAllSkipped = stepSignoffs.length > 0 && stepSignoffs.every(s => s.status === "SKIPPED")
+                  const phaseSignoff = stepSignoffs.length > 0 ? stepSignoffs[0] : null
 
                   return (
                     <div key={step} className="flex items-center flex-1 last:flex-none">
@@ -793,16 +819,15 @@ export default function DemandDetailPage() {
                               {isSignoffPhase && phaseSignoff && (
                                 <span className={cn(
                                   "inline-flex items-center gap-0.5 text-[10px] font-medium rounded-full px-1.5 py-0",
-                                  phaseSignoff.status === "PENDING" && "text-amber-600 bg-amber-50",
-                                  phaseSignoff.status === "APPROVED" && "text-emerald-600 bg-emerald-50",
-                                  phaseSignoff.status === "REJECTED" && "text-red-600 bg-red-50",
-                                  phaseSignoff.status === "SKIPPED" && "text-gray-500 bg-gray-50",
+                                  stepHasPending && "text-amber-600 bg-amber-50",
+                                  stepAllApproved && "text-emerald-600 bg-emerald-50",
+                                  stepHasRejected && "text-red-600 bg-red-50",
+                                  stepAllSkipped && "text-gray-500 bg-gray-50",
                                 )}>
-                                  {phaseSignoff.status === "PENDING" && <Clock className="h-2.5 w-2.5" />}
-                                  {phaseSignoff.status === "APPROVED" && <Check className="h-2.5 w-2.5" />}
-                                  {phaseSignoff.status === "REJECTED" && <X className="h-2.5 w-2.5" />}
-                                  {phaseSignoff.status === "SKIPPED" && <SkipForward className="h-2.5 w-2.5" />}
-                                  {SIGNOFF_STATUS_MAP[phaseSignoff.status]?.label}
+                                  {stepHasPending && <><Clock className="h-2.5 w-2.5" />待確認</>}
+                                  {stepAllApproved && <><Check className="h-2.5 w-2.5" />已確認</>}
+                                  {stepHasRejected && <><X className="h-2.5 w-2.5" />已退回</>}
+                                  {stepAllSkipped && <><SkipForward className="h-2.5 w-2.5" />略過</>}
                                 </span>
                               )}
                               {isSignoffPhase && !phaseSignoff && (
@@ -881,22 +906,22 @@ export default function DemandDetailPage() {
                         {PHASE_DESCRIPTIONS[currentPhase]}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {hasSignoff && currentPhaseSignoff.status === "PENDING" && (
+                        {hasSignoff && curHasPending && (
                           <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200">
                             <ClipboardCheck className="h-3 w-3 mr-1" />
-                            等待需求者簽核確認中
+                            等待簽核確認中
                           </Badge>
                         )}
-                        {hasSignoff && currentPhaseSignoff.status === "APPROVED" && (
+                        {hasSignoff && curAllApproved && (
                           <Badge variant="outline" className="text-[11px] bg-emerald-50 text-emerald-700 border-emerald-200">
                             <Check className="h-3 w-3 mr-1" />
-                            需求者已簽核確認
+                            已簽核確認
                           </Badge>
                         )}
-                        {hasSignoff && currentPhaseSignoff.status === "REJECTED" && (
+                        {hasSignoff && curHasRejected && !curHasPending && (
                           <Badge variant="outline" className="text-[11px] bg-red-50 text-red-700 border-red-200">
                             <AlertCircle className="h-3 w-3 mr-1" />
-                            需求者已退回簽核
+                            簽核已退回
                           </Badge>
                         )}
                         {needsAssignment && (

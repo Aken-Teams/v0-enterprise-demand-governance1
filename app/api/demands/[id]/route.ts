@@ -259,7 +259,7 @@ export async function PATCH(
     const isForward = currentIdx >= 0 && targetIdx >= 0 && targetIdx > currentIdx
 
     if (isForward && signoffPhases.includes(demand.status)) {
-      const pendingSignoff = await prisma.phaseSignoff.findFirst({
+      const pendingSignoffs = await prisma.phaseSignoff.findMany({
         where: {
           demandId: id,
           phase: demand.status as DemandStatus,
@@ -268,14 +268,14 @@ export async function PATCH(
         orderBy: { requestedAt: "desc" },
       })
 
-      if (pendingSignoff) {
+      if (pendingSignoffs.length > 0) {
         if (!body.forceAdvance) {
           return NextResponse.json(
-            { error: "此階段需要需求者簽核確認後才能推進", signoffRequired: true, signoffId: pendingSignoff.id },
+            { error: "此階段需要所有簽核人員確認後才能推進", signoffRequired: true, pendingCount: pendingSignoffs.length },
             { status: 409 }
           )
         }
-        // Force advance: mark sign-off as SKIPPED inside transaction below
+        // Force advance: mark all pending sign-offs as SKIPPED inside transaction below
       }
     }
 
@@ -399,16 +399,37 @@ export async function PATCH(
         })
       }
 
-      // Auto-create sign-off for the target phase if required (forward only)
+      // Auto-create sign-off(s) for the target phase if required (forward only)
       if (isForward && signoffPhases.includes(status)) {
-        await tx.phaseSignoff.create({
-          data: {
-            demandId: id,
-            phase: status as DemandStatus,
-            status: "PENDING",
-            requestedById: auth.userId,
-          },
-        })
+        type SignoffTarget = { userId: string; role: string }
+        const targets: SignoffTarget[] = []
+
+        if (status === "PRD_REVIEW" || status === "ACCEPTANCE") {
+          if (demand.contactPersonId) targets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
+          if (demand.demandManagerId) targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
+        } else if (status === "SP_REVIEW") {
+          const boardAccess = await tx.demandAccess.findMany({
+            where: { demandId: id, signoffRole: "BOARD" },
+            select: { userId: true },
+          })
+          for (const a of boardAccess) targets.push({ userId: a.userId, role: "BOARD" })
+        }
+
+        // Fallback: create one generic signoff if no specific targets
+        if (targets.length === 0) targets.push({ userId: "", role: "" })
+
+        for (const t of targets) {
+          await tx.phaseSignoff.create({
+            data: {
+              demandId: id,
+              phase: status as DemandStatus,
+              status: "PENDING",
+              requestedById: auth.userId,
+              targetUserId: t.userId || null,
+              targetRole: t.role || null,
+            },
+          })
+        }
       }
 
       return d

@@ -36,9 +36,36 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+    // Authentication: LDAP-first for AD-bound users, then local bcrypt fallback
+    let authenticated = false
 
-    if (!isPasswordValid) {
+    if (user.ldapUsername) {
+      // Try LDAP auth first
+      try {
+        const adUrl = process.env.AD_URL
+        const adApi = process.env.AD_API
+        if (adUrl && adApi) {
+          const ldapRes = await fetch(`${adUrl}/api/v1/ldap/auth`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-API-Key": adApi },
+            body: JSON.stringify({ username: user.ldapUsername, password }),
+          })
+          const ldapData = await ldapRes.json().catch(() => ({}))
+          if (ldapRes.ok && ldapData.success) {
+            authenticated = true
+          }
+        }
+      } catch {
+        // LDAP unavailable — fall through to local password
+      }
+    }
+
+    // Fallback: local bcrypt password (if set)
+    if (!authenticated && user.password) {
+      authenticated = await bcrypt.compare(password, user.password)
+    }
+
+    if (!authenticated) {
       return NextResponse.json(
         { error: "帳號或密碼錯誤" },
         { status: 401 }

@@ -126,10 +126,12 @@ model User {
   id             String        @id @default(cuid())
   email          String        @unique
   name           String
-  password       String /// bcrypt hashed
+  password       String        @default("") /// bcrypt hashed (空 = 僅 LDAP 登入)
   role           UserRole
   avatarUrl      String?       @db.Text
   isActive       Boolean       @default(true)
+  ldapUsername    String?       /// AD 工號 (e.g. 90770)
+  ldapDomain     String?       /// AD domain (e.g. PANJIT)
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   createdAt      DateTime      @default(now())
@@ -419,6 +421,8 @@ model PhaseSignoff {
   demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   phase         DemandStatus
   status        SignoffStatus @default(PENDING)
+  targetUserId  String?       /// 指定簽核人 (null = 舊資料, 任何有權限的人可簽)
+  targetRole    String?       /// 簽核角色 (REQUESTER / MANAGER / BOARD)
   comment        String?       @db.Text
   requestComment String?       @db.Text @map("request_comment")
   requestedAt    DateTime      @default(now())

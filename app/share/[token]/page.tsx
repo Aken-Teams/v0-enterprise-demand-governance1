@@ -254,7 +254,10 @@ interface DemandDetail {
     id: string
     phase: string
     status: string
+    targetUserId: string | null
+    targetRole: string | null
     comment: string | null
+    requestComment: string | null
     requestedAt: string
     respondedAt: string | null
     requestedBy: { id: string; name: string }
@@ -913,34 +916,38 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                         </div>
                       </div>
                     </div>
-                    {demand.contactPerson && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                          <span className="text-[11px] font-medium text-amber-600">
-                            {demand.contactPerson.name[0]}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium leading-tight">
-                            {demand.contactPerson.name}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">需求窗口</p>
-                        </div>
-                      </div>
-                    )}
-                    {demand.demandManager && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
-                          <span className="text-[11px] font-medium text-teal-600">
-                            {demand.demandManager.name[0]}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium leading-tight">
-                            {demand.demandManager.name}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">需求主管</p>
-                        </div>
+                    {(demand.contactPerson || demand.demandManager) && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {demand.contactPerson && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                              <span className="text-[11px] font-medium text-amber-600">
+                                {demand.contactPerson.name[0]}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium leading-tight truncate">
+                                {demand.contactPerson.name}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">需求窗口</p>
+                            </div>
+                          </div>
+                        )}
+                        {demand.demandManager && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
+                              <span className="text-[11px] font-medium text-teal-600">
+                                {demand.demandManager.name[0]}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium leading-tight truncate">
+                                {demand.demandManager.name}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">需求主管</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>

@@ -87,18 +87,58 @@ export async function POST(
       return NextResponse.json({ error: "此階段已有待確認的簽核" }, { status: 409 })
     }
 
-    const signoff = await prisma.phaseSignoff.create({
-      data: {
-        demandId: id,
-        phase: phase as DemandStatus,
-        status: "PENDING",
-        requestedById: auth.userId,
-        requestComment: requestComment?.trim() || null,
-      },
-      include: {
-        requestedBy: { select: { id: true, name: true } },
+    // Determine target signers based on phase and demand assignments
+    const demandFull = await prisma.demand.findUnique({
+      where: { id },
+      select: {
+        contactPersonId: true,
+        demandManagerId: true,
+        contactPerson_: { select: { id: true, name: true } },
+        demandManager: { select: { id: true, name: true } },
       },
     })
+
+    type SignoffTarget = { userId: string; role: string }
+    const targets: SignoffTarget[] = []
+
+    if (phase === "PRD_REVIEW" || phase === "ACCEPTANCE") {
+      if (demandFull?.contactPersonId) targets.push({ userId: demandFull.contactPersonId, role: "REQUESTER" })
+      if (demandFull?.demandManagerId) targets.push({ userId: demandFull.demandManagerId, role: "MANAGER" })
+    } else if (phase === "SP_REVIEW") {
+      // Board members: find from DemandAccess with signoffRole=BOARD
+      const boardAccess = await prisma.demandAccess.findMany({
+        where: { demandId: id, signoffRole: "BOARD" },
+        select: { userId: true },
+      })
+      for (const a of boardAccess) {
+        targets.push({ userId: a.userId, role: "BOARD" })
+      }
+    }
+
+    // Fallback: if no specific targets found, create one generic signoff (backward compat)
+    if (targets.length === 0) {
+      targets.push({ userId: "", role: "" })
+    }
+
+    const signoffs = await prisma.$transaction(
+      targets.map((t) =>
+        prisma.phaseSignoff.create({
+          data: {
+            demandId: id,
+            phase: phase as DemandStatus,
+            status: "PENDING",
+            requestedById: auth.userId,
+            requestComment: requestComment?.trim() || null,
+            targetUserId: t.userId || null,
+            targetRole: t.role || null,
+          },
+          include: {
+            requestedBy: { select: { id: true, name: true } },
+          },
+        })
+      )
+    )
+    const signoff = signoffs[0]
 
     // Save attached files (if any)
     if (files.length > 0) {
@@ -126,17 +166,28 @@ export async function POST(
       }
     }
 
-    // Fire-and-forget: notify org subsidiary users + audit
+    // Fire-and-forget: notify target signers (or org subsidiary users as fallback) + audit
     const phaseLabel = STATUS_MAP[phase]?.label ?? phase
-    getOrgSubsidiaryUserIds(demand.organizationId).then((orgIds) => {
-      const recipients = orgIds.filter(uid => uid !== auth.userId)
+    const targetUserIds = targets.filter(t => t.userId).map(t => t.userId)
+    if (targetUserIds.length > 0) {
+      const recipients = targetUserIds.filter(uid => uid !== auth.userId)
       notifyUsers(recipients, {
         type: "SIGNOFF",
         title: "簽核請求",
         message: `需求 ${demand.demandNumber}「${demand.title}」在「${phaseLabel}」階段需要您的簽核確認。`,
         linkUrl: `/demands/${id}`,
       })
-    })
+    } else {
+      getOrgSubsidiaryUserIds(demand.organizationId).then((orgIds) => {
+        const recipients = orgIds.filter(uid => uid !== auth.userId)
+        notifyUsers(recipients, {
+          type: "SIGNOFF",
+          title: "簽核請求",
+          message: `需求 ${demand.demandNumber}「${demand.title}」在「${phaseLabel}」階段需要您的簽核確認。`,
+          linkUrl: `/demands/${id}`,
+        })
+      })
+    }
     logAudit({
       userId: auth.userId,
       action: "SIGNOFF_REQUEST",

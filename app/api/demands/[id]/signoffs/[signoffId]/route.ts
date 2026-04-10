@@ -80,27 +80,34 @@ export async function PATCH(
       return NextResponse.json({ error: "此簽核已處理" }, { status: 400 })
     }
 
-    // Auth check: admin bypasses; others must have matching DemandAccess signoff role
+    // Auth check: admin bypasses; others must be the designated target user
     if (auth.role !== "admin") {
-      const access = await prisma.demandAccess.findUnique({
-        where: { demandId_userId: { demandId: id, userId: auth.userId } },
-        select: { signoffRole: true },
-      })
-      const userRole = access?.signoffRole
-
-      const phase = signoff.phase as string
-      if (phase === "PRD_REVIEW" || phase === "ACCEPTANCE") {
-        if (userRole !== "REQUESTER" && userRole !== "MANAGER") {
-          return NextResponse.json({ error: "您無權進行此簽核操作（需為需求者或主管）" }, { status: 403 })
-        }
-      } else if (phase === "SP_REVIEW") {
-        if (userRole !== "BOARD") {
-          return NextResponse.json({ error: "您無權進行此簽核操作（需為董事會）" }, { status: 403 })
+      if (signoff.targetUserId) {
+        // New multi-signer: only the designated target can respond
+        if (auth.userId !== signoff.targetUserId) {
+          return NextResponse.json({ error: "此簽核指定由其他人員處理" }, { status: 403 })
         }
       } else {
-        // Fallback for other phases: require at least REQUESTER or MANAGER
-        if (userRole !== "REQUESTER" && userRole !== "MANAGER") {
-          return NextResponse.json({ error: "您無權進行此簽核操作" }, { status: 403 })
+        // Legacy signoff (no targetUserId): fall back to role-based check
+        const access = await prisma.demandAccess.findUnique({
+          where: { demandId_userId: { demandId: id, userId: auth.userId } },
+          select: { signoffRole: true },
+        })
+        const userRole = access?.signoffRole
+
+        const phase = signoff.phase as string
+        if (phase === "PRD_REVIEW" || phase === "ACCEPTANCE") {
+          if (userRole !== "REQUESTER" && userRole !== "MANAGER") {
+            return NextResponse.json({ error: "您無權進行此簽核操作（需為需求者或主管）" }, { status: 403 })
+          }
+        } else if (phase === "SP_REVIEW") {
+          if (userRole !== "BOARD") {
+            return NextResponse.json({ error: "您無權進行此簽核操作（需為董事會）" }, { status: 403 })
+          }
+        } else {
+          if (userRole !== "REQUESTER" && userRole !== "MANAGER") {
+            return NextResponse.json({ error: "您無權進行此簽核操作" }, { status: 403 })
+          }
         }
       }
     }
