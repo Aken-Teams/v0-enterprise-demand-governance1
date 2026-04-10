@@ -437,9 +437,23 @@ function LoginModal({
 export default function ShareDemandPage({ params }: { params: Promise<{ token: string }> }) {
   const { token: shareToken } = use(params)
 
-  // Auth state (page-local, not stored in localStorage)
-  const [authUser, setAuthUser] = useState<ShareUser | null>(null)
-  const [authToken, setAuthToken] = useState<string | null>(null)
+  // Auth state — persisted in localStorage per share token
+  const [authUser, setAuthUser] = useState<ShareUser | null>(() => {
+    if (typeof window === "undefined") return null
+    try {
+      const saved = localStorage.getItem(`share_auth_${shareToken}`)
+      if (saved) return JSON.parse(saved).user ?? null
+    } catch { /* ignore */ }
+    return null
+  })
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null
+    try {
+      const saved = localStorage.getItem(`share_auth_${shareToken}`)
+      if (saved) return JSON.parse(saved).token ?? null
+    } catch { /* ignore */ }
+    return null
+  })
   const [loginOpen, setLoginOpen] = useState(false)
 
   // Demand state
@@ -474,6 +488,11 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
       }
 
       if (!res.ok) {
+        // If stored token expired, auto-logout and retry with public API
+        if (res.status === 401 && authToken) {
+          handleLogout()
+          return
+        }
         const data = await res.json().catch(() => ({}))
         setError(data.error || "載入失敗")
         return
@@ -496,11 +515,17 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
   const handleLoginSuccess = (user: ShareUser, jwtToken: string) => {
     setAuthUser(user)
     setAuthToken(jwtToken)
+    try {
+      localStorage.setItem(`share_auth_${shareToken}`, JSON.stringify({ user, token: jwtToken }))
+    } catch { /* ignore */ }
   }
 
   const handleLogout = () => {
     setAuthUser(null)
     setAuthToken(null)
+    try {
+      localStorage.removeItem(`share_auth_${shareToken}`)
+    } catch { /* ignore */ }
   }
 
   // Document preview effects
