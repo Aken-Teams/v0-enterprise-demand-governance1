@@ -101,7 +101,6 @@ export function UserFormDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setStep(initialStep)
       if (mode === "edit" && initialUser) {
         setForm({
           name: initialUser.name,
@@ -115,8 +114,12 @@ export function UserFormDialog({
           ldapDomain: "",
           ldapDepartment: "",
         })
+        // If initialStep=2 but role isn't subsidiary, fall back to step 1
+        const roleNeedsStep2 = initialUser.role === "subsidiary"
+        setStep(initialStep === 2 && !roleNeedsStep2 ? 1 : initialStep)
       } else {
         setForm(EMPTY_FORM)
+        setStep(initialStep)
       }
       setAssignments([])
       setAllDemands([])
@@ -322,6 +325,15 @@ export function UserFormDialog({
       ? !!(form.name && form.email && form.password && form.role && form.password.length >= 6)
       : !!(form.name && form.email && form.role)
 
+  // Only "subsidiary" role needs Step 2 (project + signoff role assignment)
+  const needsStep2 = form.role === "subsidiary"
+  const visibleSteps = needsStep2
+    ? STEP_LABELS
+    : [STEP_LABELS[0], STEP_LABELS[2]] // 基本資訊 → 確認
+  const totalSteps = visibleSteps.length
+  // Map internal step number to display position
+  const displayStep = needsStep2 ? step : step === 3 ? 2 : 1
+
   const dialogTitle = mode === "create" ? "新增帳號" : `編輯帳號 — ${initialUser?.name || ""}`
   const dialogDescription =
     mode === "create" ? "建立新的系統使用者帳號" : "修改帳號資訊與專案審核角色"
@@ -337,13 +349,19 @@ export function UserFormDialog({
 
           {/* Step indicator with connecting line */}
           <div className="flex items-center px-1">
-            {STEP_LABELS.map((label, i) => {
-              const stepNum = i + 1
-              const isCurrent = step === stepNum
-              const isCompleted = step > stepNum
+            {visibleSteps.map((label, i) => {
+              // Map display index to internal step number
+              const internalStep = needsStep2
+                ? (i + 1) as 1 | 2 | 3
+                : (i === 0 ? 1 : 3) as 1 | 2 | 3
+              const isCurrent = step === internalStep
+              const isCompleted = step > internalStep
+              const displayNum = i + 1
+              const isDisabled =
+                (internalStep === 2 && !isStep1Valid) ||
+                (internalStep === 3 && step < (needsStep2 ? 2 : 1))
               return (
                 <div key={label} className="flex items-center">
-                  {/* Connecting line before step 2 */}
                   {i > 0 && (
                     <div
                       className={cn(
@@ -355,23 +373,21 @@ export function UserFormDialog({
                   <button
                     type="button"
                     onClick={() => {
-                      if (stepNum === 1) {
+                      if (internalStep === 1) {
                         setStep(1)
-                      } else if (stepNum === 2) {
+                      } else if (internalStep === 2) {
                         if (step === 1) goToStep2()
                         else setStep(2)
-                      } else if (stepNum === 3 && step >= 2) {
-                        setStep(3)
+                      } else if (internalStep === 3) {
+                        if (!needsStep2 && step === 1 && isStep1Valid) setStep(3)
+                        else if (step >= 2) setStep(3)
                       }
                     }}
-                    disabled={
-                      (stepNum === 2 && !isStep1Valid) ||
-                      (stepNum === 3 && step < 2)
-                    }
+                    disabled={isDisabled}
                     className={cn(
                       "flex items-center gap-1.5 text-sm transition-colors",
                       isCurrent ? "text-foreground font-medium" : "text-muted-foreground",
-                      (stepNum === 2 && !isStep1Valid) || (stepNum === 3 && step < 2)
+                      isDisabled
                         ? "opacity-40 cursor-not-allowed"
                         : "hover:text-foreground cursor-pointer",
                     )}
@@ -386,7 +402,7 @@ export function UserFormDialog({
                             : "bg-muted text-muted-foreground border-muted-foreground/30",
                       )}
                     >
-                      {isCompleted ? <Check className="h-3 w-3" /> : stepNum}
+                      {isCompleted ? <Check className="h-3 w-3" /> : displayNum}
                     </span>
                     {label}
                   </button>
@@ -662,47 +678,72 @@ export function UserFormDialog({
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t pt-3">
-            <div className="text-xs text-muted-foreground">
-              步驟 {step} / {STEP_LABELS.length}
+          {/* Footer: left button | center step | right button */}
+          <div className="grid grid-cols-3 items-center border-t pt-3">
+            {/* Left */}
+            <div className="flex justify-start">
+              {step === 1 ? (
+                <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                  取消
+                </Button>
+              ) : step === 2 ? (
+                <Button variant="outline" size="sm" onClick={() => setStep(1)}>
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  上一步
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setStep(needsStep2 ? 2 : 1)}>
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  上一步
+                </Button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
+            {/* Center */}
+            <div className="flex justify-center text-xs text-muted-foreground">
+              步驟 {displayStep} / {totalSteps}
+            </div>
+            {/* Right */}
+            <div className="flex justify-end">
               {step === 1 && (
-                <>
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>
-                    取消
-                  </Button>
-                  <Button onClick={goToStep2} disabled={!isStep1Valid}>
-                    下一步
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (needsStep2) {
+                      goToStep2()
+                    } else {
+                      // Validate then skip to confirmation
+                      if (mode === "create") {
+                        if (!form.name || !form.email || !form.password || !form.role) {
+                          toast.error("請先填寫所有必填欄位")
+                          return
+                        }
+                        if (form.password.length < 6) {
+                          toast.error("密碼至少需要 6 個字元")
+                          return
+                        }
+                      }
+                      setAssignments([])
+                      setStep(3)
+                    }
+                  }}
+                  disabled={!isStep1Valid}
+                >
+                  下一步
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
               )}
               {step === 2 && (
-                <>
-                  <Button variant="outline" onClick={() => setStep(1)}>
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    上一步
-                  </Button>
-                  <Button onClick={() => setStep(3)}>
-                    下一步
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </>
+                <Button size="sm" onClick={() => setStep(3)}>
+                  下一步
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
               )}
               {step === 3 && (
-                <>
-                  <Button variant="outline" onClick={() => setStep(2)}>
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    上一步
-                  </Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    <ShieldCheck className="h-4 w-4 mr-1" />
-                    {mode === "create" ? "確認建立" : "確認儲存"}
-                  </Button>
-                </>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  <ShieldCheck className="h-4 w-4 mr-1" />
+                  {mode === "create" ? "確認建立" : "確認儲存"}
+                </Button>
               )}
             </div>
           </div>

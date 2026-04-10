@@ -47,7 +47,6 @@ const ROLE_OPTIONS: { value: SignoffRole; label: string }[] = [
   { value: "OBSERVER", label: "觀察者" },
   { value: "REQUESTER", label: "需求者" },
   { value: "MANAGER", label: "主管" },
-  { value: "BOARD", label: "董事會" },
 ]
 
 interface DemandRoleAssignmentPanelProps {
@@ -192,7 +191,7 @@ export function DemandRoleAssignmentPanel({
                       value={role}
                       onValueChange={(v) => changeRole(d.id, v as SignoffRole)}
                     >
-                      <SelectTrigger className="w-[100px] h-8 text-xs shrink-0">
+                      <SelectTrigger className="w-[100px] h-8 text-xs shrink-0 bg-blue-50 border-blue-200 text-blue-700 font-medium">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

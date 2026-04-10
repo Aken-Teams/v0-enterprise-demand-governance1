@@ -27,6 +27,11 @@ export async function GET(
         creator: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true } },
         developer: { select: { id: true, name: true } },
+        contactPerson_: { select: { id: true, name: true } },
+        demandManager: { select: { id: true, name: true } },
+        accessGrants: {
+          select: { userId: true, signoffRole: true, user: { select: { id: true, name: true } } },
+        },
         documents: {
           orderBy: { createdAt: "desc" },
         },
@@ -84,7 +89,19 @@ export async function GET(
       mySignoffRole = access?.signoffRole ?? null
     }
 
-    return NextResponse.json({ demand, mySignoffRole })
+    // Restructure: rename contactPerson_ → contactPerson, extract accessUsers
+    const { contactPerson_: contactPersonUser, accessGrants, ...demandRest } = demand as typeof demand & { contactPerson_: { id: string; name: string } | null }
+    const accessUsers = (accessGrants ?? []).map((g: { userId: string; signoffRole: string; user: { id: string; name: string } }) => ({
+      id: g.user.id,
+      name: g.user.name,
+      signoffRole: g.signoffRole,
+    }))
+
+    return NextResponse.json({
+      demand: { ...demandRest, contactPerson: contactPersonUser },
+      mySignoffRole,
+      accessUsers,
+    })
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })
@@ -161,15 +178,15 @@ export async function PATCH(
       })
     }
 
-    // Handle contactPerson update — admin only
-    if (body.contactPerson !== undefined) {
+    // Handle contactPersonId / demandManagerId update — admin only
+    if (body.contactPersonId !== undefined || body.demandManagerId !== undefined) {
       if (auth.role !== "admin") {
         return NextResponse.json({ error: "僅管理者可編輯" }, { status: 403 })
       }
-      await prisma.demand.update({
-        where: { id },
-        data: { contactPerson: body.contactPerson || null },
-      })
+      const data: Record<string, string | null> = {}
+      if (body.contactPersonId !== undefined) data.contactPersonId = body.contactPersonId || null
+      if (body.demandManagerId !== undefined) data.demandManagerId = body.demandManagerId || null
+      await prisma.demand.update({ where: { id }, data })
       return NextResponse.json({ success: true })
     }
 

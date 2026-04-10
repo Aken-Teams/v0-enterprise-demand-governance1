@@ -61,7 +61,10 @@ interface DemandDetail {
   completedDate: string | null
   rejectReason: string | null
   adminNotes: string | null
-  contactPerson: string | null
+  contactPersonId: string | null
+  contactPerson: { id: string; name: string } | null
+  demandManagerId: string | null
+  demandManager: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
   organization: { id: string; name: string }
@@ -361,6 +364,7 @@ export default function DemandDetailPage() {
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string }[]>([])
+  const [accessUsers, setAccessUsers] = useState<{ id: string; name: string; signoffRole: string }[]>([])
   const [activeTab, setActiveTab] = useState("overview")
   const [docPhaseKey, setDocPhaseKey] = useState(0)
   const [spPlanOpen, setSpPlanOpen] = useState<boolean | null>(null)
@@ -414,7 +418,10 @@ export default function DemandDetailPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
-      if (res.ok) setDemand(data.demand)
+      if (res.ok) {
+        setDemand(data.demand)
+        if (data.accessUsers) setAccessUsers(data.accessUsers)
+      }
     } catch { /* ignore */ } finally {
       setLoading(false)
     }
@@ -481,7 +488,7 @@ export default function DemandDetailPage() {
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
   }, [user?.name])
 
-  const handleAssign = async (field: "managerId" | "developerId", userId: string) => {
+  const handleAssign = async (field: "managerId" | "developerId" | "contactPersonId" | "demandManagerId", userId: string) => {
     if (!token || !demand) return
     try {
       const res = await fetch(`/api/demands/${demand.id}`, {
@@ -1235,27 +1242,47 @@ export default function DemandDetailPage() {
                       <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">需求窗口</span>
                       {user?.role === "admin" && !isClosed ? (
-                        <input
-                          className="flex-1 h-9 text-xs rounded-md border border-input bg-transparent px-3 shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] placeholder:text-muted-foreground"
-                          placeholder="填寫需求者窗口..."
-                          defaultValue={demand.contactPerson || ""}
-                          onBlur={async (e) => {
-                            const v = e.target.value.trim()
-                            if (v === (demand.contactPerson || "")) return
-                            try {
-                              const res = await fetch(`/api/demands/${demand.id}`, {
-                                method: "PATCH",
-                                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                                body: JSON.stringify({ contactPerson: v }),
-                              })
-                              if (res.ok) fetchDemand()
-                            } catch { /* ignore */ }
-                          }}
-                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
-                        />
+                        <Select
+                          value={demand.contactPerson?.id || "none"}
+                          onValueChange={(v) => handleAssign("contactPersonId", v === "none" ? "" : v)}
+                        >
+                          <SelectTrigger className="h-7 text-xs flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">尚未指派</SelectItem>
+                            {accessUsers.filter((u) => u.signoffRole === "REQUESTER").map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : (
                         <span className={cn("font-medium", !demand.contactPerson && "text-muted-foreground")}>
-                          {demand.contactPerson || "未填寫"}
+                          {demand.contactPerson?.name || "尚未指派"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-16 shrink-0">需求主管</span>
+                      {user?.role === "admin" && !isClosed ? (
+                        <Select
+                          value={demand.demandManager?.id || "none"}
+                          onValueChange={(v) => handleAssign("demandManagerId", v === "none" ? "" : v)}
+                        >
+                          <SelectTrigger className="h-7 text-xs flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">尚未指派</SelectItem>
+                            {accessUsers.filter((u) => u.signoffRole === "MANAGER").map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className={cn("font-medium", !demand.demandManager && "text-muted-foreground")}>
+                          {demand.demandManager?.name || "尚未指派"}
                         </span>
                       )}
                     </div>

@@ -29,6 +29,8 @@ export async function GET(
         creator: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true } },
         developer: { select: { id: true, name: true } },
+        contactPerson_: { select: { id: true, name: true } },
+        demandManager: { select: { id: true, name: true } },
         documents: {
           orderBy: { createdAt: "desc" },
         },
@@ -66,9 +68,11 @@ export async function GET(
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
 
-    // Sanitize: remove confidential fields
+    // Sanitize: remove confidential fields and restructure contactPerson_
+    const { contactPerson_: contactPersonUser, ...demandFields } = demand as typeof demand & { contactPerson_: { id: string; name: string } | null }
     const sanitized = {
-      ...demand,
+      ...demandFields,
+      contactPerson: contactPersonUser,
       adminNotes: null,
       rejectReason: null,
       // Filter out internal comments

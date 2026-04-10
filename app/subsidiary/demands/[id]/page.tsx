@@ -268,7 +268,10 @@ interface DemandDetail {
   completedDate: string | null
   rejectReason: string | null
   adminNotes: string | null
-  contactPerson: string | null
+  contactPersonId: string | null
+  contactPerson: { id: string; name: string } | null
+  demandManagerId: string | null
+  demandManager: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
   organization: { id: string; name: string }
@@ -792,14 +795,29 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       <div className="flex items-center gap-2">
                         <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                           <span className="text-[11px] font-medium text-amber-600">
-                            {demand.contactPerson[0]}
+                            {demand.contactPerson.name[0]}
                           </span>
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium leading-tight">
-                            {demand.contactPerson}
+                            {demand.contactPerson.name}
                           </p>
                           <p className="text-[11px] text-muted-foreground">需求窗口</p>
+                        </div>
+                      </div>
+                    )}
+                    {demand.demandManager && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
+                          <span className="text-[11px] font-medium text-teal-600">
+                            {demand.demandManager.name[0]}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-tight">
+                            {demand.demandManager.name}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">需求主管</p>
                         </div>
                       </div>
                     )}
