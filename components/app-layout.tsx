@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ScrollText,
+  Network,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -80,6 +81,7 @@ const navSections: NavSection[] = [
     roles: ["admin"],
     items: [
       { title: "帳號管理", href: "/admin/users", icon: UserCog, roles: ["admin"] },
+      { title: "AD 組織架構", href: "/admin/ldap", icon: Network, roles: ["admin"] },
       { title: "SP 管理", href: "/admin/organizations", icon: Building2, roles: ["admin"] },
       { title: "操作紀錄", href: "/admin/audit-log", icon: ScrollText, roles: ["admin"] },
     ],

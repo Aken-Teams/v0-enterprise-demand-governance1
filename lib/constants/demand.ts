@@ -89,13 +89,27 @@ export const PHASE_ACTIONS: Record<string, string[]> = {
   CLOSED: [],
 }
 
-/** 需要需求者簽核的階段 */
+/** 需要簽核的階段（CLOSED 改為純通知，不再需要簽核） */
 export const SIGNOFF_REQUIRED_PHASES = [
   "PRD_REVIEW",
   "SP_REVIEW",
   "ACCEPTANCE",
-  "CLOSED",
 ] as const
+
+/** 每個簽核階段對應允許簽核的 DemandSignoffRole */
+export const PHASE_SIGNOFF_ROLES: Record<string, string[]> = {
+  PRD_REVIEW: ["REQUESTER", "MANAGER"],
+  SP_REVIEW: ["BOARD"],
+  ACCEPTANCE: ["REQUESTER", "MANAGER"],
+}
+
+/** 審核角色標籤 */
+export const SIGNOFF_ROLE_LABELS: Record<string, string> = {
+  REQUESTER: "需求者",
+  MANAGER: "主管",
+  BOARD: "董事會",
+  OBSERVER: "觀察者",
+}
 
 /** 簽核狀態標籤與顏色 */
 export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }> = {

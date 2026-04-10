@@ -79,15 +79,40 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: role as "admin" | "delivery" | "subsidiary",
-        organizationId: organizationId || null,
-      },
-      include: { organization: { select: { name: true } } },
+    // Optional: demand access + signoff role assignments from Step 2
+    const assignments: { demandId: string; signoffRole?: string }[] = body.assignments ?? []
+    const VALID_SIGNOFF_ROLES = ["REQUESTER", "MANAGER", "BOARD", "OBSERVER"]
+    for (const a of assignments) {
+      if (a.signoffRole && !VALID_SIGNOFF_ROLES.includes(a.signoffRole)) {
+        return NextResponse.json({ error: `不合法的審核角色: ${a.signoffRole}` }, { status: 400 })
+      }
+    }
+
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          role: role as "admin" | "delivery" | "subsidiary",
+          organizationId: organizationId || null,
+        },
+        include: { organization: { select: { name: true } } },
+      })
+
+      // Create demand access + signoff role assignments
+      if (assignments.length > 0) {
+        await tx.demandAccess.createMany({
+          data: assignments.map((a) => ({
+            demandId: a.demandId,
+            userId: created.id,
+            grantedBy: auth.userId,
+            signoffRole: (a.signoffRole || "OBSERVER") as "REQUESTER" | "MANAGER" | "BOARD" | "OBSERVER",
+          })),
+        })
+      }
+
+      return created
     })
 
     logAudit({
@@ -95,7 +120,13 @@ export async function POST(request: NextRequest) {
       action: "CREATE",
       entity: "USER",
       entityId: user.id,
-      details: { name, email, role, organization: user.organization?.name || null },
+      details: {
+        name,
+        email,
+        role,
+        organization: user.organization?.name || null,
+        assignmentCount: assignments.length,
+      },
       request,
     })
 

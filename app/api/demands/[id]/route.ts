@@ -74,7 +74,17 @@ export async function GET(
       return NextResponse.json({ error: "無權限查看此需求" }, { status: 403 })
     }
 
-    return NextResponse.json({ demand })
+    // Include current user's signoff role for this demand (for UI gating)
+    let mySignoffRole: string | null = null
+    if (auth.role !== "admin") {
+      const access = await prisma.demandAccess.findUnique({
+        where: { demandId_userId: { demandId: id, userId: auth.userId } },
+        select: { signoffRole: true },
+      })
+      mySignoffRole = access?.signoffRole ?? null
+    }
+
+    return NextResponse.json({ demand, mySignoffRole })
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })

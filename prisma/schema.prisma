@@ -93,6 +93,13 @@ enum SignoffStatus {
   SKIPPED   // 管理者略過
 }
 
+enum DemandSignoffRole {
+  REQUESTER   // 需求者
+  MANAGER     // 主管
+  BOARD       // 董事會（開案審核）
+  OBSERVER    // 觀察者（只能看）
+}
+
 // ============================================================
 // MODELS
 // ============================================================
@@ -383,15 +390,16 @@ model DemandSubTask {
   @@map("demand_sub_tasks")
 }
 
-/// 需求可見權限授權 (管理員手動授權)
+/// 需求可見權限 + 每專案審核角色 (管理員手動授權)
 model DemandAccess {
-  id        String   @id @default(cuid())
-  demandId  String
-  demand    Demand   @relation(fields: [demandId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy String /// 授權者 user ID
-  createdAt DateTime @default(now())
+  id          String            @id @default(cuid())
+  demandId    String
+  demand      Demand            @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy   String /// 授權者 user ID
+  signoffRole DemandSignoffRole @default(OBSERVER) /// 在該專案擔任的審核角色
+  createdAt   DateTime          @default(now())
 
   @@unique([demandId, userId])
   @@index([userId])

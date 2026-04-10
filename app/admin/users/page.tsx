@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,13 +16,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Users, Shield, UserCheck, Edit, Loader2, Search, ChevronLeft, ChevronRight, Plus, Trash2, Eye } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
+import { UserFormDialog } from "@/components/admin/user-form-dialog"
 
 interface UserRow {
   id: string
@@ -36,13 +34,6 @@ interface UserRow {
   organizationName: string | null
   accessCount: number
   createdAt: string
-}
-
-interface DemandOption {
-  id: string
-  demandNumber: string
-  title: string
-  status: string
 }
 
 interface Summary {
@@ -72,35 +63,22 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
 
 const PAGE_SIZE = 10
 
-const EMPTY_CREATE_FORM = { name: "", email: "", password: "", role: "", organizationId: "" }
-
 export default function UsersPage() {
   const { token } = useAuth()
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<UserRow[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [organizations, setOrganizations] = useState<OrgOption[]>([])
-  const [saving, setSaving] = useState(false)
 
-  // Edit dialog
-  const [editUser, setEditUser] = useState<UserRow | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", isActive: true, organizationId: "", password: "", adminPassword: "" })
-
-  // Create dialog
-  const [createOpen, setCreateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM)
+  // UserFormDialog state
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create")
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogUser, setDialogUser] = useState<UserRow | null>(null)
+  const [dialogStep, setDialogStep] = useState<1 | 2>(1)
 
   // Delete dialog
   const [deleteUser, setDeleteUser] = useState<UserRow | null>(null)
   const [deleting, setDeleting] = useState(false)
-
-  // Permission dialog
-  const [permUser, setPermUser] = useState<UserRow | null>(null)
-  const [permDemandIds, setPermDemandIds] = useState<Set<string>>(new Set())
-  const [permAllDemands, setPermAllDemands] = useState<DemandOption[]>([])
-  const [permLoading, setPermLoading] = useState(false)
-  const [permSaving, setPermSaving] = useState(false)
-  const [permSearch, setPermSearch] = useState("")
 
   // Filter & pagination
   const [searchQuery, setSearchQuery] = useState("")
@@ -132,7 +110,7 @@ export default function UsersPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Filtered & grouped users
+  // Filtered & sorted users
   const filtered = useMemo(() => {
     let list = users
     if (searchQuery) {
@@ -148,7 +126,6 @@ export default function UsersPage() {
     if (filterStatus !== "all") {
       list = list.filter((u) => (filterStatus === "active" ? u.isActive : !u.isActive))
     }
-    // Sort: group by organization, then main accounts (accessCount=0) before sub-accounts
     return [...list].sort((a, b) => {
       const orgA = a.organizationName || "\uffff"
       const orgB = b.organizationName || "\uffff"
@@ -157,105 +134,31 @@ export default function UsersPage() {
     })
   }, [users, searchQuery, filterRole, filterOrg, filterStatus])
 
-  // Reset page when filters change
   useEffect(() => { setPage(1) }, [searchQuery, filterRole, filterOrg, filterStatus])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  // --- Create ---
+  // --- Dialog openers ---
   const openCreate = () => {
-    setCreateForm(EMPTY_CREATE_FORM)
-    setCreateOpen(true)
+    setDialogMode("create")
+    setDialogUser(null)
+    setDialogStep(1)
+    setDialogOpen(true)
   }
 
-  const handleCreate = async () => {
-    if (!token) return
-    if (!createForm.name || !createForm.email || !createForm.password || !createForm.role) {
-      toast.error("請填寫所有必填欄位")
-      return
-    }
-    setSaving(true)
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: createForm.name,
-          email: createForm.email,
-          password: createForm.password,
-          role: createForm.role,
-          organizationId: createForm.organizationId || null,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success("帳號建立成功")
-        setCreateOpen(false)
-        fetchData()
-      } else {
-        toast.error(data.error || "建立失敗")
-      }
-    } catch {
-      toast.error("網路錯誤")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // --- Edit ---
   const openEdit = (user: UserRow) => {
-    setEditUser(user)
-    setEditForm({
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isActive: user.isActive,
-      organizationId: user.organizationId || "",
-      password: "",
-      adminPassword: "",
-    })
+    setDialogMode("edit")
+    setDialogUser(user)
+    setDialogStep(1)
+    setDialogOpen(true)
   }
 
-  const handleSave = async () => {
-    if (!token || !editUser) return
-    setSaving(true)
-    try {
-      const payload: Record<string, unknown> = {
-        id: editUser.id,
-        name: editForm.name,
-        email: editForm.email,
-        role: editForm.role,
-        isActive: editForm.isActive,
-        organizationId: editForm.organizationId || null,
-      }
-      if (editForm.password) {
-        if (!editForm.adminPassword) {
-          toast.error("修改密碼需要輸入您的管理員密碼確認")
-          setSaving(false)
-          return
-        }
-        payload.password = editForm.password
-        payload.adminPassword = editForm.adminPassword
-      }
-      const res = await fetch("/api/admin/users", {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success("帳號更新成功")
-        setEditUser(null)
-        fetchData()
-      } else {
-        toast.error(data.error || "更新失敗")
-      }
-    } catch {
-      toast.error("網路錯誤")
-    } finally {
-      setSaving(false)
-    }
+  const openPermission = (user: UserRow) => {
+    setDialogMode("edit")
+    setDialogUser(user)
+    setDialogStep(2)
+    setDialogOpen(true)
   }
 
   // --- Delete ---
@@ -282,91 +185,6 @@ export default function UsersPage() {
       setDeleting(false)
     }
   }
-
-  // --- Permission ---
-  const openPermission = async (user: UserRow) => {
-    setPermUser(user)
-    setPermLoading(true)
-    setPermSearch("")
-    try {
-      // Fetch current whitelist and available demands in parallel
-      const params = new URLSearchParams()
-      if (user.role === "subsidiary" && user.organizationId) {
-        params.set("organizationId", user.organizationId)
-      } else if (user.role === "delivery") {
-        params.set("developerId", user.id)
-      }
-
-      const [accessRes, demandsRes] = await Promise.all([
-        fetch(`/api/admin/users/${user.id}/access`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`/api/demands?${params}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ])
-
-      const accessData = await accessRes.json()
-      const demandsData = await demandsRes.json()
-
-      if (accessRes.ok) {
-        setPermDemandIds(new Set(accessData.demandIds as string[]))
-      }
-      if (demandsRes.ok) {
-        setPermAllDemands(
-          demandsData.demands.map((d: { id: string; demandNumber: string; title: string; status: string }) => ({
-            id: d.id,
-            demandNumber: d.demandNumber,
-            title: d.title,
-            status: d.status,
-          }))
-        )
-      }
-    } catch {
-      toast.error("載入權限資料失敗")
-    } finally {
-      setPermLoading(false)
-    }
-  }
-
-  const handlePermSave = async () => {
-    if (!token || !permUser) return
-    setPermSaving(true)
-    try {
-      const res = await fetch(`/api/admin/users/${permUser.id}/access`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ demandIds: Array.from(permDemandIds) }),
-      })
-      if (res.ok) {
-        toast.success(permDemandIds.size > 0 ? `已限制為 ${permDemandIds.size} 筆可見需求` : "已解除限制，可看全部需求")
-        setPermUser(null)
-        fetchData()
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "儲存失敗")
-      }
-    } catch {
-      toast.error("網路錯誤")
-    } finally {
-      setPermSaving(false)
-    }
-  }
-
-  const togglePermDemand = (demandId: string) => {
-    setPermDemandIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(demandId)) next.delete(demandId)
-      else next.add(demandId)
-      return next
-    })
-  }
-
-  const filteredPermDemands = permAllDemands.filter((d) => {
-    if (!permSearch) return true
-    const q = permSearch.toLowerCase()
-    return d.demandNumber.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
-  })
 
   if (loading) {
     return (
@@ -544,7 +362,7 @@ export default function UsersPage() {
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         {user.role !== "admin" ? (
-                          <Button variant="ghost" size="sm" onClick={() => openPermission(user)} title="權限設定">
+                          <Button variant="ghost" size="sm" onClick={() => openPermission(user)} title="專案與審核角色">
                             <Eye className="h-4 w-4" />
                           </Button>
                         ) : (
@@ -594,134 +412,17 @@ export default function UsersPage() {
           </CardContent>
         </Card>
 
-        {/* ===== Create Dialog ===== */}
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>新增帳號</DialogTitle>
-              <DialogDescription>建立新的系統使用者帳號</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>姓名 <span className="text-destructive">*</span></Label>
-                <Input placeholder="使用者姓名" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>電子郵件 <span className="text-destructive">*</span></Label>
-                <Input type="email" placeholder="user@example.com" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>密碼 <span className="text-destructive">*</span></Label>
-                <Input type="password" placeholder="至少 6 個字元" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>角色 <span className="text-destructive">*</span></Label>
-                <Select value={createForm.role} onValueChange={(v) => setCreateForm({ ...createForm, role: v })}>
-                  <SelectTrigger><SelectValue placeholder="選擇角色" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">管理員</SelectItem>
-                    <SelectItem value="delivery">交付團隊</SelectItem>
-                    <SelectItem value="subsidiary">需求單位</SelectItem>
-                    <SelectItem value="viewer">董事會</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>組織</Label>
-                <Select value={createForm.organizationId || "none"} onValueChange={(v) => setCreateForm({ ...createForm, organizationId: v === "none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="選擇組織（選填）" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">無</SelectItem>
-                    {organizations.map((org) => (
-                      <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
-                <Button onClick={handleCreate} disabled={saving}>
-                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  建立
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* ===== Edit Dialog ===== */}
-        <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>編輯使用者</DialogTitle>
-              <DialogDescription>修改「{editUser?.name}」的帳號資訊</DialogDescription>
-            </DialogHeader>
-            {editUser && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>姓名</Label>
-                  <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>電子郵件</Label>
-                  <Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>新密碼</Label>
-                  <Input type="password" placeholder="留空表示不修改" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value, adminPassword: "" })} />
-                </div>
-                {editForm.password && (
-                  <div className="space-y-2">
-                    <Label>管理員密碼確認 <span className="text-destructive">*</span></Label>
-                    <Input type="password" placeholder="請輸入您自己的密碼以確認身份" value={editForm.adminPassword} onChange={(e) => setEditForm({ ...editForm, adminPassword: e.target.value })} />
-                    <p className="text-xs text-muted-foreground">修改密碼需要驗證管理員身份</p>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label>角色</Label>
-                  <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">管理員</SelectItem>
-                      <SelectItem value="delivery">交付團隊</SelectItem>
-                      <SelectItem value="subsidiary">需求單位</SelectItem>
-                      <SelectItem value="viewer">董事會</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>組織</Label>
-                  <Select value={editForm.organizationId || "none"} onValueChange={(v) => setEditForm({ ...editForm, organizationId: v === "none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="選擇組織" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">無</SelectItem>
-                      {organizations.map((org) => (
-                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>狀態</Label>
-                  <Select value={editForm.isActive ? "active" : "inactive"} onValueChange={(v) => setEditForm({ ...editForm, isActive: v === "active" })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">啟用</SelectItem>
-                      <SelectItem value="inactive">停用</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setEditUser(null)}>取消</Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    儲存
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* ===== User Form Dialog (Create / Edit / Permission) ===== */}
+        <UserFormDialog
+          mode={dialogMode}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          initialUser={dialogUser}
+          initialStep={dialogStep}
+          organizations={organizations}
+          token={token}
+          onSaved={fetchData}
+        />
 
         {/* ===== Delete Confirm Dialog ===== */}
         <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
@@ -747,101 +448,6 @@ export default function UsersPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-        {/* ===== Permission Dialog ===== */}
-        <Dialog open={!!permUser} onOpenChange={(open) => !open && setPermUser(null)}>
-          <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Eye className="h-4 w-4" />
-                設定「{permUser?.name}」的可見需求
-              </DialogTitle>
-              <DialogDescription>
-                勾選此帳號可以查看的需求。未勾選任何需求表示可看到全部（角色預設權限）。
-              </DialogDescription>
-            </DialogHeader>
-            {permLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="flex-1 overflow-hidden flex flex-col gap-3">
-                {/* Status bar */}
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {permDemandIds.size > 0
-                      ? <span>已選 <span className="font-medium text-foreground">{permDemandIds.size}</span> / {permAllDemands.length} 筆</span>
-                      : <span className="text-emerald-600">未限制（可看全部）</span>
-                    }
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-7"
-                      onClick={() => setPermDemandIds(new Set(permAllDemands.map((d) => d.id)))}
-                    >
-                      全選
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-7"
-                      onClick={() => setPermDemandIds(new Set())}
-                    >
-                      清除
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="搜尋需求編號或標題..."
-                    className="pl-9 h-8 text-sm"
-                    value={permSearch}
-                    onChange={(e) => setPermSearch(e.target.value)}
-                  />
-                </div>
-
-                {/* Demand list */}
-                <div className="flex-1 overflow-y-auto border rounded-md divide-y max-h-[340px]">
-                  {filteredPermDemands.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">無可選需求</p>
-                  ) : (
-                    filteredPermDemands.map((d) => (
-                      <label
-                        key={d.id}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={permDemandIds.has(d.id)}
-                          onCheckedChange={() => togglePermDemand(d.id)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-muted-foreground shrink-0">{d.demandNumber}</span>
-                            <span className="text-sm truncate">{d.title}</span>
-                          </div>
-                        </div>
-                      </label>
-                    ))
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button variant="outline" onClick={() => setPermUser(null)}>取消</Button>
-                  <Button onClick={handlePermSave} disabled={permSaving}>
-                    {permSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    儲存
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
     </AppLayout>
   )

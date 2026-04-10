@@ -33,7 +33,7 @@ import {
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, PHASE_SIGNOFF_ROLES } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { SignoffHistory } from "@/components/demand/signoff-history"
@@ -348,6 +348,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const { id } = use(params)
   const { token, user } = useAuth()
   const [demand, setDemand] = useState<DemandDetail | null>(null)
+  const [mySignoffRole, setMySignoffRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -373,6 +374,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
       }
       const data = await res.json()
       setDemand(data.demand)
+      setMySignoffRole(data.mySignoffRole ?? null)
     } catch {
       setError("網路錯誤，無法載入需求資料")
     } finally {
@@ -535,15 +537,19 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
-        {/* ── Sign-off Banner ── */}
-        {pendingSignoff && (
-          <PhaseSignoffBanner
-            signoff={pendingSignoff}
-            demandId={demand.id}
-            token={token}
-            onComplete={fetchDemand}
-          />
-        )}
+        {/* ── Sign-off Banner (only show if user's signoff role matches phase) ── */}
+        {pendingSignoff && (() => {
+          const allowedRoles = PHASE_SIGNOFF_ROLES[pendingSignoff.phase] || []
+          const canSign = mySignoffRole && allowedRoles.includes(mySignoffRole)
+          return canSign ? (
+            <PhaseSignoffBanner
+              signoff={pendingSignoff}
+              demandId={demand.id}
+              token={token}
+              onComplete={fetchDemand}
+            />
+          ) : null
+        })()}
 
         {/* ── Tabs ── */}
         <Tabs defaultValue="overview" className="w-full">
