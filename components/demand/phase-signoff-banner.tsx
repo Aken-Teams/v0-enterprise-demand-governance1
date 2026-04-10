@@ -19,6 +19,8 @@ interface PhaseSignoffBannerProps {
   demandId: string
   token: string | null
   onComplete: () => void
+  /** Render only the action buttons without the outer wrapper/header */
+  inline?: boolean
 }
 
 function formatFileSize(bytes: number) {
@@ -32,6 +34,7 @@ export function PhaseSignoffBanner({
   demandId,
   token,
   onComplete,
+  inline,
 }: PhaseSignoffBannerProps) {
   const [comment, setComment] = useState("")
   const [loading, setLoading] = useState(false)
@@ -94,11 +97,11 @@ export function PhaseSignoffBanner({
 
   if (signoff.status !== "PENDING") return null
 
-  return (
-    <div className="rounded-lg border-2 border-amber-300 bg-amber-50/80 p-4">
-      <div className="flex items-start gap-3">
-        <ClipboardCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
+  // Shared action buttons content (used by both modes)
+  const actionContent = (
+    <div className={inline ? "" : "flex-1 min-w-0"}>
+      {!inline && (
+        <>
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-medium text-amber-900 text-sm">
               「{phaseLabel}」階段等待您的確認
@@ -110,9 +113,11 @@ export function PhaseSignoffBanner({
           <p className="text-xs text-amber-700/70 mt-1">
             由 {signoff.requestedBy.name} 於 {new Date(signoff.requestedAt).toLocaleDateString("zh-TW")} 發起簽核請求
           </p>
+        </>
+      )}
 
-          {!showForm ? (
-            <div className="flex items-center gap-2 mt-3">
+      {!showForm ? (
+            <div className={cn("flex items-center gap-2 justify-end", !inline && "mt-3")}>
               <Button
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -134,7 +139,7 @@ export function PhaseSignoffBanner({
               </Button>
             </div>
           ) : (
-            <div className="mt-3 space-y-2">
+            <div className={cn("space-y-2", !inline && "mt-3")}>
               <Textarea
                 placeholder="請說明退回原因（必填）..."
                 value={comment}
@@ -208,8 +213,17 @@ export function PhaseSignoffBanner({
             </div>
           )}
 
-          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-        </div>
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+    </div>
+  )
+
+  if (inline) return actionContent
+
+  return (
+    <div className="rounded-lg border-2 border-amber-300 bg-amber-50/80 p-4">
+      <div className="flex items-start gap-3">
+        <ClipboardCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+        {actionContent}
       </div>
     </div>
   )

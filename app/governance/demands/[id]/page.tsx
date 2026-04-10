@@ -28,6 +28,7 @@ import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { SignoffHistory } from "@/components/demand/signoff-history"
+import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 import ReactMarkdown from "react-markdown"
@@ -944,6 +945,23 @@ export default function DemandDetailPage() {
               )
             })()}
 
+            {/* Board member signoff — inside card */}
+            {!canManage && user?.role === "viewer" && (() => {
+              const mySignoff = currentPhaseSignoffs.find(
+                (s) => s.status === "PENDING" && s.targetUserId === user?.id
+              )
+              return mySignoff ? (
+                <div className="mt-3">
+                  <PhaseSignoffBanner
+                    signoff={mySignoff}
+                    demandId={demand.id}
+                    token={token}
+                    onComplete={fetchDemand}
+                  />
+                </div>
+              ) : null
+            })()}
+
             {isRejected && (
               <div className="mt-3 text-center">
                 <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">已駁回</Badge>
@@ -971,6 +989,7 @@ export default function DemandDetailPage() {
               />
               </div>
             )}
+
           </CardContent>
         </Card>
 

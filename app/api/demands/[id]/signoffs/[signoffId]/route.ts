@@ -89,24 +89,25 @@ export async function PATCH(
         }
       } else {
         // Legacy signoff (no targetUserId): fall back to role-based check
-        const access = await prisma.demandAccess.findUnique({
-          where: { demandId_userId: { demandId: id, userId: auth.userId } },
-          select: { signoffRole: true },
-        })
-        const userRole = access?.signoffRole
-
         const phase = signoff.phase as string
-        if (phase === "PRD_REVIEW" || phase === "ACCEPTANCE") {
-          if (userRole !== "REQUESTER" && userRole !== "MANAGER") {
-            return NextResponse.json({ error: "您無權進行此簽核操作（需為需求者或主管）" }, { status: 403 })
-          }
-        } else if (phase === "SP_REVIEW") {
-          if (userRole !== "BOARD") {
+
+        if (phase === "SP_REVIEW") {
+          // Board members are a global role
+          const currentUser = await prisma.user.findUnique({
+            where: { id: auth.userId },
+            select: { isBoardMember: true },
+          })
+          if (!currentUser?.isBoardMember) {
             return NextResponse.json({ error: "您無權進行此簽核操作（需為董事會）" }, { status: 403 })
           }
         } else {
+          const access = await prisma.demandAccess.findUnique({
+            where: { demandId_userId: { demandId: id, userId: auth.userId } },
+            select: { signoffRole: true },
+          })
+          const userRole = access?.signoffRole
           if (userRole !== "REQUESTER" && userRole !== "MANAGER") {
-            return NextResponse.json({ error: "您無權進行此簽核操作" }, { status: 403 })
+            return NextResponse.json({ error: "您無權進行此簽核操作（需為需求者或主管）" }, { status: 403 })
           }
         }
       }

@@ -105,13 +105,13 @@ export async function POST(
       if (demandFull?.contactPersonId) targets.push({ userId: demandFull.contactPersonId, role: "REQUESTER" })
       if (demandFull?.demandManagerId) targets.push({ userId: demandFull.demandManagerId, role: "MANAGER" })
     } else if (phase === "SP_REVIEW") {
-      // Board members: find from DemandAccess with signoffRole=BOARD
-      const boardAccess = await prisma.demandAccess.findMany({
-        where: { demandId: id, signoffRole: "BOARD" },
-        select: { userId: true },
+      // Board members are a global role (User.isBoardMember)
+      const boardMembers = await prisma.user.findMany({
+        where: { isBoardMember: true, isActive: true },
+        select: { id: true },
       })
-      for (const a of boardAccess) {
-        targets.push({ userId: a.userId, role: "BOARD" })
+      for (const u of boardMembers) {
+        targets.push({ userId: u.id, role: "BOARD" })
       }
     }
 

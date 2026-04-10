@@ -83,11 +83,107 @@ export async function GET(
     // Include current user's signoff role for this demand (for UI gating)
     let mySignoffRole: string | null = null
     if (auth.role !== "admin") {
+      // Check demand-specific DemandAccess first
       const access = await prisma.demandAccess.findUnique({
         where: { demandId_userId: { demandId: id, userId: auth.userId } },
         select: { signoffRole: true },
       })
       mySignoffRole = access?.signoffRole ?? null
+
+      // Board members always get BOARD role for SP_REVIEW phases
+      if (!mySignoffRole) {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: auth.userId },
+          select: { isBoardMember: true },
+        })
+        if (currentUser?.isBoardMember) {
+          mySignoffRole = "BOARD"
+        }
+      }
+    }
+
+    // Self-healing: if demand is in a signoff-required phase, ensure all required
+    // targets have PENDING signoffs. Handles demands advanced before auto-create was
+    // deployed, and board members added after the demand entered SP_REVIEW.
+    const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
+    if (signoffPhases.includes(demand.status)) {
+      const phase = demand.status as DemandStatus
+      const currentPhaseSignoffs = demand.phaseSignoffs.filter((s) => s.phase === demand.status)
+
+      // Determine if the phase is actively waiting (has PENDING or has no signoffs at all)
+      const hasPending = currentPhaseSignoffs.some((s) => s.status === "PENDING")
+      const noSignoffs = currentPhaseSignoffs.length === 0
+
+      if (hasPending || noSignoffs) {
+        // Determine required targets for this phase
+        type Target = { userId: string; role: string }
+        const requiredTargets: Target[] = []
+        if (phase === "PRD_REVIEW" || phase === "ACCEPTANCE") {
+          if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
+          if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
+        } else if (phase === "SP_REVIEW") {
+          // Board members are global: find all active users with isBoardMember flag
+          const boardMembers = await prisma.user.findMany({
+            where: { isBoardMember: true, isActive: true },
+            select: { id: true },
+          })
+          for (const u of boardMembers) requiredTargets.push({ userId: u.id, role: "BOARD" })
+        }
+
+        // Find latest round timestamp
+        const latestTime = currentPhaseSignoffs.length > 0
+          ? Math.max(...currentPhaseSignoffs.map((s) => new Date(s.requestedAt).getTime()))
+          : 0
+
+        // Create missing signoffs
+        const roundTime = latestTime > 0 ? new Date(latestTime) : new Date()
+        const requestedById = demand.managerId || demand.creatorId || auth.userId
+        let needRefetch = false
+
+        for (const t of requiredTargets) {
+          const exists = currentPhaseSignoffs.some((s) => s.targetUserId === t.userId)
+          if (!exists) {
+            await prisma.phaseSignoff.create({
+              data: {
+                demandId: id,
+                phase,
+                status: "PENDING",
+                requestedById,
+                targetUserId: t.userId,
+                targetRole: t.role,
+                requestedAt: roundTime,
+              },
+            })
+            needRefetch = true
+          }
+        }
+
+        // Re-fetch phaseSignoffs if we created any
+        if (needRefetch) {
+          const refreshed = await prisma.phaseSignoff.findMany({
+            where: { demandId: id },
+            include: {
+              requestedBy: { select: { id: true, name: true } },
+              respondedBy: { select: { id: true, name: true } },
+              targetUser: { select: { id: true, name: true } },
+              documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true } },
+            },
+            orderBy: { requestedAt: "desc" },
+          })
+          ;(demand as Record<string, unknown>).phaseSignoffs = refreshed
+
+          // Re-check mySignoffRole: board members get BOARD role for SP_REVIEW
+          if (!mySignoffRole && auth.role !== "admin") {
+            const currentUser = await prisma.user.findUnique({
+              where: { id: auth.userId },
+              select: { isBoardMember: true },
+            })
+            if (currentUser?.isBoardMember) {
+              mySignoffRole = "BOARD"
+            }
+          }
+        }
+      }
     }
 
     // Restructure: rename contactPerson_ → contactPerson, extract accessUsers
@@ -269,11 +365,12 @@ export async function PATCH(
         if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
         if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
       } else if (phase === "SP_REVIEW") {
-        const boardAccess = await prisma.demandAccess.findMany({
-          where: { demandId: id, signoffRole: "BOARD" },
-          select: { userId: true },
+        // Board members are global (User.isBoardMember)
+        const boardMembers = await prisma.user.findMany({
+          where: { isBoardMember: true, isActive: true },
+          select: { id: true },
         })
-        for (const a of boardAccess) requiredTargets.push({ userId: a.userId, role: "BOARD" })
+        for (const u of boardMembers) requiredTargets.push({ userId: u.id, role: "BOARD" })
       }
 
       // Find existing signoffs for current phase (latest round only)
@@ -453,16 +550,19 @@ export async function PATCH(
           if (demand.contactPersonId) targets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
           if (demand.demandManagerId) targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
         } else if (status === "SP_REVIEW") {
-          const boardAccess = await tx.demandAccess.findMany({
-            where: { demandId: id, signoffRole: "BOARD" },
-            select: { userId: true },
+          // Board members are global (User.isBoardMember)
+          const boardMembers = await tx.user.findMany({
+            where: { isBoardMember: true, isActive: true },
+            select: { id: true },
           })
-          for (const a of boardAccess) targets.push({ userId: a.userId, role: "BOARD" })
+          for (const u of boardMembers) targets.push({ userId: u.id, role: "BOARD" })
         }
 
         // Fallback: create one generic signoff if no specific targets
         if (targets.length === 0) targets.push({ userId: "", role: "" })
 
+        // Use the same requestedAt for all signoffs so they form a single round
+        const advanceRoundTime = now
         for (const t of targets) {
           await tx.phaseSignoff.create({
             data: {
@@ -472,6 +572,7 @@ export async function PATCH(
               requestedById: auth.userId,
               targetUserId: t.userId || null,
               targetRole: t.role || null,
+              requestedAt: advanceRoundTime,
             },
           })
         }

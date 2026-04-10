@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
           organizationId: organizationId || null,
           ldapUsername: ldapUsername || null,
           ldapDomain: ldapDomain || null,
+          isBoardMember: role === "viewer",
         },
         include: { organization: { select: { name: true } } },
       })
@@ -166,7 +167,10 @@ export async function PATCH(request: NextRequest) {
     const data: Record<string, unknown> = {}
     if (name !== undefined) data.name = name
     if (email !== undefined) data.email = email
-    if (role !== undefined) data.role = role
+    if (role !== undefined) {
+      data.role = role
+      data.isBoardMember = role === "viewer"
+    }
     if (isActive !== undefined) data.isActive = isActive
     if (organizationId !== undefined) data.organizationId = organizationId || null
     if (ldapUsername !== undefined) data.ldapUsername = ldapUsername || null
