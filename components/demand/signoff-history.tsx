@@ -10,7 +10,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
-import { Check, Clock, X, SkipForward, FileIcon, Download, Filter, Paperclip, Trash2, Loader2, Pencil, MessageSquare, Coins } from "lucide-react"
+import {
+  Check, Clock, X, SkipForward, FileIcon, Download, Filter,
+  Paperclip, Trash2, Loader2, Pencil, MessageSquare, Coins,
+  ChevronDown, User,
+} from "lucide-react"
 
 interface SignoffDocument {
   id: string
@@ -24,6 +28,7 @@ interface SignoffRecord {
   phase: string
   status: string
   targetUserId: string | null
+  targetUser: { id: string; name: string } | null
   targetRole: string | null
   comment: string | null
   requestComment?: string | null
@@ -69,6 +74,13 @@ const STATUS_ICON_COLORS: Record<string, string> = {
   SKIPPED: "text-gray-400",
 }
 
+const STATUS_BG: Record<string, string> = {
+  PENDING: "bg-amber-50 border-amber-200",
+  APPROVED: "bg-emerald-50 border-emerald-200",
+  REJECTED: "bg-red-50 border-red-200",
+  SKIPPED: "bg-gray-50 border-gray-200",
+}
+
 function fmtDate(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
@@ -89,6 +101,21 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
   const [filterPhase, setFilterPhase] = useState<FilterPhase>("all")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [page, setPage] = useState(1)
+
+  // Expand/collapse: default expand first item (latest)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    const first = signoffs[0]?.id
+    return first ? new Set([first]) : new Set()
+  })
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   // Document deletion
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
@@ -277,6 +304,13 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
     }
   }
 
+  // Helper: get display name for the reviewer/target
+  const getReviewerLabel = (s: SignoffRecord) => {
+    if (s.targetUser) return s.targetUser.name
+    if (s.respondedBy) return s.respondedBy.name
+    return null
+  }
+
   if (signoffs.length === 0) {
     return (
       <p className="text-xs text-muted-foreground/40 text-center py-4">尚無簽核紀錄</p>
@@ -284,7 +318,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -342,20 +376,20 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
         >
           全部
         </button>
-        {statuses.map((s) => {
-          const info = SIGNOFF_STATUS_MAP[s]
+        {statuses.map((st) => {
+          const info = SIGNOFF_STATUS_MAP[st]
           return (
             <button
-              key={s}
+              key={st}
               className={cn(
                 "text-xs px-2 py-0.5 rounded-full border transition-colors",
-                filterStatus === s
+                filterStatus === st
                   ? "bg-foreground text-background border-foreground"
                   : "text-muted-foreground border-border hover:border-foreground/30"
               )}
-              onClick={() => setFilterStatus(filterStatus === s ? "all" : s)}
+              onClick={() => setFilterStatus(filterStatus === st ? "all" : st)}
             >
-              {info?.label || s}
+              {info?.label || st}
             </button>
           )
         })}
@@ -376,11 +410,11 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
         </p>
       ) : (
         <>
-          <div className="space-y-5">
+          <div className="space-y-2">
             {(() => {
               const showSpAdj = spAdjustment && (filterPhase === "all" || filterPhase === "CLOSED")
               let spAdjRendered = false
-              return paged.map((s) => {
+              return paged.map((s, idx) => {
               const Icon = STATUS_ICONS[s.status] || Clock
               const iconColor = STATUS_ICON_COLORS[s.status] || "text-gray-400"
               const statusInfo = SIGNOFF_STATUS_MAP[s.status]
@@ -389,6 +423,8 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
               const isUploading = uploadingId === s.id
               const isPending = s.status === "PENDING"
               const canAddDocs = canUpload && isPending
+              const isExpanded = expandedIds.has(s.id)
+              const reviewerName = getReviewerLabel(s)
 
               const renderSpAdj = showSpAdj && s.phase === "CLOSED" && !spAdjRendered
               if (renderSpAdj) spAdjRendered = true
@@ -396,277 +432,315 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
               return (
                 <React.Fragment key={s.id}>
                 {renderSpAdj && (
-                  <div className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 bg-orange-50">
-                        <Coins className="h-3.5 w-3.5 text-orange-500" />
-                      </div>
-                      <div className="w-px flex-1 bg-border/60 mt-1" />
-                    </div>
-                    <div className="flex-1 min-w-0 pb-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[11px] border-orange-300 text-orange-700 bg-white">SP 調整</Badge>
-                        <span className="text-sm font-medium">{spAdjustment!.oldSp} → {spAdjustment!.newSp} SP</span>
-                      </div>
-                      {spAdjustment!.reason && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{spAdjustment!.reason}</p>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50/50 px-3 py-2">
+                    <Coins className="h-4 w-4 text-orange-500 shrink-0" />
+                    <Badge variant="outline" className="text-[11px] border-orange-300 text-orange-700 bg-white">SP 調整</Badge>
+                    <span className="text-sm font-medium">{spAdjustment!.oldSp} → {spAdjustment!.newSp} SP</span>
+                    {spAdjustment!.reason && (
+                      <span className="text-xs text-muted-foreground ml-2">{spAdjustment!.reason}</span>
+                    )}
                   </div>
                 )}
-                <div className="flex gap-3">
-                  <div className="flex flex-col items-center">
-                    <div className={cn("h-6 w-6 rounded-full flex items-center justify-center shrink-0",
-                      s.status === "PENDING" ? "bg-amber-50" :
-                      s.status === "APPROVED" ? "bg-emerald-50" :
-                      s.status === "REJECTED" ? "bg-red-50" : "bg-gray-50"
+
+                {/* Signoff card */}
+                <div className={cn(
+                  "rounded-lg border transition-colors",
+                  isExpanded ? STATUS_BG[s.status] || "bg-white border-border" : "bg-white border-border/60 hover:border-border"
+                )}>
+                  {/* Collapsed header — always visible, clickable */}
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
+                    onClick={() => toggleExpand(s.id)}
+                  >
+                    {/* Status icon */}
+                    <div className={cn(
+                      "h-6 w-6 rounded-full flex items-center justify-center shrink-0",
+                      s.status === "PENDING" ? "bg-amber-100" :
+                      s.status === "APPROVED" ? "bg-emerald-100" :
+                      s.status === "REJECTED" ? "bg-red-100" : "bg-gray-100"
                     )}>
                       <Icon className={cn("h-3.5 w-3.5", iconColor)} />
                     </div>
-                    <div className="w-px flex-1 bg-border/60 mt-1" />
-                  </div>
-                  <div className="flex-1 min-w-0 pb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{phaseLabel}</span>
-                      {s.targetRole && (
-                        <Badge variant="outline" className="text-[10px] border-violet-200 text-violet-600 bg-violet-50">
-                          {TARGET_ROLE_LABELS[s.targetRole] || s.targetRole}
-                        </Badge>
-                      )}
-                      {statusInfo && (
-                        <Badge className={cn("text-[10px]", statusInfo.color)}>
-                          {statusInfo.label}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {s.requestedBy.name} 發起 · {fmtDate(s.requestedAt)}
-                      {s.respondedBy && s.respondedAt && (
-                        <> · {s.respondedBy.name} 回應 · {fmtDate(s.respondedAt)}</>
-                      )}
-                    </p>
-                    {/* 1. 提出說明 (manager's notes when submitting this round) */}
-                    {canEditRequestComment && editingCommentId === s.id ? (
-                      <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2.5">
-                        <textarea
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-                          rows={3}
-                          placeholder="說明已調整的內容..."
-                          value={editCommentText}
-                          onChange={(e) => setEditCommentText(e.target.value)}
-                        />
-                        <div className="flex items-center gap-2 justify-end">
-                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditComment} disabled={editCommentLoading}>
-                            取消
-                          </Button>
-                          <Button size="sm" className="h-6 text-xs" onClick={() => saveComment(s.id)} disabled={editCommentLoading}>
-                            {editCommentLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                            儲存
-                          </Button>
-                        </div>
-                      </div>
-                    ) : s.requestComment ? (
-                      <div className="mt-1.5 group/rc">
-                        <span className="text-[11px] font-medium text-blue-500/70">提出說明</span>
-                        <div className="flex items-start gap-1.5 mt-0.5">
-                          <MessageSquare className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
-                          <p className="text-sm text-blue-600/80 whitespace-pre-line flex-1">{s.requestComment}</p>
-                          {canEditRequestComment && (
-                            <div className="flex items-center gap-1 opacity-0 group-hover/rc:opacity-100 transition-opacity">
-                              <button
-                                className="text-muted-foreground/50 hover:text-muted-foreground"
-                                onClick={() => startEditComment(s.id, s.requestComment ?? null)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </button>
-                              <button
-                                className="text-muted-foreground/50 hover:text-red-500"
-                                onClick={() => setConfirmDeleteCommentId(s.id)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : canEditRequestComment ? (
-                      <button
-                        className="mt-1.5 flex items-center gap-1 text-xs text-blue-400/60 hover:text-blue-500 transition-colors"
-                        onClick={() => startEditComment(s.id, null)}
-                      >
-                        <MessageSquare className="h-3 w-3" />
-                        補充提出說明
-                      </button>
-                    ) : null}
 
-                    {/* 2. 審核回應 (reviewer's comment/rejection reason) */}
-                    {canEditComment && editingResponseId === s.id ? (
-                      <div className="mt-2 space-y-2 rounded-lg border border-gray-200 bg-muted/20 p-2.5">
-                        <textarea
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-                          rows={3}
-                          placeholder="填寫審核回應..."
-                          value={editResponseText}
-                          onChange={(e) => setEditResponseText(e.target.value)}
-                        />
-                        <div className="flex items-center gap-2 justify-end">
-                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditResponse} disabled={editResponseLoading}>
-                            取消
-                          </Button>
-                          <Button size="sm" className="h-6 text-xs" onClick={() => saveResponse(s.id)} disabled={editResponseLoading}>
-                            {editResponseLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                            儲存
-                          </Button>
-                        </div>
-                      </div>
-                    ) : s.comment ? (
-                      <div className="mt-1.5 group/resp">
-                        <span className="text-[11px] font-medium text-muted-foreground/70">審核回應</span>
-                        <div className="flex items-start gap-1.5 mt-0.5">
-                          <p className="text-sm text-muted-foreground/80 whitespace-pre-line bg-muted/30 rounded px-2.5 py-2 flex-1">
-                            {s.comment}
-                          </p>
-                          {canEditComment && (
-                            <div className="flex items-center gap-1 opacity-0 group-hover/resp:opacity-100 transition-opacity pt-2">
-                              <button
-                                className="text-muted-foreground/50 hover:text-muted-foreground"
-                                onClick={() => startEditResponse(s.id, s.comment)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </button>
-                              <button
-                                className="text-muted-foreground/50 hover:text-red-500"
-                                onClick={() => setConfirmDeleteResponseId(s.id)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : canEditComment ? (
-                      <button
-                        className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                        onClick={() => startEditResponse(s.id, null)}
-                      >
-                        <MessageSquare className="h-3 w-3" />
-                        補充審核回應
-                      </button>
-                    ) : s.comment ? (
-                      <div className="mt-1.5">
-                        <span className="text-[11px] font-medium text-muted-foreground/70">審核回應</span>
-                        <p className="text-sm text-muted-foreground/80 mt-0.5 whitespace-pre-line bg-muted/30 rounded px-2.5 py-2">
-                          {s.comment}
-                        </p>
-                      </div>
-                    ) : null}
+                    {/* Phase + role badge */}
+                    <span className="text-sm font-medium shrink-0">{phaseLabel}</span>
+                    {s.targetRole && (
+                      <Badge variant="outline" className="text-[10px] border-violet-200 text-violet-600 bg-violet-50 shrink-0">
+                        {TARGET_ROLE_LABELS[s.targetRole] || s.targetRole}
+                      </Badge>
+                    )}
 
-                    {/* 3. 附件 (documents) */}
-                    {docs.length > 0 && (
-                      <div className="mt-1.5 space-y-1">
-                        {docs.map((doc) => (
-                          <div key={doc.id} className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2 text-sm group/doc">
-                            <a
-                              href={doc.fileUrl!}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 flex-1 min-w-0 hover:text-foreground transition-colors"
-                            >
-                              <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="truncate flex-1 text-muted-foreground group-hover/doc:text-foreground">
-                                {doc.fileName}
-                              </span>
-                              {doc.fileSize != null && (
-                                <span className="text-muted-foreground/60 shrink-0">
-                                  {formatFileSize(doc.fileSize)}
-                                </span>
-                              )}
-                              <Download className="h-3 w-3 text-muted-foreground/40 group-hover/doc:text-foreground shrink-0" />
-                            </a>
-                            {canUpload && isPending && (
-                              <button
-                                className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground/50 hover:text-red-500 shrink-0"
-                                onClick={() => { setConfirmDeleteDocId(doc.id); setConfirmDeleteDocName(doc.fileName) }}
-                                disabled={deletingDocId === doc.id}
-                              >
-                                {deletingDocId === doc.id
-                                  ? <Loader2 className="h-3 w-3 animate-spin" />
-                                  : <Trash2 className="h-3 w-3" />}
-                              </button>
-                            )}
+                    {/* Status badge */}
+                    {statusInfo && (
+                      <Badge className={cn("text-[10px] shrink-0", statusInfo.color)}>
+                        {statusInfo.label}
+                      </Badge>
+                    )}
+
+                    {/* Reviewer / target user name */}
+                    {reviewerName && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                        <User className="h-3 w-3" />
+                        {reviewerName}
+                      </span>
+                    )}
+
+                    {/* Spacer + date + chevron */}
+                    <span className="flex-1" />
+                    <span className="text-[11px] text-muted-foreground/60 shrink-0">
+                      {fmtDate(s.requestedAt)}
+                    </span>
+                    <ChevronDown className={cn(
+                      "h-4 w-4 text-muted-foreground/40 shrink-0 transition-transform",
+                      isExpanded && "rotate-180"
+                    )} />
+                  </button>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div className="px-3 pb-3 pt-0 space-y-2.5 border-t border-border/40 mx-3">
+                      {/* Meta info */}
+                      <div className="pt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span>
+                          發起：<span className="font-medium text-foreground">{s.requestedBy.name}</span>
+                          <span className="ml-1 text-muted-foreground/60">{fmtDate(s.requestedAt)}</span>
+                        </span>
+                        {s.targetUser && (
+                          <span>
+                            指定審核：<span className="font-medium text-foreground">{s.targetUser.name}</span>
+                          </span>
+                        )}
+                        {s.respondedBy && s.respondedAt && (
+                          <span>
+                            回應：<span className="font-medium text-foreground">{s.respondedBy.name}</span>
+                            <span className="ml-1 text-muted-foreground/60">{fmtDate(s.respondedAt)}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 1. 提出說明 */}
+                      {canEditRequestComment && editingCommentId === s.id ? (
+                        <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2.5">
+                          <textarea
+                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                            rows={3}
+                            placeholder="說明已調整的內容..."
+                            value={editCommentText}
+                            onChange={(e) => setEditCommentText(e.target.value)}
+                          />
+                          <div className="flex items-center gap-2 justify-end">
+                            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditComment} disabled={editCommentLoading}>
+                              取消
+                            </Button>
+                            <Button size="sm" className="h-6 text-xs" onClick={() => saveComment(s.id)} disabled={editCommentLoading}>
+                              {editCommentLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                              儲存
+                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {canAddDocs && !isUploading && (
-                      <button
-                        className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                        onClick={() => startUpload(s.id)}
-                      >
-                        <Paperclip className="h-3 w-3" />
-                        補充文件
-                      </button>
-                    )}
-
-                    {isUploading && (
-                      <div className="mt-2 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
-                        {pendingFiles.length > 0 && (
-                          <div className="space-y-1">
-                            {pendingFiles.map((f, i) => (
-                              <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded bg-white border border-border/60 px-2 py-1 text-xs">
-                                <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-                                <span className="truncate flex-1">{f.name}</span>
-                                <span className="text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                        </div>
+                      ) : s.requestComment ? (
+                        <div className="group/rc">
+                          <span className="text-[11px] font-medium text-blue-500/70">提出說明</span>
+                          <div className="flex items-start gap-1.5 mt-0.5">
+                            <MessageSquare className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
+                            <p className="text-sm text-blue-600/80 whitespace-pre-line flex-1">{s.requestComment}</p>
+                            {canEditRequestComment && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover/rc:opacity-100 transition-opacity">
                                 <button
-                                  type="button"
-                                  className="text-red-400 hover:text-red-600 shrink-0"
-                                  onClick={() => removeFile(i)}
+                                  className="text-muted-foreground/50 hover:text-muted-foreground"
+                                  onClick={() => startEditComment(s.id, s.requestComment ?? null)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                  className="text-muted-foreground/50 hover:text-red-500"
+                                  onClick={() => setConfirmDeleteCommentId(s.id)}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </button>
                               </div>
-                            ))}
+                            )}
                           </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploadLoading}
-                          >
-                            <Paperclip className="h-3 w-3 mr-1" />
-                            選擇檔案
-                          </Button>
-                          <div className="flex items-center gap-2 ml-auto">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs text-muted-foreground"
-                              onClick={cancelUpload}
-                              disabled={uploadLoading}
-                            >
+                        </div>
+                      ) : canEditRequestComment ? (
+                        <button
+                          className="flex items-center gap-1 text-xs text-blue-400/60 hover:text-blue-500 transition-colors"
+                          onClick={() => startEditComment(s.id, null)}
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          補充提出說明
+                        </button>
+                      ) : null}
+
+                      {/* 2. 審核回應 */}
+                      {canEditComment && editingResponseId === s.id ? (
+                        <div className="space-y-2 rounded-lg border border-gray-200 bg-muted/20 p-2.5">
+                          <textarea
+                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                            rows={3}
+                            placeholder="填寫審核回應..."
+                            value={editResponseText}
+                            onChange={(e) => setEditResponseText(e.target.value)}
+                          />
+                          <div className="flex items-center gap-2 justify-end">
+                            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={cancelEditResponse} disabled={editResponseLoading}>
                               取消
                             </Button>
-                            <Button
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={submitFiles}
-                              disabled={uploadLoading || pendingFiles.length === 0}
-                            >
-                              {uploadLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                              上傳
+                            <Button size="sm" className="h-6 text-xs" onClick={() => saveResponse(s.id)} disabled={editResponseLoading}>
+                              {editResponseLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                              儲存
                             </Button>
                           </div>
                         </div>
-                        {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
-                      </div>
-                    )}
+                      ) : s.comment ? (
+                        <div className="group/resp">
+                          <span className="text-[11px] font-medium text-muted-foreground/70">審核回應</span>
+                          <div className="flex items-start gap-1.5 mt-0.5">
+                            <p className="text-sm text-muted-foreground/80 whitespace-pre-line bg-muted/30 rounded px-2.5 py-2 flex-1">
+                              {s.comment}
+                            </p>
+                            {canEditComment && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover/resp:opacity-100 transition-opacity pt-2">
+                                <button
+                                  className="text-muted-foreground/50 hover:text-muted-foreground"
+                                  onClick={() => startEditResponse(s.id, s.comment)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                  className="text-muted-foreground/50 hover:text-red-500"
+                                  onClick={() => setConfirmDeleteResponseId(s.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : canEditComment ? (
+                        <button
+                          className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                          onClick={() => startEditResponse(s.id, null)}
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          補充審核回應
+                        </button>
+                      ) : s.comment ? (
+                        <div>
+                          <span className="text-[11px] font-medium text-muted-foreground/70">審核回應</span>
+                          <p className="text-sm text-muted-foreground/80 mt-0.5 whitespace-pre-line bg-muted/30 rounded px-2.5 py-2">
+                            {s.comment}
+                          </p>
+                        </div>
+                      ) : null}
 
-                  </div>
+                      {/* 3. 附件 */}
+                      {docs.length > 0 && (
+                        <div className="space-y-1">
+                          {docs.map((doc) => (
+                            <div key={doc.id} className="flex items-center gap-2 rounded-md bg-white/80 border border-border/40 px-3 py-2 text-sm group/doc">
+                              <a
+                                href={doc.fileUrl!}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 flex-1 min-w-0 hover:text-foreground transition-colors"
+                              >
+                                <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span className="truncate flex-1 text-muted-foreground group-hover/doc:text-foreground">
+                                  {doc.fileName}
+                                </span>
+                                {doc.fileSize != null && (
+                                  <span className="text-muted-foreground/60 shrink-0">
+                                    {formatFileSize(doc.fileSize)}
+                                  </span>
+                                )}
+                                <Download className="h-3 w-3 text-muted-foreground/40 group-hover/doc:text-foreground shrink-0" />
+                              </a>
+                              {canUpload && isPending && (
+                                <button
+                                  className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground/50 hover:text-red-500 shrink-0"
+                                  onClick={() => { setConfirmDeleteDocId(doc.id); setConfirmDeleteDocName(doc.fileName) }}
+                                  disabled={deletingDocId === doc.id}
+                                >
+                                  {deletingDocId === doc.id
+                                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                                    : <Trash2 className="h-3 w-3" />}
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {canAddDocs && !isUploading && (
+                        <button
+                          className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                          onClick={() => startUpload(s.id)}
+                        >
+                          <Paperclip className="h-3 w-3" />
+                          補充文件
+                        </button>
+                      )}
+
+                      {isUploading && (
+                        <div className="space-y-2 rounded-lg border border-border/60 bg-white/50 p-2.5">
+                          {pendingFiles.length > 0 && (
+                            <div className="space-y-1">
+                              {pendingFiles.map((f, i) => (
+                                <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded bg-white border border-border/60 px-2 py-1 text-xs">
+                                  <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate flex-1">{f.name}</span>
+                                  <span className="text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                                  <button
+                                    type="button"
+                                    className="text-red-400 hover:text-red-600 shrink-0"
+                                    onClick={() => removeFile(i)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={uploadLoading}
+                            >
+                              <Paperclip className="h-3 w-3 mr-1" />
+                              選擇檔案
+                            </Button>
+                            <div className="flex items-center gap-2 ml-auto">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs text-muted-foreground"
+                                onClick={cancelUpload}
+                                disabled={uploadLoading}
+                              >
+                                取消
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={submitFiles}
+                                disabled={uploadLoading || pendingFiles.length === 0}
+                              >
+                                {uploadLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                上傳
+                              </Button>
+                            </div>
+                          </div>
+                          {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 </React.Fragment>
               )

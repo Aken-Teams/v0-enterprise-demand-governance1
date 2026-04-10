@@ -124,6 +124,7 @@ interface DemandDetail {
     phase: string
     status: string
     targetUserId: string | null
+    targetUser: { id: string; name: string } | null
     targetRole: string | null
     comment: string | null
     requestComment: string | null

@@ -58,6 +58,7 @@ export async function GET(
           include: {
             requestedBy: { select: { id: true, name: true } },
             respondedBy: { select: { id: true, name: true } },
+            targetUser: { select: { id: true, name: true } },
             documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true } },
           },
           orderBy: { requestedAt: "desc" },

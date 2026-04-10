@@ -152,6 +152,7 @@ model User {
   demandAccessGrants DemandAccess[]
   signoffRequests    PhaseSignoff[]  @relation("SignoffRequester")
   signoffResponses   PhaseSignoff[]  @relation("SignoffResponder")
+  signoffTargets     PhaseSignoff[]  @relation("SignoffTarget")
   createdShares      DemandShare[]
   auditLogs          AuditLog[]
 
@@ -422,6 +423,7 @@ model PhaseSignoff {
   phase         DemandStatus
   status        SignoffStatus @default(PENDING)
   targetUserId  String?       /// 指定簽核人 (null = 舊資料, 任何有權限的人可簽)
+  targetUser    User?         @relation("SignoffTarget", fields: [targetUserId], references: [id])
   targetRole    String?       /// 簽核角色 (REQUESTER / MANAGER / BOARD)
   comment        String?       @db.Text
   requestComment String?       @db.Text @map("request_comment")
