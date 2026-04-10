@@ -181,6 +181,13 @@ export function UserFormDialog({
     }
   }, [token, mode, initialUser])
 
+  // Auto-load Step 2 data when dialog opens directly at step 2 (edit via Eye button)
+  useEffect(() => {
+    if (open && step === 2 && allDemands.length === 0 && !demandsLoading) {
+      loadStep2Data()
+    }
+  }, [open, step, allDemands.length, demandsLoading, loadStep2Data])
+
   const hasLdap = !!form.ldapUsername
   const goToStep2 = () => {
     // Validate Step 1 for create mode
