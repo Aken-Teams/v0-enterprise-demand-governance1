@@ -518,6 +518,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
                           </span>
                         )}
                       </div>
+                      <div className="border-t border-border/40" />
 
                       {/* 1. 提出說明 */}
                       {canEditRequestComment && editingCommentId === s.id ? (
