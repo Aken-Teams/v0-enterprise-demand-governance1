@@ -260,10 +260,54 @@ export async function PATCH(
     const isForward = currentIdx >= 0 && targetIdx >= 0 && targetIdx > currentIdx
 
     if (isForward && signoffPhases.includes(demand.status)) {
+      // Check if all required signers have signoff records; auto-create missing ones
+      const phase = demand.status as DemandStatus
+      type RequiredTarget = { userId: string; role: string }
+      const requiredTargets: RequiredTarget[] = []
+
+      if (phase === "PRD_REVIEW" || phase === "ACCEPTANCE") {
+        if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
+        if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
+      } else if (phase === "SP_REVIEW") {
+        const boardAccess = await prisma.demandAccess.findMany({
+          where: { demandId: id, signoffRole: "BOARD" },
+          select: { userId: true },
+        })
+        for (const a of boardAccess) requiredTargets.push({ userId: a.userId, role: "BOARD" })
+      }
+
+      // Find existing signoffs for current phase (latest round only)
+      const allPhaseSignoffs = await prisma.phaseSignoff.findMany({
+        where: { demandId: id, phase },
+      })
+      const latestTime = allPhaseSignoffs.length > 0
+        ? Math.max(...allPhaseSignoffs.map(s => new Date(s.requestedAt).getTime()))
+        : 0
+      const latestRound = allPhaseSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestTime)
+
+      // Auto-create missing signoffs for required targets that don't have a record
+      for (const t of requiredTargets) {
+        const exists = latestRound.some(s => s.targetUserId === t.userId)
+        if (!exists) {
+          await prisma.phaseSignoff.create({
+            data: {
+              demandId: id,
+              phase,
+              status: "PENDING",
+              requestedById: auth.userId,
+              targetUserId: t.userId,
+              targetRole: t.role,
+              requestedAt: latestTime > 0 ? new Date(latestTime) : new Date(),
+            },
+          })
+        }
+      }
+
+      // Re-fetch pending signoffs after potential auto-creates
       const pendingSignoffs = await prisma.phaseSignoff.findMany({
         where: {
           demandId: id,
-          phase: demand.status as DemandStatus,
+          phase,
           status: "PENDING",
         },
         orderBy: { requestedAt: "desc" },
