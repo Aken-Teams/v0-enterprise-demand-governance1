@@ -11,6 +11,7 @@ interface User {
   subsidiary?: string
   organizationId?: string | null
   restrictedView?: boolean
+  isOrgAccount?: boolean
 }
 
 interface AuthContextType {

@@ -474,13 +474,15 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
 
   // Pending sign-off(s) for current phase — find the one targeting current user
-  const myPendingSignoff = demand.phaseSignoffs?.find(
+  // Org accounts are read-only and can never sign
+  const isOrgAccount = user?.isOrgAccount
+  const myPendingSignoff = !isOrgAccount ? (demand.phaseSignoffs?.find(
     (s) => s.status === "PENDING" && s.targetUserId === user?.id
-  ) || null
+  ) || null) : null
   // Fallback for legacy signoffs (no targetUserId) — any pending one
-  const pendingSignoff = myPendingSignoff || demand.phaseSignoffs?.find(
+  const pendingSignoff = myPendingSignoff || (!isOrgAccount ? (demand.phaseSignoffs?.find(
     (s) => s.status === "PENDING" && !s.targetUserId
-  ) || null
+  ) || null) : null)
 
   // Project start date
   const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {

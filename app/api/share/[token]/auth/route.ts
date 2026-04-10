@@ -116,6 +116,7 @@ export async function POST(
         role: user.role,
         subsidiary: user.organization?.name,
         organizationId: user.organizationId,
+        isOrgAccount: user.isOrgAccount,
       },
     })
   } catch (error) {

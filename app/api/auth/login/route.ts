@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
         subsidiary: user.organization?.name,
         organizationId: user.organizationId,
         restrictedView,
+        isOrgAccount: user.isOrgAccount,
       },
     })
   } catch (error) {

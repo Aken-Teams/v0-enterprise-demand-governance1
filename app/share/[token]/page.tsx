@@ -179,6 +179,7 @@ interface ShareUser {
   role: string
   subsidiary?: string
   organizationId?: string | null
+  isOrgAccount?: boolean
 }
 
 interface DemandDetail {
@@ -620,10 +621,11 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
   const currentStepIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
 
-  // Find pending signoff targeting the current logged-in user (or legacy signoff with no target)
-  const pendingSignoff = demand.phaseSignoffs?.find(
-    (s) => s.status === "PENDING" && (s.targetUserId === authUser?.id || !s.targetUserId)
-  ) || null
+  // Find pending signoff strictly targeting the current logged-in user
+  // Org accounts are read-only and can never sign
+  const pendingSignoff = (!authUser?.isOrgAccount && demand.phaseSignoffs?.find(
+    (s) => s.status === "PENDING" && s.targetUserId === authUser?.id
+  )) || null
 
   const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {
     const d = p.plannedStart || p.actualStart

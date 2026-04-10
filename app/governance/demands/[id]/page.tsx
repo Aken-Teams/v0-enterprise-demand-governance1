@@ -945,8 +945,8 @@ export default function DemandDetailPage() {
               )
             })()}
 
-            {/* Board member signoff — inside card */}
-            {!canManage && user?.role === "viewer" && (() => {
+            {/* Board member signoff — inside card (org accounts excluded) */}
+            {!canManage && user?.role === "viewer" && !user?.isOrgAccount && (() => {
               const mySignoff = currentPhaseSignoffs.find(
                 (s) => s.status === "PENDING" && s.targetUserId === user?.id
               )

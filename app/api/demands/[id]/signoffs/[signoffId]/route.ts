@@ -82,6 +82,15 @@ export async function PATCH(
 
     // Auth check: admin bypasses; others must be the designated target user
     if (auth.role !== "admin") {
+      // Block org-level accounts (read-only, cannot sign)
+      const currentUser = await prisma.user.findUnique({
+        where: { id: auth.userId },
+        select: { isOrgAccount: true, isBoardMember: true },
+      })
+      if (currentUser?.isOrgAccount) {
+        return NextResponse.json({ error: "組織帳號為唯讀，無法進行簽核操作" }, { status: 403 })
+      }
+
       if (signoff.targetUserId) {
         // New multi-signer: only the designated target can respond
         if (auth.userId !== signoff.targetUserId) {
@@ -92,11 +101,6 @@ export async function PATCH(
         const phase = signoff.phase as string
 
         if (phase === "SP_REVIEW") {
-          // Board members are a global role
-          const currentUser = await prisma.user.findUnique({
-            where: { id: auth.userId },
-            select: { isBoardMember: true },
-          })
           if (!currentUser?.isBoardMember) {
             return NextResponse.json({ error: "您無權進行此簽核操作（需為董事會）" }, { status: 403 })
           }

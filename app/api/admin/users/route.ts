@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       organizationName: u.organization?.name || null,
       ldapUsername: u.ldapUsername,
       ldapDomain: u.ldapDomain,
+      isOrgAccount: u.isOrgAccount,
       accessCount: u._count.demandAccessGrants,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = verifyRole(request, ["admin"])
     const body = await request.json()
-    const { name, email, password, role, organizationId, ldapUsername, ldapDomain } = body
+    const { name, email, password, role, organizationId, ldapUsername, ldapDomain, isOrgAccount } = body
 
     if (!name || !email || !role) {
       return NextResponse.json({ error: "姓名、電子郵件、角色皆為必填" }, { status: 400 })
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
           ldapUsername: ldapUsername || null,
           ldapDomain: ldapDomain || null,
           isBoardMember: role === "viewer",
+          isOrgAccount: !!isOrgAccount,
         },
         include: { organization: { select: { name: true } } },
       })
@@ -158,7 +160,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const auth = verifyRole(request, ["admin"])
     const body = await request.json()
-    const { id, name, email, role, isActive, organizationId, password, adminPassword, ldapUsername, ldapDomain } = body
+    const { id, name, email, role, isActive, organizationId, password, adminPassword, ldapUsername, ldapDomain, isOrgAccount } = body
 
     if (!id) {
       return NextResponse.json({ error: "缺少使用者 ID" }, { status: 400 })
@@ -175,6 +177,7 @@ export async function PATCH(request: NextRequest) {
     if (organizationId !== undefined) data.organizationId = organizationId || null
     if (ldapUsername !== undefined) data.ldapUsername = ldapUsername || null
     if (ldapDomain !== undefined) data.ldapDomain = ldapDomain || null
+    if (isOrgAccount !== undefined) data.isOrgAccount = !!isOrgAccount
 
     // Password reset — requires admin's own password for verification
     if (password && typeof password === "string" && password.length > 0) {
