@@ -120,6 +120,8 @@ export async function POST(
       targets.push({ userId: "", role: "" })
     }
 
+    // Use the same requestedAt for all signoffs in this round so they can be grouped
+    const roundTime = new Date()
     const signoffs = await prisma.$transaction(
       targets.map((t) =>
         prisma.phaseSignoff.create({
@@ -131,6 +133,7 @@ export async function POST(
             requestComment: requestComment?.trim() || null,
             targetUserId: t.userId || null,
             targetRole: t.role || null,
+            requestedAt: roundTime,
           },
           include: {
             requestedBy: { select: { id: true, name: true } },

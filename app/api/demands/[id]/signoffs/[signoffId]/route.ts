@@ -126,6 +126,29 @@ export async function PATCH(
       },
     })
 
+    // When a signer rejects, auto-skip other PENDING signoffs in the same round
+    // (same phase + requestedAt within 5 seconds = same round)
+    if (action === "reject") {
+      const roundTime = signoff.requestedAt.getTime()
+      await prisma.phaseSignoff.updateMany({
+        where: {
+          demandId: id,
+          phase: signoff.phase as DemandStatus,
+          status: "PENDING",
+          id: { not: signoffId },
+          requestedAt: {
+            gte: new Date(roundTime - 5000),
+            lte: new Date(roundTime + 5000),
+          },
+        },
+        data: {
+          status: "SKIPPED",
+          comment: "同輪次已有審核人退回，自動略過",
+          respondedAt: new Date(),
+        },
+      })
+    }
+
     // Save attached files (if any)
     if (validFiles.length > 0) {
       const uploadDir = path.join(process.cwd(), "uploads", "demands", id)
