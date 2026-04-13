@@ -24,7 +24,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 
@@ -69,28 +69,61 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
 }
 
+const STORAGE_KEY = "inbox-filters"
+
+/** Read saved filters from sessionStorage */
+function readSavedFilters(): Record<string, string> {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
 export default function InboxPage() {
   const { token, user } = useAuth()
   const router = useRouter()
   const isAdmin = user?.role === "admin"
   const isViewer = user?.role === "viewer"
   const canSeeAll = isAdmin || isViewer
+
+  // Restore from sessionStorage on client mount
+  const saved = useRef<Record<string, string> | null>(null)
+  if (saved.current === null && typeof window !== "undefined") {
+    saved.current = readSavedFilters()
+  }
+  const s = saved.current || {}
+
   const [demands, setDemands] = useState<Demand[]>([])
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [filterOrg, setFilterOrg] = useState("all")
-  const [filterSubmitter, setFilterSubmitter] = useState("all")
-  const [filterDeveloper, setFilterDeveloper] = useState("all")
+  const [searchQuery, setSearchQuery] = useState(s.q || "")
+  const [debouncedSearch, setDebouncedSearch] = useState(s.q || "")
+  const [filterStatus, setFilterStatus] = useState(s.status || "all")
+  const [filterOrg, setFilterOrg] = useState(s.org || "all")
+  const [filterSubmitter, setFilterSubmitter] = useState(s.submitter || "all")
+  const [filterDeveloper, setFilterDeveloper] = useState(s.developer || "all")
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
   const [deleteTarget, setDeleteTarget] = useState<Demand | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage, setCurrentPage] = useState(() => {
+    const p = parseInt(s.page || "1", 10)
+    return p > 0 ? p : 1
+  })
   const ITEMS_PER_PAGE = 12
+
+  // Persist filters to sessionStorage on change
+  useEffect(() => {
+    const data: Record<string, string> = {}
+    if (filterStatus !== "all") data.status = filterStatus
+    if (filterOrg !== "all") data.org = filterOrg
+    if (filterSubmitter !== "all") data.submitter = filterSubmitter
+    if (filterDeveloper !== "all") data.developer = filterDeveloper
+    if (debouncedSearch) data.q = debouncedSearch
+    if (currentPage > 1) data.page = String(currentPage)
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
+  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch, currentPage])
 
   // Debounce search
   useEffect(() => {
@@ -146,8 +179,12 @@ export default function InboxPage() {
     } catch { /* ignore */ }
   }
 
-  // Reset page when filters change
-  useEffect(() => { setCurrentPage(1) }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch])
+  // Reset page when filters change (skip first render — state already restored from storage)
+  const didMount = useRef(false)
+  useEffect(() => {
+    if (!didMount.current) { didMount.current = true; return }
+    setCurrentPage(1)
+  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch])
 
   const totalPages = Math.max(1, Math.ceil(demands.length / ITEMS_PER_PAGE))
   const paginatedDemands = useMemo(() => {
