@@ -489,7 +489,7 @@ export default function InboxPage() {
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-4">
+              <div className="flex items-center justify-center gap-3 pt-4">
                 <Button
                   variant="outline" size="sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -499,7 +499,7 @@ export default function InboxPage() {
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   上一頁
                 </Button>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <Button
                       key={page}
@@ -524,7 +524,7 @@ export default function InboxPage() {
               </div>
             )}
 
-            <div className="text-center text-sm text-muted-foreground">
+            <div className="text-center text-sm text-muted-foreground pt-2">
               顯示 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, demands.length)} 筆，共 {demands.length} 筆需求
             </div>
           </>

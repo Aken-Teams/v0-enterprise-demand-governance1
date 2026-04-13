@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +20,7 @@ import {
   Loader2, Code2, Search,
   Building2, Check, Circle, Play, Eye, CircleCheck,
   AlertTriangle, FileWarning, ChevronDown, Save, Upload,
+  ChevronLeft, ChevronRight,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -117,6 +118,8 @@ export default function DeliveryDashboardPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [orgFilter, setOrgFilter] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 12
   // { demandId: { taskId: { ...edits } } }
   const [pendingEdits, setPendingEdits] = useState<Record<string, Record<string, TaskEdit>>>({})
   const [savingDemand, setSavingDemand] = useState<string | null>(null)
@@ -141,7 +144,6 @@ export default function DeliveryDashboardPage() {
       const data = await res.json()
 
       const allIds: string[] = data.demands
-        .filter((d: { id: string; status: string }) => d.status !== "CLOSED")
         .map((d: { id: string }) => d.id)
 
       const details: DemandDetail[] = (
@@ -334,6 +336,15 @@ export default function DeliveryDashboardPage() {
     return true
   })
 
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1) }, [statusFilter, orgFilter, searchQuery])
+
+  const totalPages = Math.max(1, Math.ceil(filteredDemands.length / ITEMS_PER_PAGE))
+  const paginatedDemands = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE
+    return filteredDemands.slice(start, start + ITEMS_PER_PAGE)
+  }, [filteredDemands, currentPage, ITEMS_PER_PAGE])
+
   // Compute status counts for filter badges
   const statusCountMap: Record<string, number> = {}
   for (const d of allDemands) {
@@ -415,8 +426,9 @@ export default function DeliveryDashboardPage() {
               </CardContent>
             </Card>
           ) : (
+            <>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {filteredDemands.map((demand) => {
+              {paginatedDemands.map((demand) => {
                 const totalTasks = demand.subTasks.length
                 const completedTasks = demand.subTasks.filter(
                   (t) => t.status === "completed"
@@ -586,6 +598,47 @@ export default function DeliveryDashboardPage() {
                 )
               })}
             </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-4">
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="h-9 px-3"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  上一頁
+                </Button>
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="h-9 w-9 p-0"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="h-9 px-3"
+                >
+                  下一頁
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            )}
+
+            <div className="text-center text-sm text-muted-foreground pt-2">
+              顯示 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredDemands.length)} 筆，共 {filteredDemands.length} 筆需求
+            </div>
+            </>
           )}
         </div>
       </div>
