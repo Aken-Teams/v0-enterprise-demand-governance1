@@ -465,14 +465,14 @@ export default function DeliveryDashboardPage() {
                         <p className="font-semibold text-sm leading-snug truncate">{demand.title}</p>
 
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              <Building2 className="h-3 w-3" />{demand.organization.name}
+                              <Building2 className="h-3.5 w-3.5" />{demand.organization.name}
                             </span>
                             <span>{demand.confirmedSp ?? demand.estimatedSp} SP</span>
                           </div>
                           {totalTasks > 0 && (
-                            <span className="text-xs text-muted-foreground tabular-nums">{completedTasks}/{totalTasks}</span>
+                            <span className="text-sm text-muted-foreground tabular-nums">{completedTasks}/{totalTasks}</span>
                           )}
                         </div>
 
@@ -485,22 +485,22 @@ export default function DeliveryDashboardPage() {
 
                         {/* Warnings */}
                         {(missingDocs.length > 0 || taskWarnings.noStart > 0 || taskWarnings.noEnd > 0) && (
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                             {missingDocs.length > 0 && (
-                              <span className="text-xs text-amber-700 flex items-center gap-1">
-                                <FileWarning className="h-3 w-3" />
+                              <span className="text-sm text-amber-700 flex items-center gap-1">
+                                <FileWarning className="h-3.5 w-3.5" />
                                 缺少：{missingDocs.map((t) => DOCUMENT_TYPE_LABELS[t] || t).join("、")}
                               </span>
                             )}
                             {taskWarnings.noStart > 0 && (
-                              <span className="text-xs text-orange-700 flex items-center gap-1">
-                                <AlertTriangle className="h-3 w-3" />
+                              <span className="text-sm text-orange-700 flex items-center gap-1">
+                                <AlertTriangle className="h-3.5 w-3.5" />
                                 {taskWarnings.noStart} 個未填開始日
                               </span>
                             )}
                             {taskWarnings.noEnd > 0 && (
-                              <span className="text-xs text-orange-700 flex items-center gap-1">
-                                <AlertTriangle className="h-3 w-3" />
+                              <span className="text-sm text-orange-700 flex items-center gap-1">
+                                <AlertTriangle className="h-3.5 w-3.5" />
                                 {taskWarnings.noEnd} 個未填完成日
                               </span>
                             )}
