@@ -401,11 +401,13 @@ export async function PATCH(
       }
 
       // Re-fetch pending signoffs after potential auto-creates
+      // Exclude orphan signoffs (no targetUserId) — they are stale/invalid
       const pendingSignoffs = await prisma.phaseSignoff.findMany({
         where: {
           demandId: id,
           phase,
           status: "PENDING",
+          targetUserId: { not: null },
         },
         orderBy: { requestedAt: "desc" },
       })

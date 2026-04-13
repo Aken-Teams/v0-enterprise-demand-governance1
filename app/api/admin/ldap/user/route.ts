@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "LDAP 環境變數未設定 (AD_URL / AD_API)" }, { status: 500 })
     }
 
-    const url = `${baseUrl}/api/v1/ldap/users/${encodeURIComponent(username)}`
+    const domain = request.nextUrl.searchParams.get("domain")
+    const qs = domain ? `?domain=${encodeURIComponent(domain)}` : ""
+    const url = `${baseUrl}/api/v1/ldap/users/${encodeURIComponent(username)}${qs}`
     const upstream = await fetch(url, {
       headers: { "X-API-Key": apiKey },
       cache: "no-store",

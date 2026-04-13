@@ -595,8 +595,10 @@ export default function DemandDetailPage() {
   const effectiveCanManage = canManage && (!isClosed || user?.role === "admin")
 
   // Latest round of signoffs for current phase (ignore historical rounds)
+  // Exclude orphan signoffs (no assigned user) regardless of status
   const allCurrentSignoffs = demand.phaseSignoffs?.filter(
     (s) => s.phase === demand.status && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status)
+      && s.targetUserId
   ) || []
   const latestRoundTime = allCurrentSignoffs.length > 0
     ? Math.max(...allCurrentSignoffs.map(s => new Date(s.requestedAt).getTime()))
@@ -775,7 +777,8 @@ export default function DemandDetailPage() {
                   const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
                   const isSignoffPhase = signoffPhases.includes(step)
                   const allStepSignoffs = isSignoffPhase
-                    ? demand.phaseSignoffs?.filter((s) => s.phase === step && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status)) || []
+                    ? demand.phaseSignoffs?.filter((s) => s.phase === step && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status)
+                        && s.targetUserId) || []
                     : []
                   // Latest round = signoffs with the newest requestedAt (same batch)
                   const latestTime = allStepSignoffs.length > 0
@@ -946,7 +949,7 @@ export default function DemandDetailPage() {
             })()}
 
             {/* Board member signoff — inside card (org accounts excluded) */}
-            {!canManage && user?.role === "viewer" && !user?.isOrgAccount && (() => {
+            {!canManage && !user?.isOrgAccount && (() => {
               const mySignoff = currentPhaseSignoffs.find(
                 (s) => s.status === "PENDING" && s.targetUserId === user?.id
               )

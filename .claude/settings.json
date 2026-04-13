@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import sys, json; print\\(json.dumps\\(json.load\\(sys.stdin\\), ensure_ascii=False, indent=2\\)\\)\")",
+      "Bash(break)",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(python3 -c \":*)"
+    ]
+  }
+}

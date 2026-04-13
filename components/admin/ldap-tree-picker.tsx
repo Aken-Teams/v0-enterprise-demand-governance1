@@ -258,8 +258,8 @@ export function LdapTreePicker({
 
       // Check members
       for (const m of ou.members) {
-        const nameMatch = m.displayName.toLowerCase().includes(q)
-        const userMatch = m.username.toLowerCase().includes(q)
+        const nameMatch = (m.displayName ?? "").toLowerCase().includes(q)
+        const userMatch = (m.username ?? "").toLowerCase().includes(q)
         if (nameMatch || userMatch) {
           memberIds.add(`${ou.dn}|${m.username}`)
           hasMatch = true

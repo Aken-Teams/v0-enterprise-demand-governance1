@@ -220,7 +220,7 @@ export function UserFormDialog({
     let email = ""
     try {
       const res = await fetch(
-        `/api/admin/ldap/user?username=${encodeURIComponent(member.username)}`,
+        `/api/admin/ldap/user?username=${encodeURIComponent(member.username)}&domain=${encodeURIComponent(member.domain)}`,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} },
       )
       if (res.ok) {

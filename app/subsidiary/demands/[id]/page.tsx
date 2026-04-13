@@ -33,7 +33,7 @@ import {
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, PHASE_SIGNOFF_ROLES } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { SignoffHistory } from "@/components/demand/signoff-history"
@@ -476,13 +476,9 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   // Pending sign-off(s) for current phase — find the one targeting current user
   // Org accounts are read-only and can never sign
   const isOrgAccount = user?.isOrgAccount
-  const myPendingSignoff = !isOrgAccount ? (demand.phaseSignoffs?.find(
+  const pendingSignoff = !isOrgAccount ? (demand.phaseSignoffs?.find(
     (s) => s.status === "PENDING" && s.targetUserId === user?.id
   ) || null) : null
-  // Fallback for legacy signoffs (no targetUserId) — any pending one
-  const pendingSignoff = myPendingSignoff || (!isOrgAccount ? (demand.phaseSignoffs?.find(
-    (s) => s.status === "PENDING" && !s.targetUserId
-  ) || null) : null)
 
   // Project start date
   const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {
@@ -551,30 +547,14 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
         )}
 
         {/* ── Sign-off Banner (show if a pending signoff targets the current user) ── */}
-        {pendingSignoff && (() => {
-          // If signoff has targetUserId, only show to that user
-          if (pendingSignoff.targetUserId) {
-            return pendingSignoff.targetUserId === user?.id ? (
-              <PhaseSignoffBanner
-                signoff={pendingSignoff}
-                demandId={demand.id}
-                token={token}
-                onComplete={fetchDemand}
-              />
-            ) : null
-          }
-          // Legacy signoff (no targetUserId): fall back to role-based check
-          const allowedRoles = PHASE_SIGNOFF_ROLES[pendingSignoff.phase] || []
-          const canSign = mySignoffRole && allowedRoles.includes(mySignoffRole)
-          return canSign ? (
-            <PhaseSignoffBanner
-              signoff={pendingSignoff}
-              demandId={demand.id}
-              token={token}
-              onComplete={fetchDemand}
-            />
-          ) : null
-        })()}
+        {pendingSignoff && (
+          <PhaseSignoffBanner
+            signoff={pendingSignoff}
+            demandId={demand.id}
+            token={token}
+            onComplete={fetchDemand}
+          />
+        )}
 
         {/* ── Tabs ── */}
         <Tabs defaultValue="overview" className="w-full">
