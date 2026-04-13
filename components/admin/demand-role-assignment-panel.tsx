@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Loader2, FolderOpen } from "lucide-react"
+import { Search, Loader2, FolderOpen, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SIGNOFF_ROLE_LABELS } from "@/lib/constants/demand"
 
@@ -21,6 +21,7 @@ export interface DemandOption {
   demandNumber: string
   title: string
   status: string
+  organization?: string
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -63,6 +64,7 @@ export function DemandRoleAssignmentPanel({
   loading = false,
 }: DemandRoleAssignmentPanelProps) {
   const [search, setSearch] = useState("")
+  const [orgFilter, setOrgFilter] = useState("all")
 
   const assignmentMap = useMemo(() => {
     const map = new Map<string, SignoffRole>()
@@ -70,15 +72,28 @@ export function DemandRoleAssignmentPanel({
     return map
   }, [value])
 
+  // Unique organization names for filter dropdown
+  const orgOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const d of allDemands) if (d.organization) set.add(d.organization)
+    return Array.from(set).sort()
+  }, [allDemands])
+
   const filteredDemands = useMemo(() => {
+    let list = allDemands
+    if (orgFilter !== "all") {
+      list = list.filter((d) => d.organization === orgFilter)
+    }
     const q = search.trim().toLowerCase()
-    if (!q) return allDemands
-    return allDemands.filter(
-      (d) =>
-        d.demandNumber.toLowerCase().includes(q) ||
-        d.title.toLowerCase().includes(q),
-    )
-  }, [allDemands, search])
+    if (q) {
+      list = list.filter(
+        (d) =>
+          d.demandNumber.toLowerCase().includes(q) ||
+          d.title.toLowerCase().includes(q),
+      )
+    }
+    return list
+  }, [allDemands, search, orgFilter])
 
   const summary = useMemo(() => {
     const counts: Record<string, number> = { REQUESTER: 0, MANAGER: 0, BOARD: 0, OBSERVER: 0 }
@@ -139,15 +154,31 @@ export function DemandRoleAssignmentPanel({
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="搜尋專案編號或標題..."
-          className="pl-9 h-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Filters */}
+      <div className="flex items-center gap-2">
+        {orgOptions.length > 1 && (
+          <Select value={orgFilter} onValueChange={setOrgFilter}>
+            <SelectTrigger className="w-[160px] h-9 text-xs shrink-0">
+              <Building2 className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
+              <SelectValue placeholder="全部組織" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">全部組織</SelectItem>
+              {orgOptions.map((org) => (
+                <SelectItem key={org} value={org} className="text-xs">{org}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="搜尋專案編號或標題..."
+            className="pl-9 h-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Demand list */}
@@ -183,6 +214,11 @@ export function DemandRoleAssignmentPanel({
                       <span className={cn("text-[10px] px-1.5 py-0.5 rounded", STATUS_BADGE[d.status] || "bg-gray-100 text-gray-600")}>
                         {STATUS_LABEL[d.status] || d.status}
                       </span>
+                      {d.organization && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {d.organization}
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm truncate mt-0.5">{d.title}</p>
                   </div>

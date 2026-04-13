@@ -50,6 +50,13 @@ interface Demand {
 interface FilterOption {
   id: string
   name: string
+  organizationId?: string | null
+  organizationName?: string | null
+}
+
+interface OrgOption {
+  id: string
+  name: string
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -75,10 +82,12 @@ export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [filterOrg, setFilterOrg] = useState("all")
   const [filterSubmitter, setFilterSubmitter] = useState("all")
   const [filterDeveloper, setFilterDeveloper] = useState("all")
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
+  const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
   const [deleteTarget, setDeleteTarget] = useState<Demand | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 12
@@ -96,6 +105,7 @@ export default function InboxPage() {
       const params = new URLSearchParams()
       if (!canSeeAll && user?.id) params.set("developerId", user.id)
       if (filterStatus !== "all") params.set("status", filterStatus)
+      if (canSeeAll && filterOrg !== "all") params.set("organizationId", filterOrg)
       if (canSeeAll && filterSubmitter !== "all") params.set("submitterId", filterSubmitter)
       if (canSeeAll && filterDeveloper !== "all") params.set("developerId", filterDeveloper)
       if (debouncedSearch) params.set("search", debouncedSearch)
@@ -111,6 +121,7 @@ export default function InboxPage() {
         if (data.filters) {
           setSubmitterOptions(data.filters.submitters)
           setDeveloperOptions(data.filters.developers)
+          if (data.filters.organizations) setOrgOptions(data.filters.organizations)
         }
       }
     } catch {
@@ -118,7 +129,7 @@ export default function InboxPage() {
     } finally {
       setLoading(false)
     }
-  }, [token, isAdmin, user?.id, filterStatus, filterSubmitter, filterDeveloper, debouncedSearch])
+  }, [token, isAdmin, user?.id, filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch])
 
   useEffect(() => {
     fetchDemands(true)
@@ -136,7 +147,7 @@ export default function InboxPage() {
   }
 
   // Reset page when filters change
-  useEffect(() => { setCurrentPage(1) }, [filterStatus, filterSubmitter, filterDeveloper, debouncedSearch])
+  useEffect(() => { setCurrentPage(1) }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch])
 
   const totalPages = Math.max(1, Math.ceil(demands.length / ITEMS_PER_PAGE))
   const paginatedDemands = useMemo(() => {
@@ -147,7 +158,13 @@ export default function InboxPage() {
   const getCount = (status: string) => statusCounts[status] || 0
   const confirmStage = getCount("SUBMITTED") + getCount("PRD_REVIEW") + getCount("SP_REVIEW")
   const devStage = getCount("DEVELOPING") + getCount("ACCEPTANCE")
-  const hasActiveFilters = filterStatus !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all"
+  // Filtered submitter options based on selected org
+  const filteredSubmitterOptions = useMemo(() => {
+    if (filterOrg === "all") return submitterOptions
+    return submitterOptions.filter((u) => u.organizationId === filterOrg)
+  }, [submitterOptions, filterOrg])
+
+  const hasActiveFilters = filterStatus !== "all" || filterOrg !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all"
 
   return (
     <AppLayout>
@@ -217,6 +234,23 @@ export default function InboxPage() {
                 ))}
               </SelectContent>
             </Select>
+            {canSeeAll && orgOptions.length > 0 && (
+              <Select value={filterOrg} onValueChange={(v) => {
+                setFilterOrg(v)
+                // Reset submitter when org changes (selected submitter may not belong to new org)
+                setFilterSubmitter("all")
+              }}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="組織" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部組織</SelectItem>
+                  {orgOptions.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {canSeeAll && (
               <Select value={filterSubmitter} onValueChange={setFilterSubmitter}>
                 <SelectTrigger className="w-[140px]">
@@ -224,8 +258,13 @@ export default function InboxPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部需求者</SelectItem>
-                  {submitterOptions.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  {filteredSubmitterOptions.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name}
+                      {filterOrg === "all" && u.organizationName && (
+                        <span className="ml-1 text-muted-foreground text-xs">({u.organizationName})</span>
+                      )}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -251,6 +290,7 @@ export default function InboxPage() {
                 className="text-muted-foreground"
                 onClick={() => {
                   setFilterStatus("all")
+                  setFilterOrg("all")
                   setFilterSubmitter("all")
                   setFilterDeveloper("all")
                 }}

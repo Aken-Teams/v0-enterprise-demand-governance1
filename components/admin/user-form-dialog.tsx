@@ -154,11 +154,12 @@ export function UserFormDialog({
 
       if (responses[0].ok) {
         setAllDemands(
-          demandsData.demands.map((d: { id: string; demandNumber: string; title: string; status: string }) => ({
+          demandsData.demands.map((d: { id: string; demandNumber: string; title: string; status: string; organization?: string }) => ({
             id: d.id,
             demandNumber: d.demandNumber,
             title: d.title,
             status: d.status,
+            organization: d.organization || undefined,
           })),
         )
       }

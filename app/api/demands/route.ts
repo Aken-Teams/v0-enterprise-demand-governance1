@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
       : countWhere
 
     // Fetch demands, counts, and filter options in parallel
-    const [demands, total, counts, submitters, developers] = await Promise.all([
+    const [demands, total, counts, submitters, developers, organizations] = await Promise.all([
       prisma.demand.findMany({
         where: finalWhere,
         include: {
@@ -303,7 +303,7 @@ export async function GET(request: NextRequest) {
       (auth.role === "admin" || auth.role === "viewer")
         ? prisma.user.findMany({
             where: { isActive: true, role: "subsidiary" },
-            select: { id: true, name: true },
+            select: { id: true, name: true, organizationId: true, organization: { select: { name: true } } },
             orderBy: { name: "asc" },
           })
         : Promise.resolve([]),
@@ -311,6 +311,14 @@ export async function GET(request: NextRequest) {
         ? prisma.user.findMany({
             where: { isActive: true, role: { in: ["admin", "delivery"] } },
             select: { id: true, name: true, role: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
+      // Organizations for filter dropdown
+      (auth.role === "admin" || auth.role === "viewer")
+        ? prisma.organization.findMany({
+            where: { status: "active" },
+            select: { id: true, name: true },
             orderBy: { name: "asc" },
           })
         : Promise.resolve([]),
@@ -369,11 +377,14 @@ export async function GET(request: NextRequest) {
       statusCounts,
       ...(spSummary ? { spSummary } : {}),
       filters: {
-        submitters: submitters.map((u) => ({ id: u.id, name: u.name })),
+        submitters: submitters.map((u: { id: string; name: string; organizationId: string | null; organization: { name: string } | null }) => ({
+          id: u.id, name: u.name, organizationId: u.organizationId, organizationName: u.organization?.name || null,
+        })),
         developers: developers.map((u) => ({ id: u.id, name: u.name, role: u.role })),
+        organizations: organizations.map((o: { id: string; name: string }) => ({ id: o.id, name: o.name })),
         assignableUsers: [
           ...developers.map((u) => ({ id: u.id, name: u.name, role: u.role })),
-          ...submitters.map((u) => ({ id: u.id, name: u.name, role: "subsidiary" as const })),
+          ...submitters.map((u: { id: string; name: string }) => ({ id: u.id, name: u.name, role: "subsidiary" as const })),
         ],
       },
     })
