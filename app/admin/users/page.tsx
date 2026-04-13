@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Shield, UserCheck, Edit, Loader2, Search, ChevronLeft, ChevronRight, Plus, Trash2, Eye } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 import { UserFormDialog } from "@/components/admin/user-form-dialog"
@@ -37,6 +38,7 @@ interface UserRow {
   isOrgAccount: boolean
   restrictBoardToOrg: boolean
   restrictBoardViewToOrg: boolean
+  adminScopeType?: string
   accessCount: number
   createdAt: string
 }
@@ -69,7 +71,16 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
 const PAGE_SIZE = 10
 
 export default function UsersPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+  const router = useRouter()
+
+  // Only "all" admins can access system management pages
+  useEffect(() => {
+    if (user && user.role === "admin" && user.adminScopeType && user.adminScopeType !== "all") {
+      router.replace("/governance/inbox")
+    }
+  }, [user, router])
+
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<UserRow[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -352,7 +363,13 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       {user.role === "admin" ? (
-                        <span className="text-xs text-muted-foreground">-</span>
+                        !user.adminScopeType || user.adminScopeType === "all" ? (
+                          <span className="text-xs text-muted-foreground">全部</span>
+                        ) : (
+                          <Badge variant="outline" className="border-orange-300 text-orange-600 text-xs">
+                            {user.adminScopeType === "organization" ? "限組織" : "限專案"}
+                          </Badge>
+                        )
                       ) : user.role === "viewer" ? (
                         <div className="flex flex-col items-center gap-0.5">
                           {user.restrictBoardViewToOrg ? (
@@ -383,8 +400,8 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {user.role !== "admin" ? (
-                          <Button variant="ghost" size="sm" onClick={() => openPermission(user)} title="專案與審核角色">
+                        {(user.role === "subsidiary" || user.role === "viewer" || user.role === "admin") ? (
+                          <Button variant="ghost" size="sm" onClick={() => openPermission(user)} title={user.role === "admin" ? "管理權限" : "專案與審核角色"}>
                             <Eye className="h-4 w-4" />
                           </Button>
                         ) : (

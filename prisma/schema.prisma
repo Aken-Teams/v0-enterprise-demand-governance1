@@ -114,9 +114,10 @@ model Organization {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  users     User[]
-  demands   Demand[]
-  spWallets SpWallet[]
+  users        User[]
+  demands      Demand[]
+  spWallets    SpWallet[]
+  adminAccess  AdminAccess[]
 
   @@map("organizations")
 }
@@ -134,6 +135,7 @@ model User {
   restrictBoardToOrg     Boolean       @default(false) @map("restrict_board_to_org")     /// true = 僅能審核自己組織的專案
   restrictBoardViewToOrg Boolean       @default(false) @map("restrict_board_view_to_org") /// true = 僅能查看自己組織的專案
   isOrgAccount           Boolean       @default(false) @map("is_org_account")            /// 組織帳號（唯讀，不可簽核）
+  adminScopeType         String        @default("all") @map("admin_scope_type")          /// "all" | "organization" | "project"
   ldapUsername    String?       /// AD 工號 (e.g. 90770)
   ldapDomain     String?       /// AD domain (e.g. PANJIT)
   organizationId String?
@@ -154,6 +156,7 @@ model User {
   phasePlanPM       DemandPhasePlan[] @relation("PhasePlanPM")
   subTaskAssignee   DemandSubTask[]   @relation("SubTaskAssignee")
   demandAccessGrants DemandAccess[]
+  adminAccessGrants  AdminAccess[]
   signoffRequests    PhaseSignoff[]  @relation("SignoffRequester")
   signoffResponses   PhaseSignoff[]  @relation("SignoffResponder")
   signoffTargets     PhaseSignoff[]  @relation("SignoffTarget")
@@ -240,6 +243,7 @@ model Demand {
   phasePlans        DemandPhasePlan[]
   subTasks          DemandSubTask[]
   accessGrants      DemandAccess[]
+  adminAccessGrants AdminAccess[]
   phaseSignoffs     PhaseSignoff[]
   shares            DemandShare[]
   auditLogs         AuditLog[]
@@ -417,6 +421,25 @@ model DemandAccess {
   @@index([userId])
   @@index([demandId])
   @@map("demand_access")
+}
+
+/// 管理員權限範圍（依組織或依專案，搭配 User.adminScopeType）
+model AdminAccess {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  demandId       String?
+  demand         Demand?       @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  permission     String        @default("view") /// "view" | "edit"
+  grantedBy      String /// 授權者 user ID
+  createdAt      DateTime      @default(now())
+
+  @@unique([userId, organizationId])
+  @@unique([userId, demandId])
+  @@index([userId])
+  @@map("admin_access")
 }
 
 /// 階段簽核 (需求者背書確認)

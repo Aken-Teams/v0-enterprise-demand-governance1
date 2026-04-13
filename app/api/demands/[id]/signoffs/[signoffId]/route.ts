@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
+import { canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers, getAdminUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
@@ -78,6 +79,16 @@ export async function PATCH(
 
     if (signoff.status !== "PENDING") {
       return NextResponse.json({ error: "此簽核已處理" }, { status: 400 })
+    }
+
+    // Admin write permission check (view-only admins cannot respond to signoffs)
+    if (auth.role === "admin") {
+      const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {
+        id: signoff.demand.id, organizationId: signoff.demand.organizationId,
+      })
+      if (!canWrite) {
+        return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+      }
     }
 
     // Auth check: admin bypasses; others must be the designated target user
@@ -251,6 +262,15 @@ export async function PUT(
       // Only admin/delivery can edit requestComment (提出說明)
       if (auth.role !== "admin" && auth.role !== "delivery") {
         return NextResponse.json({ error: "權限不足" }, { status: 403 })
+      }
+      // Admin write permission check
+      if (auth.role === "admin") {
+        const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {
+          id, organizationId: signoff.demand.organizationId,
+        })
+        if (!canWrite) {
+          return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+        }
       }
       const updated = await prisma.phaseSignoff.update({
         where: { id: signoffId },

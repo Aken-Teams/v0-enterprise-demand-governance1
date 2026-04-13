@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
-import { canAccessDemand } from "@/lib/demand-access"
+import { verifyAuth, verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
+import { canAccessDemand, canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import { updateDemandSchema } from "@/lib/validations/demand"
@@ -194,10 +194,20 @@ export async function GET(
       signoffRole: g.signoffRole,
     }))
 
+    // For limited admins, check write permission for this demand
+    let adminCanWrite = true
+    if (auth.role === "admin" && auth.adminScopeType && auth.adminScopeType !== "all") {
+      adminCanWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {
+        id: demand.id,
+        organizationId: demand.organizationId,
+      })
+    }
+
     return NextResponse.json({
       demand: { ...demandRest, contactPerson: contactPersonUser },
       mySignoffRole,
       accessUsers,
+      adminCanWrite,
     })
   } catch (error) {
     if (error instanceof AuthError) {
@@ -221,6 +231,17 @@ export async function PATCH(
     const demand = await prisma.demand.findUnique({ where: { id } })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+    }
+
+    // Admin write permission check (non-"all" admins need "edit" permission)
+    if (auth.role === "admin") {
+      const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {
+        id: demand.id,
+        organizationId: demand.organizationId,
+      })
+      if (!canWrite) {
+        return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+      }
     }
 
     // Handle assignment update (managerId / developerId) — admin only
@@ -624,6 +645,7 @@ export async function DELETE(
 ) {
   try {
     const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
     const { id } = await params
 
     const demand = await prisma.demand.findUnique({ where: { id } })

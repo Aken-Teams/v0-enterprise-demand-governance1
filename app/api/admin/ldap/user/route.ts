@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyRole, AuthError } from "@/lib/auth"
+import { verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
 
     const username = request.nextUrl.searchParams.get("username")
     if (!username) {

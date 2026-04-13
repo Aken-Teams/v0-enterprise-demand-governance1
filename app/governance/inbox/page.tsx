@@ -88,6 +88,7 @@ export default function InboxPage() {
   const isAdmin = user?.role === "admin"
   const isViewer = user?.role === "viewer"
   const canSeeAll = isAdmin || isViewer
+  const isFullAdmin = isAdmin && (!user?.adminScopeType || user.adminScopeType === "all")
 
   // Restore from sessionStorage on client mount
   const saved = useRef<Record<string, string> | null>(null)
@@ -234,7 +235,7 @@ export default function InboxPage() {
               {isViewer ? "查看所有需求與開發進度" : isAdmin ? "建立與追蹤所有需求的開案流程" : "查看指派給您的需求與開發進度"}
             </p>
           </div>
-          {isAdmin && (
+          {isFullAdmin && (
             <Button asChild>
               <Link href="/governance/create">
                 <Plus className="mr-2 h-4 w-4" />
@@ -399,7 +400,7 @@ export default function InboxPage() {
               <p className="text-muted-foreground">
                 {isAdmin ? "尚無資料" : "目前沒有指派給您的需求"}
               </p>
-              {isAdmin && !debouncedSearch && !hasActiveFilters && (
+              {isFullAdmin && !debouncedSearch && !hasActiveFilters && (
                 <Button variant="outline" className="mt-4" asChild>
                   <Link href="/governance/create">
                     <Plus className="mr-2 h-4 w-4" />
@@ -452,7 +453,7 @@ export default function InboxPage() {
                           </span>
                         </div>
 
-                        {isAdmin ? (
+                        {isFullAdmin ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground">

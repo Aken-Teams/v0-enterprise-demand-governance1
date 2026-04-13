@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
+import { canAdminWrite } from "@/lib/demand-access"
 import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds, getAdminUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 
@@ -26,6 +27,16 @@ export async function POST(
     })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+    }
+
+    // Admin write permission check (view-only admins cannot comment)
+    if (auth.role === "admin") {
+      const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {
+        id: demand.id, organizationId: demand.organizationId,
+      })
+      if (!canWrite) {
+        return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+      }
     }
 
     const comment = await prisma.demandComment.create({

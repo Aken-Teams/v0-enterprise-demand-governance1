@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Building2, Users, Coins, Wallet, Edit, Loader2 } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { Progress } from "@/components/ui/progress"
 
@@ -34,7 +35,15 @@ interface Summary {
 }
 
 export default function SpManagementPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user && user.role === "admin" && user.adminScopeType && user.adminScopeType !== "all") {
+      router.replace("/governance/inbox")
+    }
+  }, [user, router])
+
   const [loading, setLoading] = useState(true)
   const [organizations, setOrganizations] = useState<OrgRow[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)

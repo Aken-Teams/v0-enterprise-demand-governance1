@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyRole, AuthError } from "@/lib/auth"
+import { verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 
 // GET: Query audit logs (admin only)
 export async function GET(request: NextRequest) {
   try {
-    verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
     const { searchParams } = new URL(request.url)
 
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"))

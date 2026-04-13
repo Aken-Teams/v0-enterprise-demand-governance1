@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyRole, AuthError } from "@/lib/auth"
+import { verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 import { notifyUsers, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 import { calcUsedSp } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
-    verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
 
     const currentYear = new Date().getFullYear()
 
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
     const body = await request.json()
     const { id, spQuota } = body
 

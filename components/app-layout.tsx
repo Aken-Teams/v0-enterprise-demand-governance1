@@ -211,9 +211,16 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   }, [pathname, userRole, user?.role])
 
   const isRestricted = user?.role === "subsidiary" && user?.restrictedView === true
+  const isLimitedAdmin = user?.role === "admin" && user?.adminScopeType && user.adminScopeType !== "all"
 
   const visibleSections = React.useMemo(() => {
-    const sections = navSections.filter((section) => section.roles.includes(detectedRole))
+    let sections = navSections.filter((section) => section.roles.includes(detectedRole))
+
+    // Non-"all" admins: hide 系統管理 section
+    if (isLimitedAdmin) {
+      sections = sections.filter((section) => section.title !== "系統管理")
+    }
+
     if (!isRestricted) return sections
     // Restricted subsidiary: only show 需求列表, hide 需求總覽 and SP 錢包
     return sections.map((section) => ({
@@ -222,7 +229,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
         item.href !== "/subsidiary" && item.href !== "/subsidiary/wallet"
       ),
     })).filter((section) => section.items.length > 0)
-  }, [detectedRole, isRestricted])
+  }, [detectedRole, isRestricted, isLimitedAdmin])
 
   return (
     <div className="flex min-h-screen bg-background">

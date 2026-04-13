@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyRole, AuthError } from "@/lib/auth"
+import { verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 
 /** Supported LDAP domains (maps to the upstream LDAP API `domain` parameter) */
 export const LDAP_DOMAINS = ["PANJIT", "PYNMAX", "WXPJ", "GDPJ", "PJWS", "PJXZ", "PJSD"] as const
@@ -23,7 +23,8 @@ const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 
 export async function GET(request: NextRequest) {
   try {
-    verifyRole(request, ["admin"])
+    const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
 
     const domain = request.nextUrl.searchParams.get("domain") || "PANJIT"
     if (!LDAP_DOMAINS.includes(domain as LdapDomain)) {

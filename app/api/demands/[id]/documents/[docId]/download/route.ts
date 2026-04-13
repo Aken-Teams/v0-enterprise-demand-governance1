@@ -3,6 +3,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
+import { canAdminWrite } from "@/lib/demand-access"
 import { watermarkPdf, textToPdf, markdownToPdf, imageToPdf, officeToPdf, coverPagePdf } from "@/lib/pdf-watermark"
 
 function getFileExtension(fileName: string): string {
@@ -41,6 +42,22 @@ export async function GET(
     })
     if (!doc) {
       return NextResponse.json({ error: "文件不存在" }, { status: 404 })
+    }
+
+    // View-only admins cannot download
+    if (auth.role === "admin") {
+      const demand = await prisma.demand.findUnique({
+        where: { id },
+        select: { id: true, organizationId: true },
+      })
+      if (demand) {
+        const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {
+          id: demand.id, organizationId: demand.organizationId,
+        })
+        if (!canWrite) {
+          return NextResponse.json({ error: "觀看權限無法下載文件" }, { status: 403 })
+        }
+      }
     }
 
     // External URL documents cannot be watermarked

@@ -74,9 +74,16 @@ function getFileIcon(fileName: string) {
 }
 
 export default function CreateDemandPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Only "all" admins can create demands
+  useEffect(() => {
+    if (user && user.role === "admin" && user.adminScopeType && user.adminScopeType !== "all") {
+      router.replace("/governance/inbox")
+    }
+  }, [user, router])
 
   const [currentStep, setCurrentStep] = useState(1)
   const [date, setDate] = useState<Date>()

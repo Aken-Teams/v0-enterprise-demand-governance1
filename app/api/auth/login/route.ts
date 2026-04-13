@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         email: user.email,
         role: user.role,
+        adminScopeType: user.role === "admin" ? (user.adminScopeType || "all") : undefined,
       },
       JWT_SECRET,
       { expiresIn: "7d" }
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
         organizationId: user.organizationId,
         restrictedView,
         isOrgAccount: user.isOrgAccount,
+        adminScopeType: user.role === "admin" ? (user.adminScopeType || "all") : undefined,
       },
     })
   } catch (error) {

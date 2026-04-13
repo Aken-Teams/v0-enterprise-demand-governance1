@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
-import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
+import { verifyAuth, verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 import { calcUsedSp } from "@/lib/constants/demand"
 import { createDemandSchema } from "@/lib/validations/demand"
 import { generateDemandNumber } from "@/lib/demand-number"
@@ -31,8 +31,9 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Auth: admin only
+    // 1. Auth: admin only (full scope required to create demands)
     const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
 
     // 2. Parse FormData
     const formData = await request.formData()

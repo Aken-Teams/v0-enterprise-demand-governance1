@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyRole, AuthError } from "@/lib/auth"
+import { verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 
 const VALID_SIGNOFF_ROLES = ["REQUESTER", "MANAGER", "BOARD", "OBSERVER"] as const
@@ -55,6 +55,7 @@ export async function PUT(
 ) {
   try {
     const auth = verifyRole(request, ["admin"])
+    verifyAdminFull(auth)
     const { id } = await params
     const body = await request.json()
 

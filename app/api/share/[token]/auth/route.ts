@@ -88,7 +88,7 @@ export async function POST(
     }
 
     const hasAccess = await canAccessDemand(
-      { userId: user.id, role: user.role },
+      { userId: user.id, role: user.role, adminScopeType: user.adminScopeType },
       demand,
     )
 

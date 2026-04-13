@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
+import { canAdminWrite } from "@/lib/demand-access"
 import { batchUpsertPhasePlansSchema } from "@/lib/validations/phase-plan"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { PIPELINE_STEPS } from "@/lib/constants/demand"
@@ -69,7 +70,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery"])
+    const auth = verifyRole(request, ["admin", "delivery"])
     const { id } = await params
     const body = await request.json()
 
@@ -84,6 +85,16 @@ export async function PUT(
     const demand = await prisma.demand.findUnique({ where: { id } })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+    }
+
+    // Admin write permission check
+    if (auth.role === "admin") {
+      const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {
+        id: demand.id, organizationId: demand.organizationId,
+      })
+      if (!canWrite) {
+        return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+      }
     }
 
     const { phases } = parseResult.data

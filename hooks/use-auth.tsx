@@ -12,6 +12,7 @@ interface User {
   organizationId?: string | null
   restrictedView?: boolean
   isOrgAccount?: boolean
+  adminScopeType?: string // "all" | "organization" | "project"
 }
 
 interface AuthContextType {

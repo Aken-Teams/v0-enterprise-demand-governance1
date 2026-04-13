@@ -3,6 +3,7 @@ import { unlink } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
+import { canAdminWrite } from "@/lib/demand-access"
 import { logAudit } from "@/lib/audit"
 
 // DELETE: Delete a document
@@ -19,6 +20,17 @@ export async function DELETE(
     })
     if (!doc) {
       return NextResponse.json({ error: "文件不存在" }, { status: 404 })
+    }
+
+    // Admin write permission check
+    if (auth.role === "admin") {
+      const demand = await prisma.demand.findUnique({ where: { id }, select: { organizationId: true } })
+      if (demand) {
+        const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, { id, organizationId: demand.organizationId })
+        if (!canWrite) {
+          return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+        }
+      }
     }
 
     // Delivery users can only delete documents they uploaded

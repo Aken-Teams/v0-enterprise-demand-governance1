@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Network, X as XIcon, ChevronLeft, ChevronRight, Check, User, FolderOpen, ShieldCheck, Eye, EyeOff } from "lucide-react"
+import { Loader2, Network, X as XIcon, ChevronLeft, ChevronRight, Check, User, FolderOpen, ShieldCheck, Eye, EyeOff, Settings } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { LdapTreePicker, type LdapSelectedMember } from "@/components/admin/ldap-tree-picker"
@@ -38,12 +39,14 @@ interface UserRow {
   isOrgAccount: boolean
   restrictBoardToOrg: boolean
   restrictBoardViewToOrg: boolean
+  adminScopeType?: string
   accessCount: number
   createdAt: string
 }
 
 const STEP_LABELS_SUBSIDIARY = ["基本資訊", "專案與審核角色", "確認"]
 const STEP_LABELS_VIEWER = ["基本資訊", "審核權限", "確認"]
+const STEP_LABELS_ADMIN = ["基本資訊", "管理權限", "確認"]
 const STEP_LABELS_DEFAULT = ["基本資訊", "確認"]
 
 interface UserFormDialogProps {
@@ -106,10 +109,15 @@ export function UserFormDialog({
   const [showPassword, setShowPassword] = useState(false)
   const [showAdminPassword, setShowAdminPassword] = useState(false)
 
-  // Step 2 state
+  // Step 2 state (subsidiary)
   const [assignments, setAssignments] = useState<DemandAssignment[]>([])
   const [allDemands, setAllDemands] = useState<DemandOption[]>([])
   const [demandsLoading, setDemandsLoading] = useState(false)
+
+  // Step 2 state (admin scope)
+  const [adminScopeType, setAdminScopeType] = useState<string>("all")
+  const [adminEntries, setAdminEntries] = useState<{ organizationId?: string; demandId?: string; permission: string }[]>([])
+  const [adminEntriesLoading, setAdminEntriesLoading] = useState(false)
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -130,14 +138,17 @@ export function UserFormDialog({
           ldapDepartment: "",
         })
         // If initialStep=2 but role doesn't need step 2, fall back to step 1
-        const roleNeedsStep2 = initialUser.role === "subsidiary" || initialUser.role === "viewer"
+        const roleNeedsStep2 = initialUser.role === "subsidiary" || initialUser.role === "viewer" || initialUser.role === "admin"
         setStep(initialStep === 2 && !roleNeedsStep2 ? 1 : initialStep)
+        setAdminScopeType(initialUser.adminScopeType || "all")
       } else {
         setForm(EMPTY_FORM)
         setStep(initialStep)
+        setAdminScopeType("all")
       }
       setAssignments([])
       setAllDemands([])
+      setAdminEntries([])
       setShowPassword(false)
       setShowAdminPassword(false)
     }
@@ -193,12 +204,58 @@ export function UserFormDialog({
     }
   }, [token, mode, initialUser])
 
-  // Auto-load Step 2 data when dialog opens directly at step 2 (edit via Eye button, subsidiary only)
+  // Load admin scope data when entering Step 2 for admin role
+  const loadAdminStep2Data = useCallback(async () => {
+    if (!token) return
+    setAdminEntriesLoading(true)
+    try {
+      const fetches: Promise<Response>[] = [
+        fetch("/api/demands", { headers: { Authorization: `Bearer ${token}` } }),
+      ]
+      if (mode === "edit" && initialUser) {
+        fetches.push(
+          fetch(`/api/admin/users/${initialUser.id}/admin-access`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        )
+      }
+      const responses = await Promise.all(fetches)
+      const demandsData = await responses[0].json()
+      if (responses[0].ok) {
+        setAllDemands(
+          demandsData.demands.map((d: { id: string; demandNumber: string; title: string; status: string; organization?: string }) => ({
+            id: d.id, demandNumber: d.demandNumber, title: d.title, status: d.status, organization: d.organization || undefined,
+          })),
+        )
+      }
+      if (responses.length > 1 && responses[1].ok) {
+        const accessData = await responses[1].json()
+        if (Array.isArray(accessData.entries)) {
+          setAdminEntries(
+            accessData.entries.map((e: { organizationId?: string; demandId?: string; permission: string }) => ({
+              organizationId: e.organizationId || undefined,
+              demandId: e.demandId || undefined,
+              permission: e.permission,
+            })),
+          )
+        }
+      }
+    } catch {
+      toast.error("載入管理權限資料失敗")
+    } finally {
+      setAdminEntriesLoading(false)
+    }
+  }, [token, mode, initialUser])
+
+  // Auto-load Step 2 data when dialog opens directly at step 2 (edit via Eye button)
   useEffect(() => {
     if (open && step === 2 && form.role === "subsidiary" && allDemands.length === 0 && !demandsLoading) {
       loadStep2Data()
     }
-  }, [open, step, form.role, allDemands.length, demandsLoading, loadStep2Data])
+    if (open && step === 2 && form.role === "admin" && !adminEntriesLoading && allDemands.length === 0) {
+      loadAdminStep2Data()
+    }
+  }, [open, step, form.role, allDemands.length, demandsLoading, loadStep2Data, adminEntriesLoading, loadAdminStep2Data])
 
   const hasLdap = !!form.ldapUsername
   const goToStep2 = () => {
@@ -219,9 +276,11 @@ export function UserFormDialog({
       }
     }
     setStep(2)
-    // Only load demand data for subsidiary role
+    // Load demand data for subsidiary/admin roles
     if (form.role === "subsidiary") {
       loadStep2Data()
+    } else if (form.role === "admin") {
+      loadAdminStep2Data()
     }
   }
 
@@ -282,6 +341,7 @@ export function UserFormDialog({
             ldapDomain: form.ldapDomain || null,
             restrictBoardToOrg: form.role === "viewer" ? form.restrictBoardToOrg : false,
             restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
+            adminScopeType: form.role === "admin" ? adminScopeType : undefined,
             assignments: assignments.map((a) => ({
               demandId: a.demandId,
               signoffRole: a.signoffRole,
@@ -290,6 +350,14 @@ export function UserFormDialog({
         })
         const data = await res.json()
         if (res.ok) {
+          // If admin with non-"all" scope, save admin access entries
+          if (form.role === "admin" && adminScopeType !== "all" && data.userId) {
+            await fetch(`/api/admin/users/${data.userId}/admin-access`, {
+              method: "PUT",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ scopeType: adminScopeType, entries: adminEntries }),
+            })
+          }
           toast.success("帳號建立成功")
           onOpenChange(false)
           onSaved()
@@ -309,6 +377,7 @@ export function UserFormDialog({
           ldapDomain: form.ldapDomain || null,
           restrictBoardToOrg: form.role === "viewer" ? form.restrictBoardToOrg : false,
           restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
+          adminScopeType: form.role === "admin" ? adminScopeType : undefined,
         }
         if (form.password) {
           if (!form.adminPassword) {
@@ -351,6 +420,21 @@ export function UserFormDialog({
           return
         }
 
+        // Save admin scope entries if admin role
+        if (form.role === "admin" && initialUser) {
+          const adminAccessRes = await fetch(`/api/admin/users/${initialUser.id}/admin-access`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ scopeType: adminScopeType, entries: adminEntries }),
+          })
+          if (!adminAccessRes.ok) {
+            const adminAccessData = await adminAccessRes.json()
+            toast.error(adminAccessData.error || "更新管理權限失敗")
+            setSaving(false)
+            return
+          }
+        }
+
         toast.success("帳號更新成功")
         onOpenChange(false)
         onSaved()
@@ -367,13 +451,15 @@ export function UserFormDialog({
       ? !!(form.name && form.email && form.role && (hasLdap || (form.password && form.password.length >= 6)))
       : !!(form.name && form.email && form.role)
 
-  // "subsidiary" and "viewer" roles need Step 2
-  const needsStep2 = form.role === "subsidiary" || form.role === "viewer"
+  // "subsidiary", "viewer", and "admin" roles need Step 2
+  const needsStep2 = form.role === "subsidiary" || form.role === "viewer" || form.role === "admin"
   const visibleSteps = form.role === "subsidiary"
     ? STEP_LABELS_SUBSIDIARY
     : form.role === "viewer"
       ? STEP_LABELS_VIEWER
-      : STEP_LABELS_DEFAULT
+      : form.role === "admin"
+        ? STEP_LABELS_ADMIN
+        : STEP_LABELS_DEFAULT
   const totalSteps = visibleSteps.length
   // Map internal step number to display position
   const displayStep = needsStep2 ? step : step === 3 ? 2 : 1
@@ -741,6 +827,151 @@ export function UserFormDialog({
               </div>
             )}
 
+            {step === 2 && form.role === "admin" && (
+              <div className="py-2 space-y-5">
+                <p className="text-sm text-muted-foreground">
+                  設定此管理員的管理範圍與權限等級。
+                </p>
+
+                <div className="space-y-2">
+                  <Label>管理範圍類型</Label>
+                  <Select value={adminScopeType} onValueChange={(v) => { setAdminScopeType(v); setAdminEntries([]) }}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部（完整權限）</SelectItem>
+                      <SelectItem value="organization">依組織</SelectItem>
+                      <SelectItem value="project">依專案</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {adminScopeType === "all" && (
+                  <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/20 p-4 text-sm text-emerald-700 dark:text-emerald-400">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      此管理員擁有完整權限，可管理所有組織與專案。
+                    </div>
+                  </div>
+                )}
+
+                {adminScopeType === "organization" && (
+                  <div className="space-y-2">
+                    <Label>選擇可管理的組織</Label>
+                    {adminEntriesLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {organizations.map((org) => {
+                          const entry = adminEntries.find(e => e.organizationId === org.id)
+                          const isChecked = !!entry
+                          return (
+                            <div key={org.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setAdminEntries([...adminEntries, { organizationId: org.id, permission: "view" }])
+                                  } else {
+                                    setAdminEntries(adminEntries.filter(e => e.organizationId !== org.id))
+                                  }
+                                }}
+                              />
+                              <span className="flex-1 text-sm">{org.name}</span>
+                              {isChecked && (
+                                <Select
+                                  value={entry!.permission}
+                                  onValueChange={(v) => {
+                                    setAdminEntries(adminEntries.map(e =>
+                                      e.organizationId === org.id ? { ...e, permission: v } : e
+                                    ))
+                                  }}
+                                >
+                                  <SelectTrigger className="w-24 h-8 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="view">觀看</SelectItem>
+                                    <SelectItem value="edit">修改</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {!adminEntriesLoading && adminEntries.length === 0 && (
+                      <p className="text-xs text-muted-foreground">請至少選擇一個組織</p>
+                    )}
+                  </div>
+                )}
+
+                {adminScopeType === "project" && (
+                  <div className="space-y-2">
+                    <Label>選擇可管理的專案</Label>
+                    {adminEntriesLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {allDemands.map((demand) => {
+                          const entry = adminEntries.find(e => e.demandId === demand.id)
+                          const isChecked = !!entry
+                          return (
+                            <div key={demand.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setAdminEntries([...adminEntries, { demandId: demand.id, permission: "view" }])
+                                  } else {
+                                    setAdminEntries(adminEntries.filter(e => e.demandId !== demand.id))
+                                  }
+                                }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className="font-mono text-xs text-muted-foreground mr-1.5">{demand.demandNumber}</span>
+                                <span className="text-sm truncate">{demand.title}</span>
+                                {demand.organization && (
+                                  <span className="ml-1.5 text-xs text-muted-foreground">({demand.organization})</span>
+                                )}
+                              </div>
+                              {isChecked && (
+                                <Select
+                                  value={entry!.permission}
+                                  onValueChange={(v) => {
+                                    setAdminEntries(adminEntries.map(e =>
+                                      e.demandId === demand.id ? { ...e, permission: v } : e
+                                    ))
+                                  }}
+                                >
+                                  <SelectTrigger className="w-24 h-8 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="view">觀看</SelectItem>
+                                    <SelectItem value="edit">修改</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {!adminEntriesLoading && adminEntries.length === 0 && (
+                      <p className="text-xs text-muted-foreground">請至少選擇一個專案</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {step === 3 && (
               <div className="py-2 space-y-4">
                 {/* Basic info summary */}
@@ -791,7 +1022,47 @@ export function UserFormDialog({
                   </div>
                 )}
 
-                {/* Project assignments summary */}
+                {/* Admin scope summary */}
+                {form.role === "admin" && (
+                  <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium mb-3">
+                      <Settings className="h-4 w-4 text-muted-foreground" />
+                      管理權限
+                    </div>
+                    <div className="grid grid-cols-[80px_1fr] gap-y-1.5 gap-x-3 text-sm">
+                      <span className="text-muted-foreground">範圍類型</span>
+                      <span>
+                        {{ all: "全部（完整權限）", organization: "依組織", project: "依專案" }[adminScopeType] || adminScopeType}
+                      </span>
+                    </div>
+                    {adminScopeType !== "all" && adminEntries.length > 0 && (
+                      <div className="space-y-1.5 mt-2 max-h-[200px] overflow-y-auto">
+                        {adminEntries.map((entry, i) => {
+                          const label = adminScopeType === "organization"
+                            ? organizations.find(o => o.id === entry.organizationId)?.name || entry.organizationId
+                            : (() => {
+                                const d = allDemands.find(d => d.id === entry.demandId)
+                                return d ? `${d.demandNumber} ${d.title}` : entry.demandId
+                              })()
+                          return (
+                            <div key={i} className="flex items-center justify-between gap-2 rounded bg-background border px-3 py-1.5 text-sm">
+                              <span className="truncate">{label}</span>
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {entry.permission === "edit" ? "修改" : "觀看"}
+                              </Badge>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {adminScopeType !== "all" && adminEntries.length === 0 && (
+                      <p className="text-sm text-muted-foreground mt-1">尚未指派任何{adminScopeType === "organization" ? "組織" : "專案"}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Project assignments summary (not for admin role) */}
+                {form.role !== "admin" && (
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium mb-3">
                     <FolderOpen className="h-4 w-4 text-muted-foreground" />
@@ -826,6 +1097,7 @@ export function UserFormDialog({
                     </div>
                   )}
                 </div>
+                )}
               </div>
             )}
           </div>

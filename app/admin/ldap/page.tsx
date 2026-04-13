@@ -1,10 +1,22 @@
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LdapTreePicker } from "@/components/admin/ldap-tree-picker"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function LdapOrgTreePage() {
+  const { user } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user && user.role === "admin" && user.adminScopeType && user.adminScopeType !== "all") {
+      router.replace("/governance/inbox")
+    }
+  }, [user, router])
+
   return (
     <AppLayout userRole="admin">
       <div className="space-y-6">

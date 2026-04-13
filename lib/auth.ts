@@ -7,6 +7,7 @@ export interface JwtPayload {
   userId: string
   email: string
   role: "subsidiary" | "admin" | "delivery" | "viewer"
+  adminScopeType?: string // "all" | "organization" | "project"
 }
 
 export class AuthError extends Error {
@@ -40,4 +41,14 @@ export function verifyRole(
     throw new AuthError("權限不足", 403)
   }
   return payload
+}
+
+/**
+ * Verify that the admin user has full ("all") scope for system management operations.
+ * Non-"all" admins cannot access user/org/LDAP management or create demands.
+ */
+export function verifyAdminFull(payload: JwtPayload): void {
+  if (payload.role === "admin" && payload.adminScopeType && payload.adminScopeType !== "all") {
+    throw new AuthError("此管理員無完整管理權限", 403)
+  }
 }

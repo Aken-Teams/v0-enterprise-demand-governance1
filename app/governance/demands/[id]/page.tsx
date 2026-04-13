@@ -387,8 +387,12 @@ export default function DemandDetailPage() {
   const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState<string | null>(null)
+  const [adminCanWrite, setAdminCanWrite] = useState(true)
 
-  const canManage = user?.role === "admin" || user?.role === "delivery"
+  const isFullAdmin = user?.role === "admin" && (!user?.adminScopeType || user.adminScopeType === "all")
+  const isAdminWithWrite = user?.role === "admin" && (isFullAdmin || adminCanWrite)
+  // canManage: full admin or delivery can manage; limited admin with edit can too
+  const canManage = isAdminWithWrite || user?.role === "delivery"
 
   // Periodically clean up stray mermaid error SVGs from the DOM
   useEffect(() => {
@@ -426,6 +430,7 @@ export default function DemandDetailPage() {
       if (res.ok) {
         setDemand(data.demand)
         if (data.accessUsers) setAccessUsers(data.accessUsers)
+        if (typeof data.adminCanWrite === "boolean") setAdminCanWrite(data.adminCanWrite)
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
@@ -591,8 +596,8 @@ export default function DemandDetailPage() {
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
   const isClosed = demand.status === "CLOSED"
-  // When CLOSED, only admin retains modification rights
-  const effectiveCanManage = canManage && (!isClosed || user?.role === "admin")
+  // When CLOSED, only admin with write retains modification rights
+  const effectiveCanManage = canManage && (!isClosed || isAdminWithWrite)
 
   // Latest round of signoffs for current phase (ignore historical rounds)
   // Exclude orphan signoffs (no assigned user) regardless of status
@@ -715,8 +720,8 @@ export default function DemandDetailPage() {
                 </DialogContent>
               </Dialog>
             )}
-            {/* Edit / Delete (admin only, not closed) */}
-            {user?.role === "admin" && !isClosed && (
+            {/* Edit / Delete (admin with write, not closed) */}
+            {isAdminWithWrite && !isClosed && (
               <>
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/governance/demands/${demand.id}/edit`}>
@@ -724,6 +729,10 @@ export default function DemandDetailPage() {
                     編輯
                   </Link>
                 </Button>
+              </>
+            )}
+            {isFullAdmin && !isClosed && (
+              <>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
@@ -1046,7 +1055,7 @@ export default function DemandDetailPage() {
               {/* Left column */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Phase-specific action cards */}
-                {user?.role === "admin" && demand.status === "SP_REVIEW" && (
+                {isAdminWithWrite && demand.status === "SP_REVIEW" && (
                   <Collapsible open={spPlanOpen ?? false} onOpenChange={setSpPlanOpen}>
                     <Card className="border-orange-200">
                       <CardHeader className="pb-3">
@@ -1079,7 +1088,7 @@ export default function DemandDetailPage() {
                   </Collapsible>
                 )}
 
-                {user?.role === "admin" && demand.status === "PRD_REVIEW" && (!demand.manager || !demand.developer) && (
+                {isAdminWithWrite && demand.status === "PRD_REVIEW" && (!demand.manager || !demand.developer) && (
                   <Card className="border-amber-200">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -1109,7 +1118,7 @@ export default function DemandDetailPage() {
                   </Card>
                 )}
 
-                {user?.role === "admin" && demand.status === "DEVELOPING" && (() => {
+                {isAdminWithWrite && demand.status === "DEVELOPING" && (() => {
                   const devPlan = demand.phasePlans.find((p) => p.phase === "DEVELOPING")
                   return (
                     <Collapsible open={subTasksOpen ?? false} onOpenChange={setSubTasksOpen}>
@@ -1231,7 +1240,7 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <User className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">PM</span>
-                      {user?.role === "admin" && !isClosed && staffUsers.length > 0 ? (
+                      {isAdminWithWrite && !isClosed && staffUsers.length > 0 ? (
                         <Select
                           value={demand.manager?.id || "none"}
                           onValueChange={(v) => handleAssign("managerId", v === "none" ? "" : v)}
@@ -1260,7 +1269,7 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <User className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">工程師</span>
-                      {user?.role === "admin" && !isClosed && staffUsers.length > 0 ? (
+                      {isAdminWithWrite && !isClosed && staffUsers.length > 0 ? (
                         <Select
                           value={demand.developer?.id || "none"}
                           onValueChange={(v) => handleAssign("developerId", v === "none" ? "" : v)}
@@ -1289,7 +1298,7 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">需求窗口</span>
-                      {user?.role === "admin" && !isClosed ? (
+                      {isAdminWithWrite && !isClosed ? (
                         <Select
                           value={demand.contactPerson?.id || "none"}
                           onValueChange={(v) => handleAssign("contactPersonId", v === "none" ? "" : v)}
@@ -1313,7 +1322,7 @@ export default function DemandDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-16 shrink-0">需求主管</span>
-                      {user?.role === "admin" && !isClosed ? (
+                      {isAdminWithWrite && !isClosed ? (
                         <Select
                           value={demand.demandManager?.id || "none"}
                           onValueChange={(v) => handleAssign("demandManagerId", v === "none" ? "" : v)}
@@ -1377,7 +1386,7 @@ export default function DemandDetailPage() {
                         </div>
                       )}
                     </div>
-                    {demand.status === "CLOSED" && user?.role === "admin" && (
+                    {demand.status === "CLOSED" && isAdminWithWrite && (
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2 text-sm">
                           <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -1654,9 +1663,11 @@ export default function DemandDetailPage() {
                                   <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
                                   <p className="text-sm font-medium">{selectedDoc.fileName}</p>
                                   <p className="text-xs text-muted-foreground">無法轉換預覽，請確認伺服器已安裝 LibreOffice 或 Microsoft Office</p>
-                                  <Button variant="outline" size="sm" asChild>
-                                    <a href={url} download><Download className="h-3.5 w-3.5 mr-1.5" />下載檔案</a>
-                                  </Button>
+                                  {(user?.role !== "admin" || isAdminWithWrite) && (
+                                    <Button variant="outline" size="sm" asChild>
+                                      <a href={url} download><Download className="h-3.5 w-3.5 mr-1.5" />下載檔案</a>
+                                    </Button>
+                                  )}
                                 </div>
                               )
                             }
@@ -1665,11 +1676,13 @@ export default function DemandDetailPage() {
                               <div className="text-center space-y-3">
                                 <FileText className="h-16 w-16 mx-auto text-muted-foreground/40" />
                                 <p className="text-sm font-medium">{selectedDoc.fileName}</p>
-                                <Button variant="outline" size="sm" asChild>
-                                  <a href={url} download>
-                                    <Download className="h-3.5 w-3.5 mr-1.5" />下載檔案
-                                  </a>
-                                </Button>
+                                {(user?.role !== "admin" || isAdminWithWrite) && (
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a href={url} download>
+                                      <Download className="h-3.5 w-3.5 mr-1.5" />下載檔案
+                                    </a>
+                                  </Button>
+                                )}
                               </div>
                             )
                           })()}
@@ -1711,6 +1724,7 @@ export default function DemandDetailPage() {
                       currentPhase={demand.status}
                       demandId={demand.id}
                       canUpload={effectiveCanManage}
+                      canDownload={user?.role !== "admin" || isAdminWithWrite}
                       token={token}
                       onRefresh={fetchDemand}
                       uploadTriggerSelector="#doc-upload-trigger"
