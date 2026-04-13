@@ -249,17 +249,26 @@ export async function GET(request: NextRequest) {
       where.organizationId = organizationId
     }
     if (submitterId) {
-      where.submitterId = submitterId
+      where.OR = [
+        { submitterId },
+        { contactPersonId: submitterId },
+      ]
     }
     if (developerId) {
       where.developerId = developerId === "unassigned" ? null : developerId
     }
     if (search) {
-      where.OR = [
+      // If submitterId already set OR, merge with AND
+      const searchOR = [
         { title: { contains: search } },
         { demandNumber: { contains: search } },
         { organization: { name: { contains: search } } },
       ]
+      if (where.OR) {
+        where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: searchOR }]
+      } else {
+        where.OR = searchOR
+      }
     }
 
     // Merge visibility filter into where clause
@@ -271,7 +280,7 @@ export async function GET(request: NextRequest) {
     const countWhere: Record<string, unknown> = {}
     if (organizationId) countWhere.organizationId = organizationId
     if (developerId) countWhere.developerId = developerId === "unassigned" ? null : developerId
-    if (submitterId) countWhere.submitterId = submitterId
+    if (submitterId) countWhere.OR = [{ submitterId }, { contactPersonId: submitterId }]
 
     const finalCountWhere = visibilityFilter
       ? { AND: [countWhere, visibilityFilter] }

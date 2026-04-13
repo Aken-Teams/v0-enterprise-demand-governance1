@@ -21,11 +21,14 @@ import {
   Search, Inbox, Plus, Loader2, Building2,
   Paperclip, User, MoreHorizontal, Eye, Trash2,
   ClipboardList, Code2, CircleCheckBig, ChevronLeft, ChevronRight,
+  ChevronsUpDown, Check,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 
 interface Demand {
@@ -106,6 +109,7 @@ export default function InboxPage() {
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
+  const [submitterOpen, setSubmitterOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Demand | null>(null)
   const [currentPage, setCurrentPage] = useState(() => {
     const p = parseInt(s.page || "1", 10)
@@ -197,9 +201,24 @@ export default function InboxPage() {
   const devStage = getCount("DEVELOPING") + getCount("ACCEPTANCE")
   // Filtered submitter options based on selected org
   const filteredSubmitterOptions = useMemo(() => {
-    if (filterOrg === "all") return submitterOptions
-    return submitterOptions.filter((u) => u.organizationId === filterOrg)
+    const list = filterOrg === "all" ? submitterOptions : submitterOptions.filter((u) => u.organizationId === filterOrg)
+    return [...list].sort((a, b) => {
+      const orgCmp = (a.organizationName || "").localeCompare(b.organizationName || "", "zh-Hant")
+      if (orgCmp !== 0) return orgCmp
+      return a.name.localeCompare(b.name, "zh-Hant")
+    })
   }, [submitterOptions, filterOrg])
+
+  // Group submitters by organization for the combobox
+  const submitterGroups = useMemo(() => {
+    const map = new Map<string, FilterOption[]>()
+    for (const u of filteredSubmitterOptions) {
+      const org = u.organizationName || "其他"
+      if (!map.has(org)) map.set(org, [])
+      map.get(org)!.push(u)
+    }
+    return Array.from(map.entries())
+  }, [filteredSubmitterOptions])
 
   const hasActiveFilters = filterStatus !== "all" || filterOrg !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all"
 
@@ -289,22 +308,49 @@ export default function InboxPage() {
               </Select>
             )}
             {canSeeAll && (
-              <Select value={filterSubmitter} onValueChange={setFilterSubmitter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="需求者" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部需求者</SelectItem>
-                  {filteredSubmitterOptions.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name}
-                      {filterOrg === "all" && u.organizationName && (
-                        <span className="ml-1 text-muted-foreground text-xs">({u.organizationName})</span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={submitterOpen} onOpenChange={setSubmitterOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" aria-expanded={submitterOpen} className="w-[160px] justify-between font-normal">
+                    <span className="truncate">
+                      {filterSubmitter === "all"
+                        ? "全部需求者"
+                        : filteredSubmitterOptions.find((u) => u.id === filterSubmitter)?.name || "全部需求者"}
+                    </span>
+                    <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[220px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜尋需求者..." />
+                    <CommandList>
+                      <CommandEmpty>找不到需求者</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="全部需求者"
+                          onSelect={() => { setFilterSubmitter("all"); setSubmitterOpen(false) }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", filterSubmitter === "all" ? "opacity-100" : "opacity-0")} />
+                          全部需求者
+                        </CommandItem>
+                      </CommandGroup>
+                      {submitterGroups.map(([orgName, users]) => (
+                        <CommandGroup key={orgName} heading={orgName}>
+                          {users.map((u) => (
+                            <CommandItem
+                              key={u.id}
+                              value={`${u.name} ${u.organizationName || ""}`}
+                              onSelect={() => { setFilterSubmitter(u.id); setSubmitterOpen(false) }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", filterSubmitter === u.id ? "opacity-100" : "opacity-0")} />
+                              <span className="truncate">{u.name}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             )}
             {canSeeAll && (
               <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
