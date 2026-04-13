@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
       ldapUsername: u.ldapUsername,
       ldapDomain: u.ldapDomain,
       isOrgAccount: u.isOrgAccount,
+      restrictBoardToOrg: u.restrictBoardToOrg,
+      restrictBoardViewToOrg: u.restrictBoardViewToOrg,
       accessCount: u._count.demandAccessGrants,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = verifyRole(request, ["admin"])
     const body = await request.json()
-    const { name, email, password, role, organizationId, ldapUsername, ldapDomain, isOrgAccount } = body
+    const { name, email, password, role, organizationId, ldapUsername, ldapDomain, isOrgAccount, restrictBoardToOrg, restrictBoardViewToOrg } = body
 
     if (!name || !email || !role) {
       return NextResponse.json({ error: "姓名、電子郵件、角色皆為必填" }, { status: 400 })
@@ -107,6 +109,8 @@ export async function POST(request: NextRequest) {
           ldapUsername: ldapUsername || null,
           ldapDomain: ldapDomain || null,
           isBoardMember: role === "viewer",
+          restrictBoardToOrg: role === "viewer" ? !!restrictBoardToOrg : false,
+          restrictBoardViewToOrg: role === "viewer" ? !!restrictBoardViewToOrg : false,
           isOrgAccount: !!isOrgAccount,
         },
         include: { organization: { select: { name: true } } },
@@ -160,7 +164,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const auth = verifyRole(request, ["admin"])
     const body = await request.json()
-    const { id, name, email, role, isActive, organizationId, password, adminPassword, ldapUsername, ldapDomain, isOrgAccount } = body
+    const { id, name, email, role, isActive, organizationId, password, adminPassword, ldapUsername, ldapDomain, isOrgAccount, restrictBoardToOrg, restrictBoardViewToOrg } = body
 
     if (!id) {
       return NextResponse.json({ error: "缺少使用者 ID" }, { status: 400 })
@@ -178,6 +182,8 @@ export async function PATCH(request: NextRequest) {
     if (ldapUsername !== undefined) data.ldapUsername = ldapUsername || null
     if (ldapDomain !== undefined) data.ldapDomain = ldapDomain || null
     if (isOrgAccount !== undefined) data.isOrgAccount = !!isOrgAccount
+    if (restrictBoardToOrg !== undefined) data.restrictBoardToOrg = !!restrictBoardToOrg
+    if (restrictBoardViewToOrg !== undefined) data.restrictBoardViewToOrg = !!restrictBoardViewToOrg
 
     // Password reset — requires admin's own password for verification
     if (password && typeof password === "string" && password.length > 0) {

@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Settings, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
+import { Building2, Settings, Eye, EyeOff, ArrowRight, Loader2, ChevronsUpDown, Check } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -14,6 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from "@/components/ui/command"
+import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 
 type LoginType = "company" | "admin"
@@ -64,6 +67,10 @@ export default function HomePage() {
   // Admin login state
   const [selectedAdminRole, setSelectedAdminRole] = useState("admin")
   const [selectedAdminEmail, setSelectedAdminEmail] = useState("")
+
+  // Combobox open states
+  const [companyAccountOpen, setCompanyAccountOpen] = useState(false)
+  const [adminAccountOpen, setAdminAccountOpen] = useState(false)
 
   // Fetch accounts on mount
   useEffect(() => {
@@ -268,25 +275,56 @@ export default function HomePage() {
                               {orgUsers.length === 0 ? (
                                 <p className="text-sm text-muted-foreground py-2">此公司尚無可用帳號</p>
                               ) : (
-                                <Select
-                                  value={selectedAccountEmail}
-                                  onValueChange={(value) => {
-                                    setSelectedAccountEmail(value)
-                                    setError("")
-                                  }}
-                                >
-                                  <SelectTrigger className="h-11 w-full">
-                                    <SelectValue placeholder="選擇帳號" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {orgUsers.map((user) => (
-                                      <SelectItem key={user.id} value={user.email}>
-                                        <span>{user.name}</span>
-                                        <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <Popover open={companyAccountOpen} onOpenChange={setCompanyAccountOpen}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={companyAccountOpen}
+                                      className="h-11 w-full justify-between font-normal"
+                                    >
+                                      {selectedAccountEmail ? (
+                                        <span className="truncate">
+                                          {orgUsers.find((u) => u.email === selectedAccountEmail)?.name || ""}
+                                          <span className="ml-2 text-muted-foreground text-xs">
+                                            ({selectedAccountEmail})
+                                          </span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground">選擇帳號</span>
+                                      )}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                    <Command>
+                                      <CommandInput placeholder="搜尋姓名或信箱..." />
+                                      <CommandList>
+                                        <CommandEmpty>找不到帳號</CommandEmpty>
+                                        {orgUsers.map((user) => (
+                                          <CommandItem
+                                            key={user.id}
+                                            value={`${user.name} ${user.email}`}
+                                            onSelect={() => {
+                                              setSelectedAccountEmail(user.email)
+                                              setError("")
+                                              setCompanyAccountOpen(false)
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                selectedAccountEmail === user.email ? "opacity-100" : "opacity-0",
+                                              )}
+                                            />
+                                            <span className="font-medium">{user.name}</span>
+                                            <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
                               )}
                             </div>
                           </>
@@ -328,25 +366,56 @@ export default function HomePage() {
                               {roleUsers.length === 0 ? (
                                 <p className="text-sm text-muted-foreground py-2">此身份尚無可用帳號</p>
                               ) : (
-                                <Select
-                                  value={selectedAdminEmail}
-                                  onValueChange={(value) => {
-                                    setSelectedAdminEmail(value)
-                                    setError("")
-                                  }}
-                                >
-                                  <SelectTrigger className="h-11 w-full">
-                                    <SelectValue placeholder="選擇帳號" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {roleUsers.map((user) => (
-                                      <SelectItem key={user.id} value={user.email}>
-                                        <span>{user.name}</span>
-                                        <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <Popover open={adminAccountOpen} onOpenChange={setAdminAccountOpen}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={adminAccountOpen}
+                                      className="h-11 w-full justify-between font-normal"
+                                    >
+                                      {selectedAdminEmail ? (
+                                        <span className="truncate">
+                                          {roleUsers.find((u) => u.email === selectedAdminEmail)?.name || ""}
+                                          <span className="ml-2 text-muted-foreground text-xs">
+                                            ({selectedAdminEmail})
+                                          </span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground">選擇帳號</span>
+                                      )}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                    <Command>
+                                      <CommandInput placeholder="搜尋姓名或信箱..." />
+                                      <CommandList>
+                                        <CommandEmpty>找不到帳號</CommandEmpty>
+                                        {roleUsers.map((user) => (
+                                          <CommandItem
+                                            key={user.id}
+                                            value={`${user.name} ${user.email}`}
+                                            onSelect={() => {
+                                              setSelectedAdminEmail(user.email)
+                                              setError("")
+                                              setAdminAccountOpen(false)
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                selectedAdminEmail === user.email ? "opacity-100" : "opacity-0",
+                                              )}
+                                            />
+                                            <span className="font-medium">{user.name}</span>
+                                            <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
                               )}
                             </div>
                           </>

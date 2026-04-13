@@ -9,7 +9,8 @@ interface AuthPayload {
  * Build a Prisma `where` filter based on the user's DemandAccess whitelist.
  *
  * Whitelist logic:
- * - admin / viewer / board member → always null (no restriction)
+ * - admin → always null (no restriction)
+ * - viewer/board member → restricted by restrictBoardViewToOrg
  * - If user has DemandAccess records → restrict to only those demand IDs
  * - If user has NO DemandAccess records → return null (no extra restriction;
  *   the caller's existing filters like organizationId/developerId still apply)
@@ -17,14 +18,19 @@ interface AuthPayload {
 export async function buildDemandVisibilityFilter(
   auth: AuthPayload,
 ): Promise<Record<string, unknown> | null> {
-  if (auth.role === "admin" || auth.role === "viewer") return null
+  if (auth.role === "admin") return null
 
-  // Board members can see all demands
+  // Board members: restricted ones only see their own org's demands
   const user = await prisma.user.findUnique({
     where: { id: auth.userId },
-    select: { isBoardMember: true },
+    select: { isBoardMember: true, restrictBoardViewToOrg: true, organizationId: true },
   })
-  if (user?.isBoardMember) return null
+  if (user?.isBoardMember) {
+    if (user.restrictBoardViewToOrg && user.organizationId) {
+      return { organizationId: user.organizationId }
+    }
+    return null
+  }
 
   const grants = await prisma.demandAccess.findMany({
     where: { userId: auth.userId },
@@ -40,7 +46,8 @@ export async function buildDemandVisibilityFilter(
  * Check whether a specific user can access a specific demand.
  *
  * Whitelist logic:
- * - admin / board member → always allowed
+ * - admin → always allowed
+ * - viewer/board member → restricted by restrictBoardViewToOrg
  * - User with whitelist → demand must be in the whitelist
  * - User without whitelist → fall back to role-based defaults:
  *   - subsidiary: demand must be from same organization
@@ -50,14 +57,17 @@ export async function canAccessDemand(
   auth: AuthPayload,
   demand: { id: string; organizationId: string; developerId: string | null },
 ): Promise<boolean> {
-  if (auth.role === "admin" || auth.role === "viewer") return true
+  if (auth.role === "admin") return true
 
-  // Board members can access all demands
+  // Board members: restricted ones can only access their own org's demands
   const user = await prisma.user.findUnique({
     where: { id: auth.userId },
-    select: { isBoardMember: true, organizationId: true },
+    select: { isBoardMember: true, restrictBoardViewToOrg: true, organizationId: true },
   })
-  if (user?.isBoardMember) return true
+  if (user?.isBoardMember) {
+    if (user.restrictBoardViewToOrg) return demand.organizationId === user.organizationId
+    return true
+  }
 
   // Check whitelist
   const grants = await prisma.demandAccess.findMany({

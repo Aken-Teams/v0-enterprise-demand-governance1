@@ -130,8 +130,10 @@ model User {
   role           UserRole
   avatarUrl      String?       @db.Text
   isActive       Boolean       @default(true)
-  isBoardMember  Boolean       @default(false) @map("is_board_member") /// 董事會成員（全域 SP_REVIEW 審核權）
-  isOrgAccount   Boolean       @default(false) @map("is_org_account")  /// 組織帳號（唯讀，不可簽核）
+  isBoardMember          Boolean       @default(false) @map("is_board_member")           /// 董事會成員（全域 SP_REVIEW 審核權）
+  restrictBoardToOrg     Boolean       @default(false) @map("restrict_board_to_org")     /// true = 僅能審核自己組織的專案
+  restrictBoardViewToOrg Boolean       @default(false) @map("restrict_board_view_to_org") /// true = 僅能查看自己組織的專案
+  isOrgAccount           Boolean       @default(false) @map("is_org_account")            /// 組織帳號（唯讀，不可簽核）
   ldapUsername    String?       /// AD 工號 (e.g. 90770)
   ldapDomain     String?       /// AD domain (e.g. PANJIT)
   organizationId String?

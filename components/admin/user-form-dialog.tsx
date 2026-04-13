@@ -35,11 +35,16 @@ interface UserRow {
   organizationName: string | null
   ldapUsername: string | null
   ldapDomain: string | null
+  isOrgAccount: boolean
+  restrictBoardToOrg: boolean
+  restrictBoardViewToOrg: boolean
   accessCount: number
   createdAt: string
 }
 
-const STEP_LABELS = ["基本資訊", "專案與審核角色", "確認"]
+const STEP_LABELS_SUBSIDIARY = ["基本資訊", "專案與審核角色", "確認"]
+const STEP_LABELS_VIEWER = ["基本資訊", "審核權限", "確認"]
+const STEP_LABELS_DEFAULT = ["基本資訊", "確認"]
 
 interface UserFormDialogProps {
   mode: "create" | "edit"
@@ -59,6 +64,8 @@ interface BasicForm {
   role: string
   organizationId: string
   isActive: boolean
+  restrictBoardToOrg: boolean
+  restrictBoardViewToOrg: boolean
   // Password reset (edit only)
   adminPassword: string
   // LDAP binding metadata (create only)
@@ -74,6 +81,8 @@ const EMPTY_FORM: BasicForm = {
   role: "",
   organizationId: "",
   isActive: true,
+  restrictBoardToOrg: false,
+  restrictBoardViewToOrg: false,
   adminPassword: "",
   ldapUsername: "",
   ldapDomain: "",
@@ -113,13 +122,15 @@ export function UserFormDialog({
           role: initialUser.role,
           organizationId: initialUser.organizationId || "",
           isActive: initialUser.isActive,
+          restrictBoardToOrg: initialUser.restrictBoardToOrg ?? false,
+          restrictBoardViewToOrg: initialUser.restrictBoardViewToOrg ?? false,
           adminPassword: "",
           ldapUsername: initialUser.ldapUsername || "",
           ldapDomain: initialUser.ldapDomain || "",
           ldapDepartment: "",
         })
-        // If initialStep=2 but role isn't subsidiary, fall back to step 1
-        const roleNeedsStep2 = initialUser.role === "subsidiary"
+        // If initialStep=2 but role doesn't need step 2, fall back to step 1
+        const roleNeedsStep2 = initialUser.role === "subsidiary" || initialUser.role === "viewer"
         setStep(initialStep === 2 && !roleNeedsStep2 ? 1 : initialStep)
       } else {
         setForm(EMPTY_FORM)
@@ -182,12 +193,12 @@ export function UserFormDialog({
     }
   }, [token, mode, initialUser])
 
-  // Auto-load Step 2 data when dialog opens directly at step 2 (edit via Eye button)
+  // Auto-load Step 2 data when dialog opens directly at step 2 (edit via Eye button, subsidiary only)
   useEffect(() => {
-    if (open && step === 2 && allDemands.length === 0 && !demandsLoading) {
+    if (open && step === 2 && form.role === "subsidiary" && allDemands.length === 0 && !demandsLoading) {
       loadStep2Data()
     }
-  }, [open, step, allDemands.length, demandsLoading, loadStep2Data])
+  }, [open, step, form.role, allDemands.length, demandsLoading, loadStep2Data])
 
   const hasLdap = !!form.ldapUsername
   const goToStep2 = () => {
@@ -208,7 +219,10 @@ export function UserFormDialog({
       }
     }
     setStep(2)
-    loadStep2Data()
+    // Only load demand data for subsidiary role
+    if (form.role === "subsidiary") {
+      loadStep2Data()
+    }
   }
 
   // LDAP select handler — queries real email from LDAP user API
@@ -266,6 +280,8 @@ export function UserFormDialog({
             organizationId: form.organizationId || null,
             ldapUsername: form.ldapUsername || null,
             ldapDomain: form.ldapDomain || null,
+            restrictBoardToOrg: form.role === "viewer" ? form.restrictBoardToOrg : false,
+            restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
             assignments: assignments.map((a) => ({
               demandId: a.demandId,
               signoffRole: a.signoffRole,
@@ -291,6 +307,8 @@ export function UserFormDialog({
           organizationId: form.organizationId || null,
           ldapUsername: form.ldapUsername || null,
           ldapDomain: form.ldapDomain || null,
+          restrictBoardToOrg: form.role === "viewer" ? form.restrictBoardToOrg : false,
+          restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
         }
         if (form.password) {
           if (!form.adminPassword) {
@@ -349,11 +367,13 @@ export function UserFormDialog({
       ? !!(form.name && form.email && form.role && (hasLdap || (form.password && form.password.length >= 6)))
       : !!(form.name && form.email && form.role)
 
-  // Only "subsidiary" role needs Step 2 (project + signoff role assignment)
-  const needsStep2 = form.role === "subsidiary"
-  const visibleSteps = needsStep2
-    ? STEP_LABELS
-    : [STEP_LABELS[0], STEP_LABELS[2]] // 基本資訊 → 確認
+  // "subsidiary" and "viewer" roles need Step 2
+  const needsStep2 = form.role === "subsidiary" || form.role === "viewer"
+  const visibleSteps = form.role === "subsidiary"
+    ? STEP_LABELS_SUBSIDIARY
+    : form.role === "viewer"
+      ? STEP_LABELS_VIEWER
+      : STEP_LABELS_DEFAULT
   const totalSteps = visibleSteps.length
   // Map internal step number to display position
   const displayStep = needsStep2 ? step : step === 3 ? 2 : 1
@@ -656,7 +676,7 @@ export function UserFormDialog({
               </div>
             )}
 
-            {step === 2 && (
+            {step === 2 && form.role === "subsidiary" && (
               <div className="py-2">
                 <DemandRoleAssignmentPanel
                   value={assignments}
@@ -664,6 +684,60 @@ export function UserFormDialog({
                   allDemands={allDemands}
                   loading={demandsLoading}
                 />
+              </div>
+            )}
+
+            {step === 2 && form.role === "viewer" && (
+              <div className="py-2 space-y-5">
+                <p className="text-sm text-muted-foreground">
+                  設定此董事會成員可觀看與審核的組織範圍。兩者為獨立設定。
+                </p>
+
+                <div className="space-y-2">
+                  <Label>觀看範圍</Label>
+                  <Select
+                    value={form.restrictBoardViewToOrg ? "own" : "all"}
+                    onValueChange={(v) =>
+                      setForm({ ...form, restrictBoardViewToOrg: v === "own" })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部組織</SelectItem>
+                      <SelectItem value="own">僅自己組織</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {form.restrictBoardViewToOrg
+                      ? "僅能查看自己所屬組織的專案"
+                      : "可查看所有組織的專案"}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>審核範圍</Label>
+                  <Select
+                    value={form.restrictBoardToOrg ? "own" : "all"}
+                    onValueChange={(v) =>
+                      setForm({ ...form, restrictBoardToOrg: v === "own" })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部組織</SelectItem>
+                      <SelectItem value="own">僅自己組織</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {form.restrictBoardToOrg
+                      ? "僅能審核（簽核開案）自己所屬組織的專案"
+                      : "可審核（簽核開案）所有組織的專案"}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -700,6 +774,22 @@ export function UserFormDialog({
                     )}
                   </div>
                 </div>
+
+                {/* Viewer scope summary */}
+                {form.role === "viewer" && (
+                  <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium mb-3">
+                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                      審核權限
+                    </div>
+                    <div className="grid grid-cols-[80px_1fr] gap-y-1.5 gap-x-3 text-sm">
+                      <span className="text-muted-foreground">觀看範圍</span>
+                      <span>{form.restrictBoardViewToOrg ? "僅自己組織" : "全部組織"}</span>
+                      <span className="text-muted-foreground">審核範圍</span>
+                      <span>{form.restrictBoardToOrg ? "僅自己組織" : "全部組織"}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Project assignments summary */}
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2">

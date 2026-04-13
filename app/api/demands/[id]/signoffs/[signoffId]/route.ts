@@ -85,10 +85,18 @@ export async function PATCH(
       // Block org-level accounts (read-only, cannot sign)
       const currentUser = await prisma.user.findUnique({
         where: { id: auth.userId },
-        select: { isOrgAccount: true, isBoardMember: true },
+        select: { isOrgAccount: true, isBoardMember: true, restrictBoardToOrg: true, organizationId: true },
       })
       if (currentUser?.isOrgAccount) {
         return NextResponse.json({ error: "組織帳號為唯讀，無法進行簽核操作" }, { status: 403 })
+      }
+
+      // Board member org scope check: restricted board members can only sign their own org's demands
+      if (currentUser?.isBoardMember && currentUser.restrictBoardToOrg) {
+        const demand = await prisma.demand.findUnique({ where: { id }, select: { organizationId: true } })
+        if (demand?.organizationId !== currentUser.organizationId) {
+          return NextResponse.json({ error: "您僅能審核自己組織的專案" }, { status: 403 })
+        }
       }
 
       if (signoff.targetUserId) {

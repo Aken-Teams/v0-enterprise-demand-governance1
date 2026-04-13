@@ -34,6 +34,9 @@ interface UserRow {
   organizationName: string | null
   ldapUsername: string | null
   ldapDomain: string | null
+  isOrgAccount: boolean
+  restrictBoardToOrg: boolean
+  restrictBoardViewToOrg: boolean
   accessCount: number
   createdAt: string
 }
@@ -350,6 +353,23 @@ export default function UsersPage() {
                     <TableCell className="text-center">
                       {user.role === "admin" ? (
                         <span className="text-xs text-muted-foreground">-</span>
+                      ) : user.role === "viewer" ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          {user.restrictBoardViewToOrg ? (
+                            <Badge variant="outline" className="border-orange-300 text-orange-600 text-xs">
+                              觀看限組織
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">觀看全部</span>
+                          )}
+                          {user.restrictBoardToOrg ? (
+                            <Badge variant="outline" className="border-orange-300 text-orange-600 text-xs">
+                              審核限組織
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">審核全部</span>
+                          )}
+                        </div>
                       ) : user.accessCount > 0 ? (
                         <Badge variant="outline" className="border-orange-300 text-orange-600 text-xs">
                           限 {user.accessCount} 筆

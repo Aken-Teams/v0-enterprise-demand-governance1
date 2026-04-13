@@ -91,6 +91,7 @@ export async function POST(
     const demandFull = await prisma.demand.findUnique({
       where: { id },
       select: {
+        organizationId: true,
         contactPersonId: true,
         demandManagerId: true,
         contactPerson_: { select: { id: true, name: true } },
@@ -106,11 +107,13 @@ export async function POST(
       if (demandFull?.demandManagerId) targets.push({ userId: demandFull.demandManagerId, role: "MANAGER" })
     } else if (phase === "SP_REVIEW") {
       // Board members are a global role (User.isBoardMember)
+      // restrictBoardToOrg = true → only add if their org matches demand's org
       const boardMembers = await prisma.user.findMany({
         where: { isBoardMember: true, isActive: true },
-        select: { id: true },
+        select: { id: true, restrictBoardToOrg: true, organizationId: true },
       })
       for (const u of boardMembers) {
+        if (u.restrictBoardToOrg && u.organizationId !== demandFull?.organizationId) continue
         targets.push({ userId: u.id, role: "BOARD" })
       }
     }
