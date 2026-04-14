@@ -122,12 +122,15 @@ export async function GET(
           if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
           if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
         } else if (phase === "SP_REVIEW") {
-          // Board members are global: find all active users with isBoardMember flag
+          // Board members: filter by restrictBoardToOrg
           const boardMembers = await prisma.user.findMany({
             where: { isBoardMember: true, isActive: true },
-            select: { id: true },
+            select: { id: true, restrictBoardToOrg: true, organizationId: true },
           })
-          for (const u of boardMembers) requiredTargets.push({ userId: u.id, role: "BOARD" })
+          for (const u of boardMembers) {
+            if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) continue
+            requiredTargets.push({ userId: u.id, role: "BOARD" })
+          }
         }
 
         // Find latest round timestamp
@@ -386,12 +389,15 @@ export async function PATCH(
         if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
         if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
       } else if (phase === "SP_REVIEW") {
-        // Board members are global (User.isBoardMember)
+        // Board members: filter by restrictBoardToOrg
         const boardMembers = await prisma.user.findMany({
           where: { isBoardMember: true, isActive: true },
-          select: { id: true },
+          select: { id: true, restrictBoardToOrg: true, organizationId: true },
         })
-        for (const u of boardMembers) requiredTargets.push({ userId: u.id, role: "BOARD" })
+        for (const u of boardMembers) {
+          if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) continue
+          requiredTargets.push({ userId: u.id, role: "BOARD" })
+        }
       }
 
       // Find existing signoffs for current phase (latest round only)
@@ -573,12 +579,15 @@ export async function PATCH(
           if (demand.contactPersonId) targets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
           if (demand.demandManagerId) targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
         } else if (status === "SP_REVIEW") {
-          // Board members are global (User.isBoardMember)
+          // Board members: filter by restrictBoardToOrg
           const boardMembers = await tx.user.findMany({
             where: { isBoardMember: true, isActive: true },
-            select: { id: true },
+            select: { id: true, restrictBoardToOrg: true, organizationId: true },
           })
-          for (const u of boardMembers) targets.push({ userId: u.id, role: "BOARD" })
+          for (const u of boardMembers) {
+            if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) continue
+            targets.push({ userId: u.id, role: "BOARD" })
+          }
         }
 
         // Fallback: create one generic signoff if no specific targets
