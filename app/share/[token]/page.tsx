@@ -38,7 +38,12 @@ import {
   ClipboardCheck,
   ShieldAlert,
   Package,
+  ChevronsUpDown,
+  Check,
+  Search,
 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
@@ -304,6 +309,7 @@ function LoginModal({
   const [loading, setLoading] = useState(false)
   const [fetchingUsers, setFetchingUsers] = useState(false)
   const [error, setError] = useState("")
+  const [accountOpen, setAccountOpen] = useState(false)
 
   // Fetch organizations & users when modal opens
   useEffect(() => {
@@ -401,15 +407,45 @@ function LoginModal({
             {orgUsers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">此公司尚無可用帳號</p>
             ) : (
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={selectedEmail}
-                onChange={(e) => { setSelectedEmail(e.target.value); setError("") }}
-              >
-                {orgUsers.map((u) => (
-                  <option key={u.id} value={u.email}>{u.name}（{u.email}）</option>
-                ))}
-              </select>
+              <Popover open={accountOpen} onOpenChange={setAccountOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={accountOpen}
+                    className="w-full justify-between font-normal h-9"
+                  >
+                    <span className="truncate">
+                      {selectedEmail
+                        ? (() => { const u = orgUsers.find(u => u.email === selectedEmail); return u ? `${u.name}（${u.email}）` : selectedEmail })()
+                        : "選擇帳號"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜尋姓名或信箱..." />
+                    <CommandList>
+                      <CommandEmpty>找不到符合的帳號</CommandEmpty>
+                      {orgUsers.map((u) => (
+                        <CommandItem
+                          key={u.id}
+                          value={`${u.name} ${u.email}`}
+                          onSelect={() => {
+                            setSelectedEmail(u.email)
+                            setError("")
+                            setAccountOpen(false)
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", selectedEmail === u.email ? "opacity-100" : "opacity-0")} />
+                          <span>{u.name}（{u.email}）</span>
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             )}
           </div>
           {/* 密碼 */}
