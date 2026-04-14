@@ -122,7 +122,19 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body {
+    overflow-x: hidden;
+    width: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Prevent long words/URLs from breaking mobile layout */
+  .prose pre,
+  .prose code,
+  .prose table {
+    overflow-x: auto;
+    max-width: 100%;
   }
 }

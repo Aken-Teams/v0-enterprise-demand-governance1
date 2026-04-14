@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useRef, useCallback } from "react"
+import { useMemo, useState, useRef, useCallback, useEffect } from "react"
 import { differenceInDays, format, addDays, startOfMonth, endOfMonth, startOfWeek, eachMonthOfInterval, eachWeekOfInterval, eachDayOfInterval } from "date-fns"
 import { zhTW } from "date-fns/locale"
 import { STATUS_MAP, PIPELINE_STEPS, PHASE_COLORS } from "@/lib/constants/demand"
@@ -341,7 +341,16 @@ export function ProjectGantt({
   const hasSubTasks = subTasks.length > 0
   const showDevSection = currentIdx >= PIPELINE_STEPS.indexOf("SP_REVIEW") || hasSubTasks
 
-  const LEFT_COL = "220px"
+  // Responsive left column: narrower on mobile
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)")
+    setIsMobile(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [])
+  const LEFT_COL = isMobile ? "130px" : "220px"
 
   return (
     <>
@@ -384,7 +393,7 @@ export function ProjectGantt({
       </div>
 
       <div className="overflow-x-auto overflow-y-hidden">
-        <div style={{ minWidth: focusRange ? "700px" : showDayLabels ? `${Math.max(700, totalDays * 28)}px` : "700px" }}>
+        <div style={{ minWidth: focusRange ? (isMobile ? "500px" : "700px") : showDayLabels ? `${Math.max(isMobile ? 500 : 700, totalDays * (isMobile ? 18 : 28))}px` : (isMobile ? "500px" : "700px") }}>
           {/* Timeline header */}
           <div className="grid" style={{ gridTemplateColumns: `${LEFT_COL} 1fr` }}>
             <div className="border-b border-border/30" />
@@ -525,14 +534,14 @@ export function ProjectGantt({
                     onMouseLeave={() => setHoveredRow(null)}
                   >
                     {/* Label */}
-                    <div className="px-3 flex items-center gap-2 h-full border-r border-border/30 border-b border-b-border/20">
+                    <div className="px-2 sm:px-3 flex items-center gap-1.5 sm:gap-2 h-full border-r border-border/30 border-b border-b-border/20">
                       {isExpandable && (
                         <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-200", devExpanded && "rotate-90")} />
                       )}
                       {!isExpandable && <div className="w-3.5 shrink-0" />}
                       <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                       <span className={cn(
-                        "text-sm truncate",
+                        "text-xs sm:text-sm truncate",
                         isCurrent && "font-semibold text-foreground",
                         isPast && "text-muted-foreground",
                         isFuture && "text-muted-foreground/60",
@@ -540,11 +549,11 @@ export function ProjectGantt({
                         {info?.label}
                       </span>
                       {hasSubTasks && isDev && (
-                        <Badge variant="outline" className="text-[10px] h-[18px] px-1.5 rounded-md ml-auto">
+                        <Badge variant="outline" className="text-[10px] h-[18px] px-1.5 rounded-md ml-auto hidden sm:inline-flex">
                           {subTasks.length}
                         </Badge>
                       )}
-                      <Badge variant="secondary" className={cn("text-[10px] h-[18px] px-1.5 rounded-md font-medium", !(hasSubTasks && isDev) && "ml-auto")}>
+                      <Badge variant="secondary" className={cn("text-[10px] h-[18px] px-1.5 rounded-md font-medium hidden sm:inline-flex", !(hasSubTasks && isDev) && "ml-auto")}>
                         {row.sp ?? 0} SP
                       </Badge>
                     </div>
@@ -717,22 +726,22 @@ export function ProjectGantt({
       </div>
 
       {/* Legend – sticky at bottom, outside scroll container */}
-      <div className="sticky bottom-0 bg-background z-10 flex items-center gap-4 pt-3 pb-1 border-t border-border/30 px-3">
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <div className="sticky bottom-0 bg-background z-10 flex items-center gap-2 sm:gap-4 pt-3 pb-1 border-t border-border/30 px-2 sm:px-3 flex-wrap">
+        <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-muted-foreground">
           <div className="h-2.5 w-6 rounded-sm bg-primary/30" />
           <span>計畫時程</span>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-muted-foreground">
           <div className="h-3 w-px bg-rose-400/60" />
           <span>今天</span>
         </div>
         {showDayLabels && (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-muted-foreground">
             <div className="h-2.5 w-4 rounded-sm bg-muted/40" />
             <span>週末</span>
           </div>
         )}
-        <div className="ml-auto text-[11px] text-muted-foreground/60">
+        <div className="ml-auto text-[10px] sm:text-[11px] text-muted-foreground/60 hidden sm:block">
           拖曳時間軸可放大區間
         </div>
       </div>

@@ -42,8 +42,6 @@ import {
   Check,
   Search,
 } from "lucide-react"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
@@ -310,6 +308,7 @@ function LoginModal({
   const [fetchingUsers, setFetchingUsers] = useState(false)
   const [error, setError] = useState("")
   const [accountOpen, setAccountOpen] = useState(false)
+  const [accountSearch, setAccountSearch] = useState("")
 
   // Fetch organizations & users when modal opens
   useEffect(() => {
@@ -407,45 +406,62 @@ function LoginModal({
             {orgUsers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">此公司尚無可用帳號</p>
             ) : (
-              <Popover open={accountOpen} onOpenChange={setAccountOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={accountOpen}
-                    className="w-full justify-between font-normal h-9"
-                  >
-                    <span className="truncate">
-                      {selectedEmail
-                        ? (() => { const u = orgUsers.find(u => u.email === selectedEmail); return u ? `${u.name}（${u.email}）` : selectedEmail })()
-                        : "選擇帳號"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="搜尋姓名或信箱..." />
-                    <CommandList>
-                      <CommandEmpty>找不到符合的帳號</CommandEmpty>
-                      {orgUsers.map((u) => (
-                        <CommandItem
-                          key={u.id}
-                          value={`${u.name} ${u.email}`}
-                          onSelect={() => {
-                            setSelectedEmail(u.email)
-                            setError("")
-                            setAccountOpen(false)
-                          }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", selectedEmail === u.email ? "opacity-100" : "opacity-0")} />
-                          <span>{u.name}（{u.email}）</span>
-                        </CommandItem>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={accountOpen}
+                  className="w-full justify-between font-normal h-9"
+                  onClick={() => setAccountOpen(!accountOpen)}
+                  type="button"
+                >
+                  <span className="truncate">
+                    {selectedEmail
+                      ? (() => { const u = orgUsers.find(u => u.email === selectedEmail); return u ? `${u.name}（${u.email}）` : selectedEmail })()
+                      : "選擇帳號"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+                {accountOpen && (
+                  <div className="absolute z-50 top-[calc(100%+4px)] left-0 right-0 rounded-md border bg-popover shadow-md">
+                    <div className="flex items-center border-b px-3">
+                      <Search className="h-4 w-4 shrink-0 opacity-50 mr-2" />
+                      <input
+                        className="flex h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        placeholder="搜尋姓名或信箱..."
+                        value={accountSearch ?? ""}
+                        onChange={(e) => setAccountSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-[200px] overflow-y-auto p-1">
+                      {(() => {
+                        const q = (accountSearch ?? "").toLowerCase()
+                        const filtered = orgUsers.filter((u) =>
+                          !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+                        )
+                        if (filtered.length === 0) return <p className="text-sm text-muted-foreground text-center py-4">找不到符合的帳號</p>
+                        return filtered.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            className="flex items-center w-full gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                            onClick={() => {
+                              setSelectedEmail(u.email)
+                              setError("")
+                              setAccountOpen(false)
+                              setAccountSearch("")
+                            }}
+                          >
+                            <Check className={cn("h-4 w-4 shrink-0", selectedEmail === u.email ? "opacity-100" : "opacity-0")} />
+                            <span className="truncate">{u.name}（{u.email}）</span>
+                          </button>
+                        ))
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           {/* 密碼 */}
@@ -675,7 +691,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
     .map((p) => ({ name: STATUS_MAP[p.phase]?.label || p.phase, value: p.plannedSp!, phase: p.phase }))
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background w-full overflow-x-hidden">
       {/* ── Top bar ── */}
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between py-2.5">
@@ -716,38 +732,34 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
       {/* ── Login prompt banner (when not logged in) ── */}
       {!isLoggedIn && (
         <div className="bg-blue-50 border-b border-blue-200">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-            <LogIn className="h-4.5 w-4.5 text-blue-500 shrink-0" />
-            <p className="text-sm text-blue-700 flex-1">
-              此為唯讀分享連結。
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
+            <LogIn className="h-4 w-4 sm:h-4.5 sm:w-4.5 text-blue-500 shrink-0" />
+            <p className="text-xs sm:text-sm text-blue-700 flex-1">
+              唯讀分享連結。
               <button className="font-medium underline ml-1" onClick={() => setLoginOpen(true)}>
                 登入
               </button>
-              後可執行簽核操作。
+              後可執行簽核。
             </p>
           </div>
         </div>
       )}
 
       {/* ── Main content ── */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5 min-w-0">
         {/* Header */}
         <div>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-mono text-muted-foreground mb-1">{demand.demandNumber}</p>
-              <h1 className="text-xl font-bold tracking-tight leading-snug">{demand.title}</h1>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <Badge className={cn("text-xs whitespace-nowrap", statusInfo.color)}>
-                {statusInfo.label}
-              </Badge>
-              <div className="text-right">
-                <span className="text-2xl font-bold text-primary">{sp}</span>
-                <span className="text-xs text-muted-foreground ml-1">SP</span>
-              </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+            <p className="text-xs font-mono text-muted-foreground shrink-0">{demand.demandNumber}</p>
+            <Badge className={cn("text-[10px] sm:text-xs whitespace-nowrap shrink-0", statusInfo.color)}>
+              {statusInfo.label}
+            </Badge>
+            <div className="ml-auto flex items-baseline gap-0.5 shrink-0">
+              <span className="text-xl sm:text-2xl font-bold text-primary">{sp}</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground">SP</span>
             </div>
           </div>
+          <h1 className="text-base sm:text-xl font-bold tracking-tight leading-snug">{demand.title}</h1>
         </div>
 
         {/* Alert banners */}
@@ -781,62 +793,64 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
         )}
 
         {/* Tabs */}
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="w-full justify-start bg-muted/50 h-10">
-            <TabsTrigger value="overview" className="gap-1.5">
-              <Layers className="h-3.5 w-3.5" />
-              概覽
-            </TabsTrigger>
-            <TabsTrigger value="gantt" className="gap-1.5">
-              <BarChart3 className="h-3.5 w-3.5" />
-              甘特圖
-            </TabsTrigger>
-            <TabsTrigger value="deliverables" className="gap-1.5">
-              <Package className="h-3.5 w-3.5" />
-              交付成果
-              {(() => {
-                const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
-                const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
-                const count = devLinks.length > 0 ? devLinks.length : prdLinks.length
-                return count > 0 ? (
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
-                    {count}
+        <Tabs defaultValue="overview" className="w-full min-w-0">
+          <div className="overflow-x-auto">
+            <TabsList className="inline-flex w-max sm:w-full justify-start bg-muted/50 h-9 sm:h-10">
+              <TabsTrigger value="overview" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+                <Layers className="h-3.5 w-3.5 hidden sm:block" />
+                概覽
+              </TabsTrigger>
+              <TabsTrigger value="gantt" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+                <BarChart3 className="h-3.5 w-3.5 hidden sm:block" />
+                甘特圖
+              </TabsTrigger>
+              <TabsTrigger value="deliverables" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+                <Package className="h-3.5 w-3.5 hidden sm:block" />
+                交付成果
+                {(() => {
+                  const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
+                  const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
+                  const count = devLinks.length > 0 ? devLinks.length : prdLinks.length
+                  return count > 0 ? (
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1 sm:px-1.5 ml-0.5 hidden sm:inline-flex">
+                      {count}
+                    </Badge>
+                  ) : null
+                })()}
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+                <Paperclip className="h-3.5 w-3.5 hidden sm:block" />
+                文件
+                {demand.documents.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1 sm:px-1.5 ml-0.5 hidden sm:inline-flex">
+                    {demand.documents.length}
                   </Badge>
-                ) : null
-              })()}
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-1.5">
-              <Paperclip className="h-3.5 w-3.5" />
-              文件
-              {demand.documents.length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
-                  {demand.documents.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="signoffs" className="gap-1.5">
-              <ClipboardCheck className="h-3.5 w-3.5" />
-              簽核紀錄
-              {demand.phaseSignoffs?.length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
-                  {demand.phaseSignoffs.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+                <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />
+                簽核
+                {demand.phaseSignoffs?.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1 sm:px-1.5 ml-0.5 hidden sm:inline-flex">
+                    {demand.phaseSignoffs.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ══════ Tab: 概覽 ══════ */}
           <TabsContent value="overview" className="mt-5">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              <div className="lg:col-span-2 space-y-5">
-                <Card>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 min-w-0">
+              <div className="lg:col-span-2 space-y-5 min-w-0">
+                <Card className="overflow-hidden">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">需求內容</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-0">
+                  <CardContent className="space-y-0 min-w-0">
                     <div>
                       <p className="text-xs font-semibold text-blue-600 mb-1.5">需求說明</p>
-                      <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                      <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none overflow-x-auto prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>
                           {formatGherkinInMarkdown(demand.description)}
                         </ReactMarkdown>
@@ -1191,9 +1205,9 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                 <Card>
                   <CardContent className="p-0">
                     <div className="relative min-h-[520px]">
-                      <div className="w-full min-h-[520px] flex flex-col">
-                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
-                          <p className="text-xs text-muted-foreground truncate flex-1">{deliverables[0].fileUrl}</p>
+                      <div className="w-full min-h-[520px] flex flex-col min-w-0">
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 min-w-0">
+                          <p className="text-xs text-muted-foreground truncate flex-1 min-w-0">{deliverables[0].fileUrl}</p>
                           <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" asChild>
                             <a href={deliverables[0].fileUrl!} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="h-3 w-3 mr-1" />新分頁
@@ -1212,8 +1226,8 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
 
           {/* ══════ Tab: 文件 ══════ */}
           <TabsContent value="documents" className="mt-5">
-            <div className="grid gap-6 lg:grid-cols-5">
-              <div className="lg:col-span-3">
+            <div className="grid gap-6 lg:grid-cols-5 min-w-0">
+              <div className="lg:col-span-3 min-w-0">
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
@@ -1310,12 +1324,12 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                 </Card>
               </div>
 
-              <div className="lg:col-span-2">
-                <Card>
+              <div className="lg:col-span-2 min-w-0">
+                <Card className="overflow-hidden">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">階段文件</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="min-w-0 overflow-hidden">
                     <PhaseDocuments
                       documents={demand.documents}
                       currentPhase={demand.status}

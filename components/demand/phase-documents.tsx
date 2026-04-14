@@ -253,35 +253,35 @@ export function PhaseDocuments({
       <div
         key={doc.id}
         className={cn(
-          "flex items-center justify-between rounded-md border px-3 py-2.5 transition-colors",
+          "flex items-center justify-between rounded-md border px-2 sm:px-3 py-2 sm:py-2.5 transition-colors overflow-hidden",
           onDocumentSelect && "cursor-pointer hover:bg-muted/50",
           selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
         )}
         onClick={() => onDocumentSelect?.(doc)}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
           <Icon className={cn("h-4 w-4 shrink-0", iconColor)} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             {isExternalLink ? (
               <a
                 href={doc.fileUrl!}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-medium text-blue-600 hover:underline truncate block"
+                className="text-xs sm:text-sm font-medium text-blue-600 hover:underline truncate block"
                 onClick={(e) => e.stopPropagation()}
               >
                 {doc.fileUrl}
               </a>
             ) : (
-              <p className="text-sm font-medium truncate">{doc.fileName}</p>
+              <p className="text-xs sm:text-sm font-medium truncate">{doc.fileName}</p>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
               {DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
               {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
           {docCanDownload && doc.fileUrl && !isExternalLink && (
             <Button
               variant="ghost"
@@ -335,7 +335,7 @@ export function PhaseDocuments({
   const activeData = allPhases.find((p) => p.key === activePhase)
 
   return (
-    <div>
+    <div className="min-w-0 overflow-hidden">
       {!activeData ? (
         /* ── Phase list ── */
         allPhases.map((phase, idx) => {
@@ -353,7 +353,7 @@ export function PhaseDocuments({
                   className="h-2 w-2 rounded-full shrink-0"
                   style={{ backgroundColor: phase.color }}
                 />
-                <span className="text-sm font-medium text-muted-foreground">
+                <span className="text-sm font-medium text-muted-foreground truncate">
                   {phase.label}
                 </span>
                 {count > 0 && (
@@ -400,7 +400,7 @@ export function PhaseDocuments({
             )}
           </div>
 
-          <div className="px-3 pb-3 space-y-2">
+          <div className="px-3 pb-3 space-y-2 min-w-0 overflow-hidden">
             {/* Required checklist */}
             {activeData.required.length > 0 && (
               <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-2">
@@ -421,7 +421,7 @@ export function PhaseDocuments({
             )}
             {/* Document list */}
             {activeData.docs.length > 0 ? (
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 {activeData.docs.map(renderDocRow)}
               </div>
             ) : (

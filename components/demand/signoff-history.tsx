@@ -677,14 +677,14 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
       />
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap rounded-lg bg-muted/40 border border-border/60 px-3 py-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap overflow-x-auto rounded-lg bg-muted/40 border border-border/60 px-2 sm:px-3 py-2 scrollbar-none">
         <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
 
         {/* Phase filter */}
-        <span className="text-[11px] text-muted-foreground/70 font-medium shrink-0">階段</span>
+        <span className="text-[10px] sm:text-[11px] text-muted-foreground/70 font-medium shrink-0">階段</span>
         <button
           className={cn(
-            "text-xs px-2 py-0.5 rounded-full border transition-colors",
+            "text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap shrink-0",
             filterPhase === "all"
               ? "bg-foreground text-background border-foreground"
               : "text-muted-foreground border-border hover:border-foreground/30",
@@ -697,7 +697,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
           <button
             key={p}
             className={cn(
-              "text-xs px-2 py-0.5 rounded-full border transition-colors",
+              "text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap shrink-0",
               filterPhase === p
                 ? "bg-foreground text-background border-foreground"
                 : "text-muted-foreground border-border hover:border-foreground/30",
@@ -708,13 +708,13 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
           </button>
         ))}
 
-        <div className="w-px h-4 bg-border/80 mx-1" />
+        <div className="w-px h-4 bg-border/80 mx-0.5 sm:mx-1 shrink-0" />
 
         {/* Status filter */}
-        <span className="text-[11px] text-muted-foreground/70 font-medium shrink-0">狀態</span>
+        <span className="text-[10px] sm:text-[11px] text-muted-foreground/70 font-medium shrink-0">狀態</span>
         <button
           className={cn(
-            "text-xs px-2 py-0.5 rounded-full border transition-colors",
+            "text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap shrink-0",
             filterStatus === "all"
               ? "bg-foreground text-background border-foreground"
               : "text-muted-foreground border-border hover:border-foreground/30",
@@ -729,7 +729,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
             <button
               key={st}
               className={cn(
-                "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                "text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap shrink-0",
                 filterStatus === st
                   ? "bg-foreground text-background border-foreground"
                   : "text-muted-foreground border-border hover:border-foreground/30",
@@ -799,37 +799,37 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
                       {/* Collapsed header */}
                       <button
                         type="button"
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
+                        className="w-full flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-2 sm:py-2.5 text-left flex-wrap"
                         onClick={() => toggleExpand(group.key)}
                       >
                         {/* Group status icon */}
                         <div className={cn(
-                          "h-6 w-6 rounded-full flex items-center justify-center shrink-0",
+                          "h-5 w-5 sm:h-6 sm:w-6 rounded-full flex items-center justify-center shrink-0",
                           cardStatus === "PENDING" ? "bg-amber-100" :
                           cardStatus === "APPROVED" ? "bg-emerald-100" :
                           cardStatus === "REJECTED" ? "bg-red-100" : "bg-gray-100",
                         )}>
-                          <GroupIcon className={cn("h-3.5 w-3.5", groupIconColor)} />
+                          <GroupIcon className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5", groupIconColor)} />
                         </div>
 
                         {/* Phase label */}
-                        <span className="text-sm font-medium shrink-0">{phaseLabel}</span>
+                        <span className="text-xs sm:text-sm font-medium shrink-0">{phaseLabel}</span>
 
                         {/* Single-signer: role badge + status + name */}
                         {!isMulti && singleSignoff && (
                           <>
                             {singleSignoff.targetRole && (
-                              <Badge variant="outline" className="text-[10px] border-violet-200 text-violet-600 bg-violet-50 shrink-0">
+                              <Badge variant="outline" className="text-[9px] sm:text-[10px] border-violet-200 text-violet-600 bg-violet-50 shrink-0">
                                 {TARGET_ROLE_LABELS[singleSignoff.targetRole] || singleSignoff.targetRole}
                               </Badge>
                             )}
                             {groupStatusInfo && (
-                              <Badge className={cn("text-[10px] shrink-0", groupStatusInfo.color)}>
+                              <Badge className={cn("text-[9px] sm:text-[10px] shrink-0", groupStatusInfo.color)}>
                                 {groupStatusInfo.label}
                               </Badge>
                             )}
                             {reviewerName && (
-                              <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                                 <User className="h-3 w-3" />
                                 {reviewerName}
                               </span>
@@ -841,17 +841,17 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
                         {isMulti && (
                           <>
                             {groupStatusInfo && (
-                              <Badge className={cn("text-[10px] shrink-0", groupStatusInfo.color)}>
+                              <Badge className={cn("text-[9px] sm:text-[10px] shrink-0", groupStatusInfo.color)}>
                                 {groupStatusInfo.label}
                               </Badge>
                             )}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                               {group.signoffs.map((s) => {
                                 const SIcon = STATUS_ICONS[s.status] || Clock
                                 const sColor = STATUS_ICON_COLORS[s.status] || "text-gray-400"
                                 const sName = s.targetUser?.name || s.respondedBy?.name || "?"
                                 return (
-                                  <span key={s.id} className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                                  <span key={s.id} className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-muted-foreground">
                                     <SIcon className={cn("h-3 w-3", sColor)} />
                                     <span>{sName}</span>
                                   </span>
@@ -863,11 +863,11 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
 
                         {/* Spacer + date + chevron */}
                         <span className="flex-1" />
-                        <span className="text-[11px] text-muted-foreground/60 shrink-0">
+                        <span className="text-[10px] sm:text-[11px] text-muted-foreground/60 shrink-0">
                           {fmtDate(group.requestedAt)}
                         </span>
                         <ChevronDown className={cn(
-                          "h-4 w-4 text-muted-foreground/40 shrink-0 transition-transform",
+                          "h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground/40 shrink-0 transition-transform",
                           isExpanded && "rotate-180",
                         )} />
                       </button>
