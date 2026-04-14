@@ -36,7 +36,7 @@ export async function GET(
       where: { id: organizationId },
       include: {
         users: {
-          where: { isActive: true, role: "subsidiary" },
+          where: { isActive: true, role: { in: ["subsidiary", "delivery", "viewer"] } },
           select: { id: true, name: true, email: true },
           orderBy: { name: "asc" },
         },
@@ -52,6 +52,8 @@ export async function GET(
         users: demandOrg.users,
       })
     }
+
+
 
     // If there are explicit access grants, include those users grouped by their org
     if (grantedUserIds.size > 0) {
