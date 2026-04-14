@@ -159,7 +159,7 @@ export default function MyDemandsPage() {
   // Client-side tab filtering
   const filteredDemands = useMemo(() => {
     if (activeTab === "all") return demands
-    if (activeTab === "signoff") return demands.filter((d) => pendingSignoffIds.has(d.id))
+    if (activeTab === "signoff") return demands.filter((d) => d.status !== "CLOSED" && d.status !== "REJECTED" && pendingSignoffIds.has(d.id))
     return demands.filter((d) => d.status === activeTab)
   }, [demands, activeTab, pendingSignoffIds])
 
@@ -171,9 +171,13 @@ export default function MyDemandsPage() {
 
   useEffect(() => { setCurrentPage(1) }, [activeTab, debouncedSearch])
 
+  const activeSignoffCount = useMemo(() =>
+    demands.filter((d) => d.status !== "CLOSED" && d.status !== "REJECTED" && pendingSignoffIds.has(d.id)).length
+  , [demands, pendingSignoffIds])
+
   const getCount = (key: string) => {
     if (key === "all") return demands.length
-    if (key === "signoff") return pendingSignoffIds.size
+    if (key === "signoff") return activeSignoffCount
     return statusCounts[key] || 0
   }
 
@@ -221,7 +225,7 @@ export default function MyDemandsPage() {
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {[
               { key: "all", label: "全部" },
-              ...(pendingSignoffIds.size > 0 ? [{ key: "signoff", label: "待簽核" }] : []),
+              ...(activeSignoffCount > 0 ? [{ key: "signoff", label: "待簽核" }] : []),
               ...STATUS_KEYS.map((k) => ({ key: k, label: STATUS_MAP[k].label })),
             ].map((tab) => {
               const count = getCount(tab.key)
@@ -273,7 +277,7 @@ export default function MyDemandsPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {paginatedDemands.map((demand) => (
-                <DemandCard key={demand.id} demand={demand} hasPendingSignoff={pendingSignoffIds.has(demand.id)} />
+                <DemandCard key={demand.id} demand={demand} hasPendingSignoff={demand.status !== "CLOSED" && demand.status !== "REJECTED" && pendingSignoffIds.has(demand.id)} />
               ))}
             </div>
 

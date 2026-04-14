@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ScrollText,
   Network,
+  ClipboardCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -99,6 +100,7 @@ const navSections: NavSection[] = [
     roles: ["viewer"],
     items: [
       { title: "需求列表", href: "/governance/inbox", icon: Inbox, roles: ["viewer"] },
+      { title: "開案審核", href: "/board/sp-review", icon: ClipboardCheck, roles: ["viewer"] },
       { title: "報表分析", href: "/governance/analytics", icon: BarChart3, roles: ["viewer"] },
     ],
   },
@@ -175,19 +177,31 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
     if (saved === "true") setSidebarCollapsed(true)
   }, [])
 
-  // Fetch pending signoff count for subsidiary users
+  // Fetch pending signoff count for subsidiary / board users
   React.useEffect(() => {
-    if (!user?.role || user.role !== "subsidiary") return
+    if (!user?.role) return
     const token = localStorage.getItem("auth_token")
     if (!token) return
-    fetch("/api/signoffs/pending", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (typeof data.count === "number") setPendingSignoffCount(data.count)
+
+    if (user.role === "subsidiary") {
+      fetch("/api/signoffs/pending", {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .catch(() => {})
+        .then((r) => r.json())
+        .then((data) => {
+          if (typeof data.count === "number") setPendingSignoffCount(data.count)
+        })
+        .catch(() => {})
+    } else if (user.role === "viewer") {
+      fetch("/api/board/sp-review?countOnly=true", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (typeof data.count === "number") setPendingSignoffCount(data.count)
+        })
+        .catch(() => {})
+    }
   }, [user?.role])
 
   const toggleCollapsed = React.useCallback(() => {
@@ -283,7 +297,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                           s.items.some((o: NavItem) => o.href !== item.href && o.href.startsWith(item.href + "/") && (pathname === o.href || pathname.startsWith(o.href + "/")))
                         )
                         const isActive = matches && !hasMoreSpecific
-                        const showSignoffBadge = item.href === "/subsidiary/demands" && pendingSignoffCount > 0
+                        const showSignoffBadge = (item.href === "/subsidiary/demands" || item.href === "/board/sp-review") && pendingSignoffCount > 0
                         const linkEl = (
                           <Link
                             key={item.href}
@@ -297,7 +311,14 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                             )}
                             onClick={() => setSidebarOpen(false)}
                           >
-                            <Icon className={cn(sidebarCollapsed ? "h-5 w-5" : "h-4 w-4")} />
+                            <span className="relative">
+                              <Icon className={cn(sidebarCollapsed ? "h-5 w-5" : "h-4 w-4")} />
+                              {sidebarCollapsed && showSignoffBadge && (
+                                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[8px] font-bold text-white">
+                                  {pendingSignoffCount}
+                                </span>
+                              )}
+                            </span>
                             {!sidebarCollapsed && item.title}
                             {!sidebarCollapsed && showSignoffBadge && (
                               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-medium text-white">
