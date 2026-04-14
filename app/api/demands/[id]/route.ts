@@ -304,10 +304,44 @@ export async function PATCH(
       if (auth.role !== "admin") {
         return NextResponse.json({ error: "僅管理者可編輯" }, { status: 403 })
       }
+
+      // Read current values before update so we can re-target pending signoffs
+      const current = await prisma.demand.findUnique({
+        where: { id },
+        select: { contactPersonId: true, demandManagerId: true },
+      })
+
       const data: Record<string, string | null> = {}
       if (body.contactPersonId !== undefined) data.contactPersonId = body.contactPersonId || null
       if (body.demandManagerId !== undefined) data.demandManagerId = body.demandManagerId || null
       await prisma.demand.update({ where: { id }, data })
+
+      // Re-target pending signoffs when contact person or manager changes
+      if (current) {
+        if (body.contactPersonId !== undefined && body.contactPersonId !== current.contactPersonId) {
+          await prisma.phaseSignoff.updateMany({
+            where: {
+              demandId: id,
+              status: "PENDING",
+              targetRole: "REQUESTER",
+              targetUserId: current.contactPersonId,
+            },
+            data: { targetUserId: body.contactPersonId || null },
+          })
+        }
+        if (body.demandManagerId !== undefined && body.demandManagerId !== current.demandManagerId) {
+          await prisma.phaseSignoff.updateMany({
+            where: {
+              demandId: id,
+              status: "PENDING",
+              targetRole: "MANAGER",
+              targetUserId: current.demandManagerId,
+            },
+            data: { targetUserId: body.demandManagerId || null },
+          })
+        }
+      }
+
       return NextResponse.json({ success: true })
     }
 
