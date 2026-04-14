@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
           const ldapRes = await fetch(`${adUrl}/api/v1/ldap/auth`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-API-Key": adApi },
-            body: JSON.stringify({ username: user.ldapUsername, password }),
+            body: JSON.stringify({ username: user.ldapUsername, password, domain: user.ldapDomain || "PANJIT" }),
           })
           const ldapData = await ldapRes.json().catch(() => ({}))
           if (ldapRes.ok && ldapData.success) {

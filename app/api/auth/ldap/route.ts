@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server"
  */
 export async function POST(request: NextRequest) {
   try {
-    const { username, password } = await request.json()
+    const { username, password, domain } = await request.json()
     if (!username || !password) {
       return NextResponse.json({ success: false, error: "缺少帳號或密碼" }, { status: 400 })
     }
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
         "X-API-Key": apiKey,
       },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, domain: domain || "PANJIT" }),
     })
 
     const data = await upstream.json().catch(() => ({}))
