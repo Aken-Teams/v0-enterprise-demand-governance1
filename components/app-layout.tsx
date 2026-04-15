@@ -192,7 +192,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
           if (typeof data.count === "number") setPendingSignoffCount(data.count)
         })
         .catch(() => {})
-    } else if (user.role === "viewer") {
+    } else if (user.role === "viewer" && !user.boardExemptFromSignoff) {
       fetch("/api/board/sp-review?countOnly=true", {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -202,7 +202,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
         })
         .catch(() => {})
     }
-  }, [user?.role])
+  }, [user?.role, user?.boardExemptFromSignoff])
 
   const toggleCollapsed = React.useCallback(() => {
     setSidebarCollapsed((prev) => {
@@ -278,7 +278,12 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
           <nav className="flex-1 space-y-4 overflow-y-auto p-3">
             <TooltipProvider delayDuration={0}>
               {visibleSections.map((section) => {
-                const visibleItems = section.items.filter((item) => item.roles.includes(detectedRole))
+                const visibleItems = section.items.filter((item) => {
+                  if (!item.roles.includes(detectedRole)) return false
+                  // Hide 開案審核 for board members exempt from signoff
+                  if (item.href === "/board/sp-review" && user?.boardExemptFromSignoff) return false
+                  return true
+                })
                 if (visibleItems.length === 0) return null
 
                 return (

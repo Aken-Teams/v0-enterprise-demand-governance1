@@ -13,6 +13,8 @@ interface User {
   restrictedView?: boolean
   isOrgAccount?: boolean
   adminScopeType?: string // "all" | "organization" | "project"
+  boardExemptFromSignoff?: boolean
+  canViewFinancial?: boolean
 }
 
 interface AuthContextType {

@@ -120,7 +120,7 @@ export async function POST(
       // Board members are a global role (User.isBoardMember)
       // restrictBoardToOrg = true → only add if their org matches demand's org
       const boardMembers = await prisma.user.findMany({
-        where: { isBoardMember: true, isActive: true },
+        where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
         select: { id: true, restrictBoardToOrg: true, organizationId: true },
       })
       for (const u of boardMembers) {

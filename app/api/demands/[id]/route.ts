@@ -124,7 +124,7 @@ export async function GET(
         } else if (phase === "SP_REVIEW") {
           // Board members: filter by restrictBoardToOrg
           const boardMembers = await prisma.user.findMany({
-            where: { isBoardMember: true, isActive: true },
+            where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
             select: { id: true, restrictBoardToOrg: true, organizationId: true },
           })
           for (const u of boardMembers) {
@@ -425,7 +425,7 @@ export async function PATCH(
       } else if (phase === "SP_REVIEW") {
         // Board members: filter by restrictBoardToOrg
         const boardMembers = await prisma.user.findMany({
-          where: { isBoardMember: true, isActive: true },
+          where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
           select: { id: true, restrictBoardToOrg: true, organizationId: true },
         })
         for (const u of boardMembers) {
@@ -615,7 +615,7 @@ export async function PATCH(
         } else if (status === "SP_REVIEW") {
           // Board members: filter by restrictBoardToOrg
           const boardMembers = await tx.user.findMany({
-            where: { isBoardMember: true, isActive: true },
+            where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
             select: { id: true, restrictBoardToOrg: true, organizationId: true },
           })
           for (const u of boardMembers) {

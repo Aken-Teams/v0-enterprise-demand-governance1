@@ -134,6 +134,8 @@ model User {
   isBoardMember          Boolean       @default(false) @map("is_board_member")           /// 董事會成員（全域 SP_REVIEW 審核權）
   restrictBoardToOrg     Boolean       @default(false) @map("restrict_board_to_org")     /// true = 僅能審核自己組織的專案
   restrictBoardViewToOrg Boolean       @default(false) @map("restrict_board_view_to_org") /// true = 僅能查看自己組織的專案
+  boardExemptFromSignoff Boolean       @default(false) @map("board_exempt_from_signoff") /// true = 不需要參與開案審核
+  canViewFinancial       Boolean       @default(false) @map("can_view_financial")         /// true = 可查看金額報表
   isOrgAccount           Boolean       @default(false) @map("is_org_account")            /// 組織帳號（唯讀，不可簽核）
   adminScopeType         String        @default("all") @map("admin_scope_type")          /// "all" | "organization" | "project"
   ldapUsername    String?       /// AD 工號 (e.g. 90770)

@@ -39,6 +39,8 @@ interface UserRow {
   isOrgAccount: boolean
   restrictBoardToOrg: boolean
   restrictBoardViewToOrg: boolean
+  boardExemptFromSignoff: boolean
+  canViewFinancial: boolean
   adminScopeType?: string
   accessCount: number
   createdAt: string
@@ -69,6 +71,8 @@ interface BasicForm {
   isActive: boolean
   restrictBoardToOrg: boolean
   restrictBoardViewToOrg: boolean
+  boardExemptFromSignoff: boolean
+  canViewFinancial: boolean
   // Password reset (edit only)
   adminPassword: string
   // LDAP binding metadata (create only)
@@ -86,6 +90,8 @@ const EMPTY_FORM: BasicForm = {
   isActive: true,
   restrictBoardToOrg: false,
   restrictBoardViewToOrg: false,
+  boardExemptFromSignoff: false,
+  canViewFinancial: false,
   adminPassword: "",
   ldapUsername: "",
   ldapDomain: "",
@@ -132,6 +138,8 @@ export function UserFormDialog({
           isActive: initialUser.isActive,
           restrictBoardToOrg: initialUser.restrictBoardToOrg ?? false,
           restrictBoardViewToOrg: initialUser.restrictBoardViewToOrg ?? false,
+          boardExemptFromSignoff: initialUser.boardExemptFromSignoff ?? false,
+          canViewFinancial: initialUser.canViewFinancial ?? false,
           adminPassword: "",
           ldapUsername: initialUser.ldapUsername || "",
           ldapDomain: initialUser.ldapDomain || "",
@@ -341,6 +349,8 @@ export function UserFormDialog({
             ldapDomain: form.ldapDomain || null,
             restrictBoardToOrg: form.role === "viewer" ? form.restrictBoardToOrg : false,
             restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
+            boardExemptFromSignoff: form.role === "viewer" ? form.boardExemptFromSignoff : false,
+            canViewFinancial: form.canViewFinancial,
             adminScopeType: form.role === "admin" ? adminScopeType : undefined,
             assignments: assignments.map((a) => ({
               demandId: a.demandId,
@@ -377,6 +387,8 @@ export function UserFormDialog({
           ldapDomain: form.ldapDomain || null,
           restrictBoardToOrg: form.role === "viewer" ? form.restrictBoardToOrg : false,
           restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
+          boardExemptFromSignoff: form.role === "viewer" ? form.boardExemptFromSignoff : false,
+          canViewFinancial: form.canViewFinancial,
           adminScopeType: form.role === "admin" ? adminScopeType : undefined,
         }
         if (form.password) {
@@ -805,9 +817,13 @@ export function UserFormDialog({
                 <div className="space-y-2">
                   <Label>審核範圍</Label>
                   <Select
-                    value={form.restrictBoardToOrg ? "own" : "all"}
+                    value={form.boardExemptFromSignoff ? "none" : form.restrictBoardToOrg ? "own" : "all"}
                     onValueChange={(v) =>
-                      setForm({ ...form, restrictBoardToOrg: v === "own" })
+                      setForm({
+                        ...form,
+                        boardExemptFromSignoff: v === "none",
+                        restrictBoardToOrg: v === "own",
+                      })
                     }
                   >
                     <SelectTrigger>
@@ -816,13 +832,30 @@ export function UserFormDialog({
                     <SelectContent>
                       <SelectItem value="all">全部組織</SelectItem>
                       <SelectItem value="own">僅自己組織</SelectItem>
+                      <SelectItem value="none">不需要審核</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {form.restrictBoardToOrg
-                      ? "僅能審核（簽核開案）自己所屬組織的專案"
-                      : "可審核（簽核開案）所有組織的專案"}
+                    {form.boardExemptFromSignoff
+                      ? "此成員不參與開案審核流程"
+                      : form.restrictBoardToOrg
+                        ? "僅能審核（簽核開案）自己所屬組織的專案"
+                        : "可審核（簽核開案）所有組織的專案"}
                   </p>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-lg border p-3">
+                  <input
+                    type="checkbox"
+                    id="canViewFinancial"
+                    checked={form.canViewFinancial}
+                    onChange={(e) => setForm({ ...form, canViewFinancial: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <Label htmlFor="canViewFinancial" className="cursor-pointer">可查看金額報表</Label>
+                    <p className="text-xs text-muted-foreground">勾選後可在報表分析中查看 SP 對應金額資訊</p>
+                  </div>
                 </div>
               </div>
             )}
@@ -969,6 +1002,20 @@ export function UserFormDialog({
                     )}
                   </div>
                 )}
+
+                <div className="flex items-center gap-3 rounded-lg border p-3">
+                  <input
+                    type="checkbox"
+                    id="adminCanViewFinancial"
+                    checked={form.canViewFinancial}
+                    onChange={(e) => setForm({ ...form, canViewFinancial: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <Label htmlFor="adminCanViewFinancial" className="cursor-pointer">可查看金額報表</Label>
+                    <p className="text-xs text-muted-foreground">勾選後可在報表分析中查看 SP 對應金額資訊</p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1017,7 +1064,9 @@ export function UserFormDialog({
                       <span className="text-muted-foreground">觀看範圍</span>
                       <span>{form.restrictBoardViewToOrg ? "僅自己組織" : "全部組織"}</span>
                       <span className="text-muted-foreground">審核範圍</span>
-                      <span>{form.restrictBoardToOrg ? "僅自己組織" : "全部組織"}</span>
+                      <span>{form.boardExemptFromSignoff ? "不需要審核" : form.restrictBoardToOrg ? "僅自己組織" : "全部組織"}</span>
+                      <span className="text-muted-foreground">金額報表</span>
+                      <span>{form.canViewFinancial ? "可查看" : "不可查看"}</span>
                     </div>
                   </div>
                 )}
@@ -1058,6 +1107,10 @@ export function UserFormDialog({
                     {adminScopeType !== "all" && adminEntries.length === 0 && (
                       <p className="text-sm text-muted-foreground mt-1">尚未指派任何{adminScopeType === "organization" ? "組織" : "專案"}</p>
                     )}
+                    <div className="grid grid-cols-[80px_1fr] gap-y-1.5 gap-x-3 text-sm mt-2">
+                      <span className="text-muted-foreground">金額報表</span>
+                      <span>{form.canViewFinancial ? "可查看" : "不可查看"}</span>
+                    </div>
                   </div>
                 )}
 

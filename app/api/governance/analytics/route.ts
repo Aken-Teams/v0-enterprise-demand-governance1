@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { calcUsedSp } from "@/lib/constants/demand"
 
+const SP_RATE = 20000 // 1 SP = NT$20,000
+
 export async function GET(request: NextRequest) {
   try {
-    verifyRole(request, ["admin", "viewer"])
+    const auth = verifyRole(request, ["admin", "viewer"])
 
     const currentYear = new Date().getFullYear()
     const now = new Date()
@@ -332,6 +334,95 @@ export async function GET(request: NextRequest) {
       devWorkload[key].usedSp += calcUsedSp(d.status, sp)
     }
 
+    // --- Financial data (permission-gated) ---
+    let financial: {
+      totalQuotaSp: number
+      totalQuotaAmount: number
+      orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[]
+      demandDetail: { organization: string; demandNumber: string; title: string; status: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
+      monthlyTrend: { month: string; data: { organization: string; sp: number; amount: number }[] }[]
+    } | null = null
+
+    const userRecord = await prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { canViewFinancial: true },
+    })
+
+    if (userRecord?.canViewFinancial) {
+      // Org summary — include wallet quota for budget context
+      const orgSummary = allOrgs.map((org) => {
+        const w = walletMap.get(org.id)
+        const quotaSp = w?.totalQuota ?? 0
+        const orgDemands = demands.filter((d) => d.organizationId === org.id && d.status !== "REJECTED")
+        let totalSp = 0
+        let usedSp = 0
+        for (const dem of orgDemands) {
+          const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
+          totalSp += sp
+          usedSp += calcUsedSp(dem.status, sp)
+        }
+        return {
+          name: org.name,
+          quotaSp,
+          quotaAmount: quotaSp * SP_RATE,
+          totalSp,
+          usedSp,
+          amount: totalSp * SP_RATE,
+          usedAmount: usedSp * SP_RATE,
+          demandCount: orgDemands.length,
+        }
+      }).filter((o) => o.demandCount > 0 || o.quotaSp > 0)
+
+      const totalQuotaSp = orgSummary.reduce((s, o) => s + o.quotaSp, 0)
+      const totalQuotaAmount = totalQuotaSp * SP_RATE
+
+      // Demand detail (grouped by org)
+      const demandDetail = demands
+        .filter((d) => d.status !== "REJECTED")
+        .map((d) => {
+          const sp = d.confirmedSp ?? d.estimatedSp ?? 0
+          const used = calcUsedSp(d.status, sp)
+          return {
+            organization: d.organization.name,
+            demandNumber: d.demandNumber,
+            title: d.title,
+            status: d.status,
+            sp,
+            usedSp: used,
+            amount: sp * SP_RATE,
+            usedAmount: used * SP_RATE,
+          }
+        })
+
+      // Monthly trend: completed SP per org per month (last 8 months)
+      const monthlyTrend: typeof financial.monthlyTrend = []
+      for (let i = 7; i >= 0; i--) {
+        const dt = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const mStart = new Date(dt.getFullYear(), dt.getMonth(), 1)
+        const mEnd = new Date(dt.getFullYear(), dt.getMonth() + 1, 1)
+        const monthLabel = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, "0")}`
+
+        const orgMap = new Map<string, number>()
+        for (const dem of demands) {
+          if (dem.status !== "CLOSED" || !dem.completedDate) continue
+          const completed = new Date(dem.completedDate)
+          if (completed < mStart || completed >= mEnd) continue
+          const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
+          const orgName = dem.organization.name
+          orgMap.set(orgName, (orgMap.get(orgName) || 0) + sp)
+        }
+
+        const data = Array.from(orgMap.entries()).map(([organization, sp]) => ({
+          organization,
+          sp,
+          amount: sp * SP_RATE,
+        }))
+        monthlyTrend.push({ month: monthLabel, data })
+      }
+
+      financial = { totalQuotaSp, totalQuotaAmount, orgSummary, demandDetail, monthlyTrend }
+    }
+
     return NextResponse.json({
       kpi: {
         activeDemands,
@@ -365,6 +456,7 @@ export async function GET(request: NextRequest) {
       },
       phaseAvgDays,
       devWorkload: Object.values(devWorkload).sort((a, b) => b.usedSp - a.usedSp),
+      ...(financial ? { financial } : {}),
     })
   } catch (error) {
     if (error instanceof AuthError) {

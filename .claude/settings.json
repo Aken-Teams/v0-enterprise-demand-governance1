@@ -6,7 +6,8 @@
       "Bash(else)",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(python3 -c \":*)"
+      "Bash(python3 -c \":*)",
+      "Bash(npx prisma db push)"
     ]
   }
 }

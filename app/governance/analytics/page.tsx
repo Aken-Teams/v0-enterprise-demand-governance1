@@ -14,7 +14,7 @@ import {
 } from "recharts"
 import {
   BarChart3, FileText, Coins, TrendingUp, AlertTriangle,
-  CheckCircle, Clock, Loader2, Users,
+  CheckCircle, Clock, Loader2, Users, DollarSign, ChevronDown, ChevronRight,
 } from "lucide-react"
 
 interface AnalyticsData {
@@ -70,6 +70,13 @@ interface AnalyticsData {
   }
   phaseAvgDays: { phase: string; avgDays: number; count: number }[]
   devWorkload: { name: string; count: number; usedSp: number; totalSp: number }[]
+  financial?: {
+    totalQuotaSp: number
+    totalQuotaAmount: number
+    orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[]
+    demandDetail: { organization: string; demandNumber: string; title: string; status: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
+    monthlyTrend: { month: string; data: { organization: string; sp: number; amount: number }[] }[]
+  }
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -84,10 +91,14 @@ const STATUS_COLORS: Record<string, string> = {
 
 const ORG_COLORS = ["#0ea5e9", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"]
 
+const fmtAmount = (n: number) =>
+  `NT$${n.toLocaleString("zh-TW")}`
+
 export default function GovernanceAnalyticsPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set())
 
   const fetchData = useCallback(async () => {
     if (!token) return
@@ -119,7 +130,18 @@ export default function GovernanceAnalyticsPage() {
     )
   }
 
-  const d = data!
+  if (!data) {
+    return (
+      <AppLayout userRole="admin">
+        <div className="flex flex-col items-center justify-center py-32 text-muted-foreground">
+          <BarChart3 className="h-10 w-10 mb-3 opacity-30" />
+          <p className="text-sm">無法載入分析資料</p>
+        </div>
+      </AppLayout>
+    )
+  }
+
+  const d = data
 
   // Prepare chart data
   const statusChartData = Object.entries(d?.statusCounts ?? {}).map(([status, count]) => ({
@@ -198,10 +220,11 @@ export default function GovernanceAnalyticsPage() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${d.financial ? "grid-cols-4" : "grid-cols-3"}`}>
             <TabsTrigger value="overview">總覽</TabsTrigger>
             <TabsTrigger value="metrics">指標分析</TabsTrigger>
             <TabsTrigger value="sp-usage">SP 分析</TabsTrigger>
+            {d.financial && <TabsTrigger value="financial">金額報表</TabsTrigger>}
           </TabsList>
 
           {/* ====== 總覽 ====== */}
@@ -547,6 +570,331 @@ export default function GovernanceAnalyticsPage() {
               </Card>
             )}
           </TabsContent>
+
+          {/* ====== 金額報表 ====== */}
+          {d.financial && (
+            <TabsContent value="financial">
+              {/* Row 1: Charts — Org pie + Org stacked bar */}
+              {(() => {
+                const fin = d.financial!
+                const totalCommittedAmount = fin.orgSummary.reduce((s, o) => s + o.amount, 0)
+                const totalUsedAmount = fin.orgSummary.reduce((s, o) => s + o.usedAmount, 0)
+                const totalCommittedSp = fin.orgSummary.reduce((s, o) => s + o.totalSp, 0)
+                const totalUsedSp = fin.orgSummary.reduce((s, o) => s + o.usedSp, 0)
+                const sorted = [...fin.orgSummary].sort((a, b) => b.quotaAmount - a.quotaAmount || b.amount - a.amount)
+
+                // Pie: committed amount by org
+                const orgPieData = sorted.filter((o) => o.amount > 0).map((o, i) => ({
+                  name: o.name,
+                  value: o.amount,
+                  fill: ORG_COLORS[i % ORG_COLORS.length],
+                }))
+                const orgPieConfig = Object.fromEntries(
+                  orgPieData.map((o) => [o.name, { label: o.name, color: o.fill }])
+                )
+
+                // Stacked bar: quota breakdown per org (consumed / committed-not-consumed / remaining quota)
+                const orgBarData = sorted.filter((o) => o.quotaAmount > 0 || o.amount > 0).map((o) => ({
+                  name: o.name,
+                  已消耗: o.usedAmount,
+                  已提出未消耗: o.amount - o.usedAmount,
+                  剩餘預算: Math.max(0, o.quotaAmount - o.amount),
+                }))
+                const barConfig = {
+                  已消耗: { label: "已消耗", color: "#8b5cf6" },
+                  已提出未消耗: { label: "已提出(未消耗)", color: "#f59e0b" },
+                  剩餘預算: { label: "剩餘預算", color: "#d4d4d8" },
+                }
+
+                return (
+                  <>
+                    {/* KPI strip: 預算 → 已提出 → 已消耗 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 divide-x rounded-lg border bg-card text-center mb-4">
+                      <div className="px-4 py-3">
+                        <p className="text-xs text-muted-foreground">年度預算</p>
+                        <p className="text-xl font-bold mt-0.5">{fmtAmount(fin.totalQuotaAmount)}</p>
+                        <p className="text-[11px] text-muted-foreground">{fin.totalQuotaSp} SP</p>
+                      </div>
+                      <div className="px-4 py-3">
+                        <p className="text-xs text-muted-foreground">已提出金額</p>
+                        <p className="text-xl font-bold mt-0.5 text-amber-600">{fmtAmount(totalCommittedAmount)}</p>
+                        <p className="text-[11px] text-muted-foreground">{totalCommittedSp} SP · 佔預算 {fin.totalQuotaAmount > 0 ? Math.round((totalCommittedAmount / fin.totalQuotaAmount) * 100) : 0}%</p>
+                      </div>
+                      <div className="px-4 py-3">
+                        <p className="text-xs text-muted-foreground">已消耗金額</p>
+                        <p className="text-xl font-bold mt-0.5 text-violet-600">{fmtAmount(totalUsedAmount)}</p>
+                        <p className="text-[11px] text-muted-foreground">{totalUsedSp} SP · 佔預算 {fin.totalQuotaAmount > 0 ? Math.round((totalUsedAmount / fin.totalQuotaAmount) * 100) : 0}%</p>
+                      </div>
+                      <div className="px-4 py-3">
+                        <p className="text-xs text-muted-foreground">剩餘預算</p>
+                        <p className="text-xl font-bold mt-0.5 text-emerald-600">{fmtAmount(Math.max(0, fin.totalQuotaAmount - totalCommittedAmount))}</p>
+                        <p className="text-[11px] text-muted-foreground">{Math.max(0, fin.totalQuotaSp - totalCommittedSp)} SP · 1 SP = NT$20,000</p>
+                      </div>
+                    </div>
+
+                    {/* Budget progress bar */}
+                    {fin.totalQuotaAmount > 0 && (
+                      <div className="rounded-lg border bg-card px-4 py-3 mb-4">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                          <span>預算使用進度</span>
+                          <span>{Math.round((totalCommittedAmount / fin.totalQuotaAmount) * 100)}% 已提出 · {Math.round((totalUsedAmount / fin.totalQuotaAmount) * 100)}% 已消耗</span>
+                        </div>
+                        <div className="flex h-3 rounded-full overflow-hidden bg-muted">
+                          {totalUsedAmount > 0 && (
+                            <div className="bg-violet-500" style={{ width: `${(totalUsedAmount / fin.totalQuotaAmount) * 100}%` }} title="已消耗" />
+                          )}
+                          {totalCommittedAmount - totalUsedAmount > 0 && (
+                            <div className="bg-amber-400" style={{ width: `${((totalCommittedAmount - totalUsedAmount) / fin.totalQuotaAmount) * 100}%` }} title="已提出(未消耗)" />
+                          )}
+                        </div>
+                        <div className="flex gap-4 mt-1.5 text-[11px] text-muted-foreground">
+                          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-violet-500" />已消耗</span>
+                          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" />已提出(未消耗)</span>
+                          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-muted" />剩餘預算</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Charts row */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">各組織提出金額佔比</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ChartContainer config={orgPieConfig} className="h-[280px] w-full">
+                            <PieChart>
+                              <Pie
+                                data={orgPieData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={90}
+                                label={({ name, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => {
+                                  const rad = (Math.PI / 180) * midAngle
+                                  const x = Number(cxVal) + (Number(or) + 18) * Math.cos(-rad)
+                                  const y = Number(cyVal) + (Number(or) + 18) * Math.sin(-rad)
+                                  return <text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={13} fill="currentColor">{name}</text>
+                                }}
+                              >
+                                {orgPieData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                              </Pie>
+                              <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
+                                <span className="flex items-center justify-between w-full gap-2">
+                                  <span className="text-muted-foreground">{name}</span>
+                                  <span className="font-medium tabular-nums">{fmtAmount(value as number)}</span>
+                                </span>
+                              )} />} />
+                            </PieChart>
+                          </ChartContainer>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">各組織預算使用狀況</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ChartContainer config={barConfig} className="h-[280px] w-full">
+                            <BarChart data={orgBarData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" tickFormatter={(v: number) => v >= 10000 ? `${(v / 10000).toFixed(0)}萬` : v.toLocaleString()} />
+                              <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                              <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
+                                <span className="flex items-center justify-between w-full gap-2">
+                                  <span className="text-muted-foreground">{barConfig[name as keyof typeof barConfig]?.label ?? name}</span>
+                                  <span className="font-medium tabular-nums">{fmtAmount(value as number)}</span>
+                                </span>
+                              )} />} />
+                              <Bar dataKey="已消耗" stackId="a" fill="#8b5cf6" />
+                              <Bar dataKey="已提出未消耗" stackId="a" fill="#f59e0b" />
+                              <Bar dataKey="剩餘預算" stackId="a" fill="#d4d4d8" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ChartContainer>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
+                )
+              })()}
+
+              {/* Row 2: Monthly trend chart */}
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-violet-500" />
+                    月度結案金額趨勢
+                  </CardTitle>
+                  <CardDescription>近 8 個月各組織結案 SP 對應金額</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const allOrgNames = Array.from(new Set(d.financial!.monthlyTrend.flatMap((m) => m.data.map((dd) => dd.organization))))
+                    const trendBarData = d.financial!.monthlyTrend.map((m) => {
+                      const row: Record<string, string | number> = { month: m.month }
+                      for (const orgName of allOrgNames) {
+                        const entry = m.data.find((dd) => dd.organization === orgName)
+                        row[orgName] = entry ? entry.amount : 0
+                      }
+                      return row
+                    })
+                    const hasData = trendBarData.some((row) => allOrgNames.some((n) => (row[n] as number) > 0))
+                    if (!hasData) return <EmptyState message="尚無結案金額資料" />
+
+                    const trendConfig = Object.fromEntries(
+                      allOrgNames.map((name, i) => [name, { label: name, color: ORG_COLORS[i % ORG_COLORS.length] }])
+                    )
+                    return (
+                      <ChartContainer config={trendConfig} className="h-[300px] w-full">
+                        <BarChart data={trendBarData} margin={{ bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" fontSize={12} />
+                          <YAxis tickFormatter={(v: number) => v >= 10000 ? `${(v / 10000).toFixed(0)}萬` : v.toLocaleString()} />
+                          <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
+                            <span className="flex items-center justify-between w-full gap-2">
+                              <span className="text-muted-foreground">{name}</span>
+                              <span className="font-medium tabular-nums">{fmtAmount(value as number)}</span>
+                            </span>
+                          )} />} />
+                          {allOrgNames.map((name, i) => (
+                            <Bar key={name} dataKey={name} stackId="a" fill={ORG_COLORS[i % ORG_COLORS.length]} radius={i === allOrgNames.length - 1 ? [4, 4, 0, 0] : undefined} />
+                          ))}
+                        </BarChart>
+                      </ChartContainer>
+                    )
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* Row 3: Org summary table (simplified) */}
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-emerald-500" />
+                    組織金額明細
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 font-medium">組織</th>
+                          <th className="pb-2 font-medium text-right">預算</th>
+                          <th className="pb-2 font-medium text-right">已提出</th>
+                          <th className="pb-2 font-medium text-right">已消耗</th>
+                          <th className="pb-2 font-medium text-right">預算使用率</th>
+                          <th className="pb-2 font-medium text-right">需求數</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...d.financial.orgSummary].sort((a, b) => b.quotaAmount - a.quotaAmount || b.amount - a.amount).map((org) => {
+                          const commitPct = org.quotaAmount > 0 ? Math.round((org.amount / org.quotaAmount) * 100) : 0
+                          const usePct = org.quotaAmount > 0 ? Math.round((org.usedAmount / org.quotaAmount) * 100) : 0
+                          return (
+                            <tr key={org.name} className="border-b last:border-0">
+                              <td className="py-2 font-medium">{org.name}</td>
+                              <td className="py-2 text-right tabular-nums">{fmtAmount(org.quotaAmount)}</td>
+                              <td className="py-2 text-right tabular-nums">{fmtAmount(org.amount)}</td>
+                              <td className="py-2 text-right tabular-nums">{fmtAmount(org.usedAmount)}</td>
+                              <td className="py-2 text-right">
+                                <div className="inline-flex items-center gap-2">
+                                  <div className="relative w-20 h-2 rounded-full bg-muted overflow-hidden">
+                                    {usePct > 0 && <div className="absolute h-full bg-violet-500 rounded-full" style={{ width: `${Math.min(usePct, 100)}%` }} />}
+                                    {commitPct > usePct && <div className="absolute h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(commitPct, 100)}%`, opacity: 0.5 }} />}
+                                    {usePct > 0 && <div className="absolute h-full bg-violet-500 rounded-full" style={{ width: `${Math.min(usePct, 100)}%` }} />}
+                                  </div>
+                                  <span className="tabular-nums text-xs text-muted-foreground w-8 text-right">{commitPct}%</span>
+                                </div>
+                              </td>
+                              <td className="py-2 text-right tabular-nums">{org.demandCount}</td>
+                            </tr>
+                          )
+                        })}
+                        <tr className="border-t-2 font-bold">
+                          <td className="py-2">合計</td>
+                          <td className="py-2 text-right tabular-nums">{fmtAmount(d.financial.orgSummary.reduce((s, o) => s + o.quotaAmount, 0))}</td>
+                          <td className="py-2 text-right tabular-nums">{fmtAmount(d.financial.orgSummary.reduce((s, o) => s + o.amount, 0))}</td>
+                          <td className="py-2 text-right tabular-nums">{fmtAmount(d.financial.orgSummary.reduce((s, o) => s + o.usedAmount, 0))}</td>
+                          <td className="py-2" />
+                          <td className="py-2 text-right tabular-nums">{d.financial.orgSummary.reduce((s, o) => s + o.demandCount, 0)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Row 4: Expandable demand detail */}
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-500" />
+                    需求明細
+                  </CardTitle>
+                  <CardDescription>按組織展開查看各需求 SP 與金額</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    {[...d.financial.orgSummary].sort((a, b) => b.amount - a.amount).map((org) => {
+                      const isExpanded = expandedOrgs.has(org.name)
+                      const orgDemands = d.financial!.demandDetail.filter((dd) => dd.organization === org.name)
+                      return (
+                        <div key={org.name} className="rounded-lg border overflow-hidden">
+                          <button
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium hover:bg-muted/50 transition-colors"
+                            onClick={() => {
+                              setExpandedOrgs((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(org.name)) next.delete(org.name)
+                                else next.add(org.name)
+                                return next
+                              })
+                            }}
+                          >
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            <span>{org.name}</span>
+                            <Badge variant="secondary" className="ml-auto text-xs">{org.demandCount} 筆 · {fmtAmount(org.amount)}</Badge>
+                          </button>
+                          {isExpanded && (
+                            <div className="border-t">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-muted/30 text-left text-muted-foreground text-xs">
+                                    <th className="px-4 py-1.5 font-medium">編號</th>
+                                    <th className="px-4 py-1.5 font-medium">需求名稱</th>
+                                    <th className="px-4 py-1.5 font-medium">狀態</th>
+                                    <th className="px-4 py-1.5 font-medium text-right">金額</th>
+                                    <th className="px-4 py-1.5 font-medium text-right">已消耗</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {orgDemands.map((dd) => (
+                                    <tr key={dd.demandNumber} className="border-b last:border-0">
+                                      <td className="px-4 py-1.5 font-mono text-xs text-muted-foreground">{dd.demandNumber}</td>
+                                      <td className="px-4 py-1.5 max-w-[240px] truncate">{dd.title}</td>
+                                      <td className="px-4 py-1.5">
+                                        <span className={`${STATUS_MAP[dd.status]?.color} text-xs px-2 py-0.5 rounded-full`}>
+                                          {STATUS_MAP[dd.status]?.label}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-1.5 text-right tabular-nums">{fmtAmount(dd.amount)}</td>
+                                      <td className="px-4 py-1.5 text-right tabular-nums">{fmtAmount(dd.usedAmount)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </AppLayout>

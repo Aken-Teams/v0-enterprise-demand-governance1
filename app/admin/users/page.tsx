@@ -38,6 +38,7 @@ interface UserRow {
   isOrgAccount: boolean
   restrictBoardToOrg: boolean
   restrictBoardViewToOrg: boolean
+  boardExemptFromSignoff: boolean
   adminScopeType?: string
   accessCount: number
   createdAt: string
@@ -379,7 +380,11 @@ export default function UsersPage() {
                           ) : (
                             <span className="text-xs text-muted-foreground">觀看全部</span>
                           )}
-                          {user.restrictBoardToOrg ? (
+                          {user.boardExemptFromSignoff ? (
+                            <Badge variant="outline" className="border-gray-300 text-gray-500 text-xs">
+                              不需審核
+                            </Badge>
+                          ) : user.restrictBoardToOrg ? (
                             <Badge variant="outline" className="border-orange-300 text-orange-600 text-xs">
                               審核限組織
                             </Badge>

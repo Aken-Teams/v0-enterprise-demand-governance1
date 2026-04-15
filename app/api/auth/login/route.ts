@@ -113,6 +113,8 @@ export async function POST(request: NextRequest) {
         restrictedView,
         isOrgAccount: user.isOrgAccount,
         adminScopeType: user.role === "admin" ? (user.adminScopeType || "all") : undefined,
+        boardExemptFromSignoff: user.role === "viewer" ? user.boardExemptFromSignoff : undefined,
+        canViewFinancial: (user.role === "viewer" || user.role === "admin") ? user.canViewFinancial : undefined,
       },
     })
   } catch (error) {
