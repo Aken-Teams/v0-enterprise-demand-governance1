@@ -25,6 +25,13 @@ export async function GET() {
       }),
     ])
 
+    // Sort: "強茂" first, then alphabetical
+    organizations.sort((a, b) => {
+      if (a.name === "強茂") return -1
+      if (b.name === "強茂") return 1
+      return a.name.localeCompare(b.name)
+    })
+
     return NextResponse.json({
       organizations: organizations.map((org) => ({
         id: org.id,

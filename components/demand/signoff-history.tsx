@@ -221,9 +221,9 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
 
   const filtered = useMemo(() => {
     const result = signoffs.filter((s) => {
-      // Hide PENDING signoffs with no assigned user (e.g., no manager exists)
-      // Exclude orphan signoffs (no assigned user) regardless of status
-      if (!s.targetUserId && !s.targetUser) return false
+      // Hide orphan PENDING signoffs with no assigned user (e.g., no manager exists)
+      // But keep completed signoffs (APPROVED/REJECTED/SKIPPED) for historical records
+      if (!s.targetUserId && !s.targetUser && s.status === "PENDING") return false
       if (filterPhase !== "all" && s.phase !== filterPhase) return false
       if (filterStatus !== "all" && s.status !== filterStatus) return false
       return true
