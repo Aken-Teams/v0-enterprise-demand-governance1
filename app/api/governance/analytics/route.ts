@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
           demandId: true,
           fromStatus: true,
           toStatus: true,
+          comment: true,
           createdAt: true,
         },
         orderBy: { createdAt: "desc" },
@@ -335,12 +336,16 @@ export async function GET(request: NextRequest) {
     }
 
     // --- Financial data (permission-gated) ---
+    type LedgerDetail = { demandNumber: string; title: string; fromStatus: string | null; toStatus: string; sp: number; deltaSp: number; deltaAmount: number; date: string; spChange?: { from: number; to: number; reason: string } }
+    type MonthlyLedgerOrg = { organization: string; deltaSp: number; deltaAmount: number; details: LedgerDetail[] }
+    type MonthlyLedger = { month: string; data: MonthlyLedgerOrg[] }
+
     let financial: {
       totalQuotaSp: number
       totalQuotaAmount: number
       orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[]
       demandDetail: { organization: string; demandNumber: string; title: string; status: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
-      monthlyTrend: { month: string; data: { organization: string; sp: number; amount: number }[] }[]
+      monthlyLedger: MonthlyLedger[]
     } | null = null
 
     const userRecord = await prisma.user.findUnique({
@@ -394,33 +399,88 @@ export async function GET(request: NextRequest) {
           }
         })
 
-      // Monthly trend: completed SP per org per month (last 8 months)
-      const monthlyTrend: typeof financial.monthlyTrend = []
-      for (let i = 7; i >= 0; i--) {
-        const dt = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        const mStart = new Date(dt.getFullYear(), dt.getMonth(), 1)
-        const mEnd = new Date(dt.getFullYear(), dt.getMonth() + 1, 1)
-        const monthLabel = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, "0")}`
+      // Monthly ledger: SP consumption deltas from status transitions
+      const demandMap = new Map(demands.map((d) => [d.id, {
+        demandNumber: d.demandNumber, title: d.title, orgName: d.organization.name,
+        estimatedSp: d.estimatedSp, confirmedSp: d.confirmedSp,
+      }]))
 
-        const orgMap = new Map<string, number>()
-        for (const dem of demands) {
-          if (dem.status !== "CLOSED" || !dem.completedDate) continue
-          const completed = new Date(dem.completedDate)
-          if (completed < mStart || completed >= mEnd) continue
-          const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
-          const orgName = dem.organization.name
-          orgMap.set(orgName, (orgMap.get(orgName) || 0) + sp)
+      // Collect all transition deltas
+      const allDeltas: { month: string; org: string; detail: LedgerDetail }[] = []
+
+      for (const h of statusHistories) {
+        const dem = demandMap.get(h.demandId)
+        if (!dem) continue
+
+        let spAdj: { type: string; oldSp: number; newSp: number; reason: string } | null = null
+        if (h.comment) {
+          try {
+            const parsed = JSON.parse(h.comment)
+            if (parsed?.type === "SP_ADJUSTMENT") spAdj = parsed
+          } catch { /* not JSON */ }
         }
 
-        const data = Array.from(orgMap.entries()).map(([organization, sp]) => ({
-          organization,
-          sp,
-          amount: sp * SP_RATE,
-        }))
-        monthlyTrend.push({ month: monthLabel, data })
+        const effectiveSp = dem.confirmedSp ?? dem.estimatedSp ?? 0
+        let oldUsed: number, newUsed: number
+
+        if (spAdj) {
+          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, spAdj.oldSp) : 0
+          newUsed = calcUsedSp(h.toStatus, spAdj.newSp)
+        } else {
+          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, effectiveSp) : 0
+          newUsed = calcUsedSp(h.toStatus, effectiveSp)
+        }
+
+        const deltaSp = newUsed - oldUsed
+        if (deltaSp === 0) continue
+
+        const dt = new Date(h.createdAt)
+        const monthKey = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, "0")}`
+
+        allDeltas.push({
+          month: monthKey,
+          org: dem.orgName,
+          detail: {
+            demandNumber: dem.demandNumber, title: dem.title,
+            fromStatus: h.fromStatus, toStatus: h.toStatus,
+            sp: spAdj ? spAdj.newSp : effectiveSp,
+            deltaSp, deltaAmount: deltaSp * SP_RATE,
+            date: new Date(h.createdAt).toISOString(),
+            ...(spAdj ? { spChange: { from: spAdj.oldSp, to: spAdj.newSp, reason: spAdj.reason || "" } } : {}),
+          },
+        })
       }
 
-      financial = { totalQuotaSp, totalQuotaAmount, orgSummary, demandDetail, monthlyTrend }
+      // Group by month → org, last 12 months
+      const monthlyLedgerMap = new Map<string, Map<string, LedgerDetail[]>>()
+      for (const d of allDeltas) {
+        if (!monthlyLedgerMap.has(d.month)) monthlyLedgerMap.set(d.month, new Map())
+        const orgMap = monthlyLedgerMap.get(d.month)!
+        if (!orgMap.has(d.org)) orgMap.set(d.org, [])
+        orgMap.get(d.org)!.push(d.detail)
+      }
+
+      // Generate last 12 months (even if empty)
+      const monthlyLedger: MonthlyLedger[] = []
+      for (let i = 11; i >= 0; i--) {
+        const dt = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const monthLabel = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, "0")}`
+        const orgMap = monthlyLedgerMap.get(monthLabel)
+        const data: MonthlyLedgerOrg[] = []
+        if (orgMap) {
+          for (const [org, details] of orgMap) {
+            const deltaSp = details.reduce((s, d) => s + d.deltaSp, 0)
+            data.push({
+              organization: org, deltaSp, deltaAmount: deltaSp * SP_RATE,
+              details: details.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+            })
+          }
+          data.sort((a, b) => b.deltaAmount - a.deltaAmount)
+        }
+        monthlyLedger.push({ month: monthLabel, data })
+      }
+
+      financial = { totalQuotaSp, totalQuotaAmount, orgSummary, demandDetail, monthlyLedger }
     }
 
     return NextResponse.json({

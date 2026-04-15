@@ -14,7 +14,7 @@ import {
 } from "recharts"
 import {
   BarChart3, FileText, Coins, TrendingUp, AlertTriangle,
-  CheckCircle, Clock, Loader2, Users, DollarSign, ChevronDown, ChevronRight,
+  CheckCircle, Clock, Loader2, Users, DollarSign, ChevronDown, ChevronRight, Calendar,
 } from "lucide-react"
 
 interface AnalyticsData {
@@ -75,7 +75,7 @@ interface AnalyticsData {
     totalQuotaAmount: number
     orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[]
     demandDetail: { organization: string; demandNumber: string; title: string; status: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
-    monthlyTrend: { month: string; data: { organization: string; sp: number; amount: number }[] }[]
+    monthlyLedger: { month: string; data: { organization: string; deltaSp: number; deltaAmount: number; details: { demandNumber: string; title: string; fromStatus: string | null; toStatus: string; sp: number; deltaSp: number; deltaAmount: number; date: string; spChange?: { from: number; to: number; reason: string } }[] }[] }[]
   }
 }
 
@@ -99,6 +99,7 @@ export default function GovernanceAnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set())
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
 
   const fetchData = useCallback(async () => {
     if (!token) return
@@ -581,30 +582,6 @@ export default function GovernanceAnalyticsPage() {
                 const totalUsedAmount = fin.orgSummary.reduce((s, o) => s + o.usedAmount, 0)
                 const totalCommittedSp = fin.orgSummary.reduce((s, o) => s + o.totalSp, 0)
                 const totalUsedSp = fin.orgSummary.reduce((s, o) => s + o.usedSp, 0)
-                const sorted = [...fin.orgSummary].sort((a, b) => b.quotaAmount - a.quotaAmount || b.amount - a.amount)
-
-                // Pie: committed amount by org
-                const orgPieData = sorted.filter((o) => o.amount > 0).map((o, i) => ({
-                  name: o.name,
-                  value: o.amount,
-                  fill: ORG_COLORS[i % ORG_COLORS.length],
-                }))
-                const orgPieConfig = Object.fromEntries(
-                  orgPieData.map((o) => [o.name, { label: o.name, color: o.fill }])
-                )
-
-                // Stacked bar: quota breakdown per org (consumed / committed-not-consumed / remaining quota)
-                const orgBarData = sorted.filter((o) => o.quotaAmount > 0 || o.amount > 0).map((o) => ({
-                  name: o.name,
-                  已消耗: o.usedAmount,
-                  已提出未消耗: o.amount - o.usedAmount,
-                  剩餘預算: Math.max(0, o.quotaAmount - o.amount),
-                }))
-                const barConfig = {
-                  已消耗: { label: "已消耗", color: "#8b5cf6" },
-                  已提出未消耗: { label: "已提出(未消耗)", color: "#f59e0b" },
-                  剩餘預算: { label: "剩餘預算", color: "#d4d4d8" },
-                }
 
                 return (
                   <>
@@ -654,107 +631,47 @@ export default function GovernanceAnalyticsPage() {
                         </div>
                       </div>
                     )}
-
-                    {/* Charts row */}
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-base">各組織提出金額佔比</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <ChartContainer config={orgPieConfig} className="h-[280px] w-full">
-                            <PieChart>
-                              <Pie
-                                data={orgPieData}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={90}
-                                label={({ name, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => {
-                                  const rad = (Math.PI / 180) * midAngle
-                                  const x = Number(cxVal) + (Number(or) + 18) * Math.cos(-rad)
-                                  const y = Number(cyVal) + (Number(or) + 18) * Math.sin(-rad)
-                                  return <text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={13} fill="currentColor">{name}</text>
-                                }}
-                              >
-                                {orgPieData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                              </Pie>
-                              <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
-                                <span className="flex items-center justify-between w-full gap-2">
-                                  <span className="text-muted-foreground">{name}</span>
-                                  <span className="font-medium tabular-nums">{fmtAmount(value as number)}</span>
-                                </span>
-                              )} />} />
-                            </PieChart>
-                          </ChartContainer>
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-base">各組織預算使用狀況</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <ChartContainer config={barConfig} className="h-[280px] w-full">
-                            <BarChart data={orgBarData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis type="number" tickFormatter={(v: number) => v >= 10000 ? `${(v / 10000).toFixed(0)}萬` : v.toLocaleString()} />
-                              <YAxis dataKey="name" type="category" width={100} fontSize={12} />
-                              <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
-                                <span className="flex items-center justify-between w-full gap-2">
-                                  <span className="text-muted-foreground">{barConfig[name as keyof typeof barConfig]?.label ?? name}</span>
-                                  <span className="font-medium tabular-nums">{fmtAmount(value as number)}</span>
-                                </span>
-                              )} />} />
-                              <Bar dataKey="已消耗" stackId="a" fill="#8b5cf6" />
-                              <Bar dataKey="已提出未消耗" stackId="a" fill="#f59e0b" />
-                              <Bar dataKey="剩餘預算" stackId="a" fill="#d4d4d8" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                          </ChartContainer>
-                        </CardContent>
-                      </Card>
-                    </div>
                   </>
                 )
               })()}
 
-              {/* Row 2: Monthly trend chart */}
+              {/* Row 2: Monthly consumption delta chart */}
               <Card className="mt-4">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-violet-500" />
-                    月度結案金額趨勢
+                    月度消耗變動
                   </CardTitle>
-                  <CardDescription>近 8 個月各組織結案 SP 對應金額</CardDescription>
+                  <CardDescription>各月份各組織 SP 消耗增減金額（含階段推進與 SP 調整）</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {(() => {
-                    const allOrgNames = Array.from(new Set(d.financial!.monthlyTrend.flatMap((m) => m.data.map((dd) => dd.organization))))
-                    const trendBarData = d.financial!.monthlyTrend.map((m) => {
+                    const ledger = d.financial!.monthlyLedger
+                    const allOrgNames = Array.from(new Set(ledger.flatMap((m) => m.data.map((dd) => dd.organization))))
+                    const ledgerBarData = ledger.map((m) => {
                       const row: Record<string, string | number> = { month: m.month }
                       for (const orgName of allOrgNames) {
                         const entry = m.data.find((dd) => dd.organization === orgName)
-                        row[orgName] = entry ? entry.amount : 0
+                        row[orgName] = entry ? entry.deltaAmount : 0
                       }
                       return row
                     })
-                    const hasData = trendBarData.some((row) => allOrgNames.some((n) => (row[n] as number) > 0))
-                    if (!hasData) return <EmptyState message="尚無結案金額資料" />
+                    const hasData = ledgerBarData.some((row) => allOrgNames.some((n) => (row[n] as number) !== 0))
+                    if (!hasData) return <EmptyState message="尚無消耗變動資料" />
 
-                    const trendConfig = Object.fromEntries(
+                    const ledgerConfig = Object.fromEntries(
                       allOrgNames.map((name, i) => [name, { label: name, color: ORG_COLORS[i % ORG_COLORS.length] }])
                     )
                     return (
-                      <ChartContainer config={trendConfig} className="h-[300px] w-full">
-                        <BarChart data={trendBarData} margin={{ bottom: 20 }}>
+                      <ChartContainer config={ledgerConfig} className="h-[300px] w-full">
+                        <BarChart data={ledgerBarData} margin={{ bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="month" fontSize={12} />
-                          <YAxis tickFormatter={(v: number) => v >= 10000 ? `${(v / 10000).toFixed(0)}萬` : v.toLocaleString()} />
+                          <YAxis tickFormatter={(v: number) => v >= 10000 ? `${(v / 10000).toFixed(0)}萬` : v <= -10000 ? `${(v / 10000).toFixed(0)}萬` : v.toLocaleString()} />
                           <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
                             <span className="flex items-center justify-between w-full gap-2">
                               <span className="text-muted-foreground">{name}</span>
-                              <span className="font-medium tabular-nums">{fmtAmount(value as number)}</span>
+                              <span className="font-medium tabular-nums">{(value as number) >= 0 ? "+" : ""}{fmtAmount(value as number)}</span>
                             </span>
                           )} />} />
                           {allOrgNames.map((name, i) => (
@@ -767,7 +684,104 @@ export default function GovernanceAnalyticsPage() {
                 </CardContent>
               </Card>
 
-              {/* Row 3: Org summary table (simplified) */}
+              {/* Row 2b: Monthly consumption detail (expandable) */}
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-blue-500" />
+                    月度消耗明細
+                  </CardTitle>
+                  <CardDescription>展開月份查看各筆階段變更的消耗異動</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const ledger = d.financial!.monthlyLedger
+                    const nonEmpty = ledger.filter((m) => m.data.length > 0)
+                    if (nonEmpty.length === 0) return <EmptyState message="尚無消耗明細" />
+                    return (
+                      <div className="space-y-1">
+                        {nonEmpty.map((m) => {
+                          const isExpanded = expandedMonths.has(m.month)
+                          const monthTotal = m.data.reduce((s, o) => s + o.deltaAmount, 0)
+                          return (
+                            <div key={m.month} className="rounded-lg border overflow-hidden">
+                              <button
+                                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium hover:bg-muted/50 transition-colors"
+                                onClick={() => {
+                                  setExpandedMonths((prev) => {
+                                    const next = new Set(prev)
+                                    if (next.has(m.month)) next.delete(m.month)
+                                    else next.add(m.month)
+                                    return next
+                                  })
+                                }}
+                              >
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                <span>{m.month}</span>
+                                <div className="flex gap-2 ml-auto flex-wrap justify-end">
+                                  {m.data.map((o) => (
+                                    <Badge key={o.organization} variant="secondary" className="text-xs">
+                                      {o.organization} {o.deltaAmount >= 0 ? "+" : ""}{fmtAmount(o.deltaAmount)}
+                                    </Badge>
+                                  ))}
+                                  <Badge variant={monthTotal >= 0 ? "default" : "destructive"} className="text-xs">
+                                    合計 {monthTotal >= 0 ? "+" : ""}{fmtAmount(monthTotal)}
+                                  </Badge>
+                                </div>
+                              </button>
+                              {isExpanded && (
+                                <div className="border-t">
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr className="bg-muted/30 text-left text-muted-foreground text-xs">
+                                        <th className="px-4 py-1.5 font-medium">日期</th>
+                                        <th className="px-4 py-1.5 font-medium">編號</th>
+                                        <th className="px-4 py-1.5 font-medium">需求</th>
+                                        <th className="px-4 py-1.5 font-medium">階段變更</th>
+                                        <th className="px-4 py-1.5 font-medium text-right">SP</th>
+                                        <th className="px-4 py-1.5 font-medium text-right">金額異動</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {m.data.flatMap((o) =>
+                                        o.details.map((det, i) => (
+                                          <tr key={`${o.organization}-${i}`} className={`border-b last:border-0 ${det.spChange ? "bg-orange-50 dark:bg-orange-950/20" : ""}`}>
+                                            <td className="px-4 py-1.5 text-xs text-muted-foreground">{new Date(det.date).toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })}</td>
+                                            <td className="px-4 py-1.5 font-mono text-xs text-muted-foreground">{det.demandNumber}</td>
+                                            <td className="px-4 py-1.5 max-w-[200px] truncate">{det.title}</td>
+                                            <td className="px-4 py-1.5 text-xs">
+                                              {det.fromStatus ? (
+                                                <span>{STATUS_MAP[det.fromStatus]?.label ?? det.fromStatus} → {STATUS_MAP[det.toStatus]?.label ?? det.toStatus}</span>
+                                              ) : (
+                                                <span>{STATUS_MAP[det.toStatus]?.label ?? det.toStatus}</span>
+                                              )}
+                                              {det.spChange && (
+                                                <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 border-orange-300 text-orange-600">
+                                                  SP: {det.spChange.from}→{det.spChange.to}
+                                                </Badge>
+                                              )}
+                                            </td>
+                                            <td className="px-4 py-1.5 text-right tabular-nums text-xs">{det.sp} SP</td>
+                                            <td className={`px-4 py-1.5 text-right tabular-nums text-xs font-medium ${det.deltaAmount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                              {det.deltaAmount >= 0 ? "+" : ""}{fmtAmount(det.deltaAmount)}
+                                            </td>
+                                          </tr>
+                                        ))
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* Row 3: Org summary table */}
               <Card className="mt-4">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
