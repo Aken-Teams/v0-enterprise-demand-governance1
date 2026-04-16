@@ -87,10 +87,11 @@ enum AcceptanceResult {
 }
 
 enum SignoffStatus {
-  PENDING   // 待確認
-  APPROVED  // 已確認
-  REJECTED  // 已退回
-  SKIPPED   // 管理者略過
+  PENDING    // 待確認
+  APPROVED   // 已確認
+  REJECTED   // 已退回
+  SKIPPED    // 管理者略過
+  CANCELLED  // 發起者撤回（目前僅限設計變更）
 }
 
 enum DemandSignoffRole {

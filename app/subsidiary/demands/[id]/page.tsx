@@ -1316,6 +1316,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                   demandId={demand.id}
                   token={token}
                   userRole={user?.role}
+                  currentUserId={user?.id}
                   onRefresh={fetchDemand}
                   spAdjustment={(() => {
                     if (demand.confirmedSp === null || demand.confirmedSp === demand.estimatedSp) return null

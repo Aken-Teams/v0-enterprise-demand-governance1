@@ -117,6 +117,7 @@ export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }
   APPROVED: { label: "已確認", color: "bg-emerald-100 text-emerald-700" },
   REJECTED: { label: "已退回", color: "bg-red-100 text-red-700" },
   SKIPPED: { label: "管理者略過", color: "bg-gray-100 text-gray-600" },
+  CANCELLED: { label: "已撤回", color: "bg-slate-100 text-slate-600" },
 }
 
 /** 可發起設計變更的階段 (MVP/開案/驗收) */

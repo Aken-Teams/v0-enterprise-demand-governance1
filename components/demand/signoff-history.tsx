@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 import {
   Check, Clock, X, SkipForward, FileIcon, Download, Filter,
   Paperclip, Trash2, Loader2, Pencil, MessageSquare, Coins,
-  ChevronDown, User, Users,
+  ChevronDown, User, Users, Ban, Undo2,
 } from "lucide-react"
 
 interface SignoffDocument {
@@ -57,6 +57,7 @@ interface SignoffHistoryProps {
   demandId?: string
   token?: string | null
   userRole?: string
+  currentUserId?: string
   onRefresh?: () => void
   spAdjustment?: SpAdjustment | null
 }
@@ -66,6 +67,7 @@ const STATUS_ICONS: Record<string, typeof Check> = {
   APPROVED: Check,
   REJECTED: X,
   SKIPPED: SkipForward,
+  CANCELLED: Ban,
 }
 
 const STATUS_ICON_COLORS: Record<string, string> = {
@@ -73,6 +75,7 @@ const STATUS_ICON_COLORS: Record<string, string> = {
   APPROVED: "text-emerald-500",
   REJECTED: "text-red-500",
   SKIPPED: "text-gray-400",
+  CANCELLED: "text-slate-400",
 }
 
 const STATUS_BG: Record<string, string> = {
@@ -80,6 +83,16 @@ const STATUS_BG: Record<string, string> = {
   APPROVED: "bg-emerald-50 border-emerald-200",
   REJECTED: "bg-red-50 border-red-200",
   SKIPPED: "bg-gray-50 border-gray-200",
+  CANCELLED: "bg-slate-50 border-slate-200",
+}
+
+// Circle background for the status icon badge (inside list items)
+const STATUS_CIRCLE_BG: Record<string, string> = {
+  PENDING: "bg-amber-100",
+  APPROVED: "bg-emerald-100",
+  REJECTED: "bg-red-100",
+  SKIPPED: "bg-gray-100",
+  CANCELLED: "bg-slate-100",
 }
 
 // Design-change cards use an indigo palette so they are visually
@@ -89,6 +102,7 @@ const DESIGN_CHANGE_BG: Record<string, string> = {
   APPROVED: "bg-indigo-50/40 border-indigo-200",
   REJECTED: "bg-rose-50/60 border-rose-200",
   SKIPPED: "bg-gray-50 border-gray-200",
+  CANCELLED: "bg-slate-50 border-slate-200",
 }
 
 function fmtDate(dateStr: string) {
@@ -116,6 +130,7 @@ interface SignoffGroup {
 }
 
 function computeGroupStatus(signoffs: SignoffRecord[]): string {
+  if (signoffs.every((s) => s.status === "CANCELLED")) return "CANCELLED"
   if (signoffs.some((s) => s.status === "REJECTED")) return "REJECTED"
   if (signoffs.some((s) => s.status === "PENDING")) return "PENDING"
   if (signoffs.every((s) => s.status === "APPROVED")) return "APPROVED"
@@ -162,6 +177,44 @@ function groupSignoffs(signoffs: SignoffRecord[]): SignoffGroup[] {
     })
   }
 
+  // Re-sort groups by "last activity" time.
+  // When a DESIGN_CHANGE in a phase has been processed (approved/rejected/
+  // cancelled), the related PHASE signoff should bubble up — because the PHASE
+  // signoff is now "what's next", even though its own requestedAt is older.
+  // We borrow the latest DC respondedAt as the PHASE group's sort time.
+  const phaseDcRespondedTime: Record<string, number> = {}
+  for (const g of groups) {
+    if (g.kind !== "DESIGN_CHANGE") continue
+    const respTimes = g.signoffs
+      .map((s) => (s.respondedAt ? new Date(s.respondedAt).getTime() : 0))
+      .filter((t) => t > 0)
+    if (respTimes.length === 0) continue
+    const maxResp = Math.max(...respTimes)
+    phaseDcRespondedTime[g.phase] = Math.max(
+      phaseDcRespondedTime[g.phase] || 0,
+      maxResp,
+    )
+  }
+
+  const sortTime = (g: SignoffGroup): number => {
+    const base = new Date(g.requestedAt).getTime()
+    if (g.kind === "PHASE") {
+      return Math.max(base, phaseDcRespondedTime[g.phase] || 0)
+    }
+    return base
+  }
+
+  groups.sort((a, b) => {
+    const diff = sortTime(b) - sortTime(a)
+    if (diff !== 0) return diff
+    // Tiebreaker 1: PENDING groups first (things to do come up top)
+    const aPending = a.groupStatus === "PENDING" ? 0 : 1
+    const bPending = b.groupStatus === "PENDING" ? 0 : 1
+    if (aPending !== bPending) return aPending - bPending
+    // Tiebreaker 2: PHASE groups before DESIGN_CHANGE groups
+    return a.kind === "PHASE" ? -1 : 1
+  })
+
   return groups
 }
 
@@ -170,7 +223,7 @@ type FilterStatus = "all" | string
 
 const PAGE_SIZE = 10
 
-export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh, spAdjustment }: SignoffHistoryProps) {
+export function SignoffHistory({ signoffs, demandId, token, userRole, currentUserId, onRefresh, spAdjustment }: SignoffHistoryProps) {
   const [filterPhase, setFilterPhase] = useState<FilterPhase>("all")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [page, setPage] = useState(1)
@@ -209,6 +262,61 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
     }
   }
 
+  // DC withdraw (cancel) state
+  const [cancelSignoffId, setCancelSignoffId] = useState<string | null>(null)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelLoading, setCancelLoading] = useState(false)
+  const [cancelError, setCancelError] = useState("")
+
+  const openCancelDialog = (signoffId: string) => {
+    setCancelSignoffId(signoffId)
+    setCancelReason("")
+    setCancelError("")
+  }
+
+  const closeCancelDialog = () => {
+    if (cancelLoading) return
+    setCancelSignoffId(null)
+    setCancelReason("")
+    setCancelError("")
+  }
+
+  const submitCancel = async () => {
+    if (!demandId || !token || !cancelSignoffId) return
+    const reason = cancelReason.trim()
+    if (reason.length < 5) {
+      setCancelError("撤回原因至少 5 字")
+      return
+    }
+    setCancelLoading(true)
+    setCancelError("")
+    try {
+      const res = await fetch(
+        `/api/demands/${demandId}/signoffs/${cancelSignoffId}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason }),
+        },
+      )
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setCancelError(data.error || "撤回失敗")
+        return
+      }
+      setCancelSignoffId(null)
+      setCancelReason("")
+      onRefresh?.()
+    } catch {
+      setCancelError("網路錯誤，請稍後再試")
+    } finally {
+      setCancelLoading(false)
+    }
+  }
+
   // Post-hoc requestComment editing
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editCommentText, setEditCommentText] = useState("")
@@ -230,7 +338,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
   // Collect unique statuses present
   const statuses = useMemo(() => {
     const set = new Set(signoffs.map((s) => s.status))
-    return ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].filter((s) => set.has(s))
+    return ["PENDING", "APPROVED", "REJECTED", "SKIPPED", "CANCELLED"].filter((s) => set.has(s))
   }, [signoffs])
 
   const filtered = useMemo(() => {
@@ -250,12 +358,16 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
   // Group filtered signoffs into rounds
   const groups = useMemo(() => groupSignoffs(filtered), [filtered])
 
-  // Resolve __first__ key to actual first group key
+  // Resolve __first__ key to actual first group key.
+  // Prefer the first non-CANCELLED group so a withdrawn DC doesn't hide a
+  // still-pending phase signoff sitting right below it.
   const resolvedExpanded = useMemo(() => {
     const set = new Set(expandedKeys)
     if (set.has("__first__") && groups.length > 0) {
       set.delete("__first__")
-      set.add(groups[0].key)
+      const firstMeaningful =
+        groups.find((g) => g.groupStatus !== "CANCELLED") || groups[0]
+      set.add(firstMeaningful.key)
     }
     return set
   }, [expandedKeys, groups])
@@ -419,9 +531,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
           <div className="flex items-center gap-2 flex-wrap">
             <div className={cn(
               "h-5 w-5 rounded-full flex items-center justify-center shrink-0",
-              s.status === "PENDING" ? "bg-amber-100" :
-              s.status === "APPROVED" ? "bg-emerald-100" :
-              s.status === "REJECTED" ? "bg-red-100" : "bg-gray-100",
+              STATUS_CIRCLE_BG[s.status] || "bg-gray-100",
             )}>
               <Icon className={cn("h-3 w-3", iconColor)} />
             </div>
@@ -823,9 +933,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
                         {/* Group status icon */}
                         <div className={cn(
                           "h-5 w-5 sm:h-6 sm:w-6 rounded-full flex items-center justify-center shrink-0",
-                          cardStatus === "PENDING" ? "bg-amber-100" :
-                          cardStatus === "APPROVED" ? "bg-emerald-100" :
-                          cardStatus === "REJECTED" ? "bg-red-100" : "bg-gray-100",
+                          STATUS_CIRCLE_BG[cardStatus] || "bg-gray-100",
                         )}>
                           <GroupIcon className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5", groupIconColor)} />
                         </div>
@@ -936,6 +1044,27 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
 
                           {/* Single-signer: flat layout */}
                           {!isMulti && singleSignoff && renderSignerDetail(singleSignoff, false)}
+
+                          {/* DC withdraw (cancel) action — only initiator, only PENDING DC */}
+                          {group.kind === "DESIGN_CHANGE"
+                            && currentUserId
+                            && group.requestedBy.id === currentUserId
+                            && group.signoffs.some((s) => s.status === "PENDING") && (
+                              <div className="pt-1 flex justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+                                  onClick={() => {
+                                    const pending = group.signoffs.find((s) => s.status === "PENDING")
+                                    if (pending) openCancelDialog(pending.id)
+                                  }}
+                                >
+                                  <Undo2 className="h-3.5 w-3.5 mr-1.5" />
+                                  撤回設計變更
+                                </Button>
+                              </div>
+                            )}
                         </div>
                       )}
                     </div>
@@ -971,6 +1100,45 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
           )}
         </>
       )}
+
+      {/* Confirm withdraw (cancel) design change dialog */}
+      <AlertDialog
+        open={!!cancelSignoffId}
+        onOpenChange={(open) => { if (!open) closeCancelDialog() }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>撤回設計變更</AlertDialogTitle>
+            <AlertDialogDescription>
+              撤回後，審核人將不再需要確認此變更，此設計變更會標記為「已撤回」並保留紀錄。請填寫撤回原因（至少 5 字），審核人會收到通知。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <textarea
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              rows={3}
+              placeholder="例如：需求方希望另開新案處理，不走設計變更流程"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              disabled={cancelLoading}
+            />
+            {cancelError && (
+              <p className="text-xs text-red-600">{cancelError}</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelLoading}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-slate-600 hover:bg-slate-700"
+              disabled={cancelLoading || cancelReason.trim().length < 5}
+              onClick={(e) => { e.preventDefault(); submitCancel() }}
+            >
+              {cancelLoading && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              確認撤回
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirm delete document dialog */}
       <AlertDialog open={!!confirmDeleteDocId} onOpenChange={(open) => { if (!open) setConfirmDeleteDocId(null) }}>
