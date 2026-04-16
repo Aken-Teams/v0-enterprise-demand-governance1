@@ -23,6 +23,13 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/png",
   "image/gif",
   "image/webp",
+  "application/octet-stream", // fallback for .md etc. on Windows
+])
+
+// Extensions allowed when MIME is application/octet-stream
+const ALLOWED_EXTENSIONS = new Set([
+  "md", "txt", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "jpg", "jpeg", "png", "gif", "webp",
 ])
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -55,6 +62,13 @@ export async function POST(
         }
         if (!ALLOWED_MIME_TYPES.has(file.type)) {
           return NextResponse.json({ error: `檔案「${file.name}」格式不支援` }, { status: 400 })
+        }
+        // For octet-stream (e.g. .md on Windows), verify by file extension
+        if (file.type === "application/octet-stream") {
+          const ext = file.name.split(".").pop()?.toLowerCase() || ""
+          if (!ALLOWED_EXTENSIONS.has(ext)) {
+            return NextResponse.json({ error: `檔案「${file.name}」格式不支援 (.${ext})` }, { status: 400 })
+          }
         }
       }
     } else {
