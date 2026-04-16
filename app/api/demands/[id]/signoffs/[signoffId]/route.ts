@@ -151,13 +151,14 @@ export async function PATCH(
     })
 
     // When a signer rejects, auto-skip other PENDING signoffs in the same round
-    // (same phase + requestedAt within 5 seconds = same round)
+    // (same phase + kind + requestedAt within 5 seconds = same round)
     if (action === "reject") {
       const roundTime = signoff.requestedAt.getTime()
       await prisma.phaseSignoff.updateMany({
         where: {
           demandId: id,
           phase: signoff.phase as DemandStatus,
+          kind: signoff.kind,
           status: "PENDING",
           id: { not: signoffId },
           requestedAt: {

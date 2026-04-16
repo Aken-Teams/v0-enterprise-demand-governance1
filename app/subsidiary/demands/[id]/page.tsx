@@ -326,6 +326,7 @@ interface DemandDetail {
   phaseSignoffs: {
     id: string
     phase: string
+    kind?: string
     status: string
     targetUserId: string | null
     targetUser: { id: string; name: string } | null
@@ -476,9 +477,22 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   // Pending sign-off(s) for current phase — find the one targeting current user
   // Org accounts are read-only and can never sign
   const isOrgAccount = user?.isOrgAccount
-  const pendingSignoff = !isOrgAccount ? (demand.phaseSignoffs?.find(
-    (s) => s.status === "PENDING" && s.targetUserId === user?.id
-  ) || null) : null
+  const myPendingSignoffs = !isOrgAccount
+    ? (demand.phaseSignoffs?.filter(
+        (s) => s.status === "PENDING" && s.targetUserId === user?.id,
+      ) || [])
+    : []
+  // Prefer DESIGN_CHANGE signoff over PHASE when both exist for the same user
+  const pendingSignoff =
+    myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "DESIGN_CHANGE") ||
+    myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "PHASE") ||
+    null
+  const pendingSignoffKind: "PHASE" | "DESIGN_CHANGE" =
+    (pendingSignoff?.kind ?? "PHASE") === "DESIGN_CHANGE" ? "DESIGN_CHANGE" : "PHASE"
+  // Any pending DC for the current phase (used for "- 設計變更" labeling)
+  const dcHasPending = (demand.phaseSignoffs || []).some(
+    (s) => s.status === "PENDING" && s.phase === demand.status && (s.kind ?? "PHASE") === "DESIGN_CHANGE",
+  )
 
   // Project start date
   const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {
@@ -517,6 +531,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             <div className="flex items-center gap-3 shrink-0">
               <Badge className={cn("text-xs whitespace-nowrap", statusInfo.color)}>
                 {statusInfo.label}
+                {dcHasPending && <span className="ml-1">- 設計變更</span>}
               </Badge>
               <div className="text-right">
                 <span className="text-2xl font-bold text-primary">{sp}</span>
@@ -550,6 +565,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
         {pendingSignoff && (
           <PhaseSignoffBanner
             signoff={pendingSignoff}
+            kind={pendingSignoffKind}
             demandId={demand.id}
             token={token}
             onComplete={fetchDemand}
@@ -947,6 +963,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               isFuture && "text-muted-foreground/50",
                             )}>
                               {phaseInfo?.label}
+                              {isCurrent && dcHasPending && " - 設計變更"}
                             </span>
 
                             {dateRange && (

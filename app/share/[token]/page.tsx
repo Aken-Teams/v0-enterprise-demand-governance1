@@ -257,6 +257,7 @@ interface DemandDetail {
   phaseSignoffs: {
     id: string
     phase: string
+    kind?: string
     status: string
     targetUserId: string | null
     targetUser: { id: string; name: string } | null
@@ -673,11 +674,23 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
   const currentStepIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
 
-  // Find pending signoff strictly targeting the current logged-in user
-  // Org accounts are read-only and can never sign
-  const pendingSignoff = (!authUser?.isOrgAccount && demand.phaseSignoffs?.find(
-    (s) => s.status === "PENDING" && s.targetUserId === authUser?.id
-  )) || null
+  // Find pending signoff strictly targeting the current logged-in user at the
+  // current phase. Prefer DESIGN_CHANGE over PHASE when both are pending, so
+  // signers aren't confused by a duplicate approval prompt.
+  // Org accounts are read-only and can never sign.
+  const myPendingSignoffs = (!authUser?.isOrgAccount && demand.phaseSignoffs?.filter(
+    (s) => s.status === "PENDING" && s.targetUserId === authUser?.id && s.phase === demand.status
+  )) || []
+  const pendingSignoff =
+    myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "DESIGN_CHANGE") ||
+    myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "PHASE") ||
+    null
+  const pendingSignoffKind: "PHASE" | "DESIGN_CHANGE" =
+    (pendingSignoff?.kind ?? "PHASE") === "DESIGN_CHANGE" ? "DESIGN_CHANGE" : "PHASE"
+  // Whether there is ANY pending design change at current phase (for label)
+  const anyDcPending = (demand.phaseSignoffs || []).some(
+    (s) => s.status === "PENDING" && s.phase === demand.status && (s.kind ?? "PHASE") === "DESIGN_CHANGE"
+  )
 
   const projectStartDate = demand.phasePlans.reduce<string | null>((earliest, p) => {
     const d = p.plannedStart || p.actualStart
@@ -753,6 +766,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
             <p className="text-xs font-mono text-muted-foreground shrink-0">{demand.demandNumber}</p>
             <Badge className={cn("text-[10px] sm:text-xs whitespace-nowrap shrink-0", statusInfo.color)}>
               {statusInfo.label}
+              {anyDcPending && <span className="ml-1">- 設計變更</span>}
             </Badge>
             <div className="ml-auto flex items-baseline gap-0.5 shrink-0">
               <span className="text-xl sm:text-2xl font-bold text-primary">{sp}</span>
@@ -786,6 +800,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
         {isLoggedIn && pendingSignoff && (
           <PhaseSignoffBanner
             signoff={pendingSignoff}
+            kind={pendingSignoffKind}
             demandId={demand.id}
             token={authToken}
             onComplete={fetchDemand}
@@ -1132,6 +1147,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                               isFuture && "text-muted-foreground/50",
                             )}>
                               {phaseInfo?.label}
+                              {isCurrent && anyDcPending && " - 設計變更"}
                             </span>
                             {dateRange && (
                               <span className={cn("text-[11px] shrink-0 hidden xl:inline", isCurrent ? "text-muted-foreground" : "text-muted-foreground/60")}>

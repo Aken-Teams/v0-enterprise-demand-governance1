@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2 } from "lucide-react"
+import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit } from "lucide-react"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +21,8 @@ interface PhaseSignoffBannerProps {
   onComplete: () => void
   /** Render only the action buttons without the outer wrapper/header */
   inline?: boolean
+  /** "PHASE" (default) or "DESIGN_CHANGE" */
+  kind?: "PHASE" | "DESIGN_CHANGE"
 }
 
 function formatFileSize(bytes: number) {
@@ -35,6 +37,7 @@ export function PhaseSignoffBanner({
   token,
   onComplete,
   inline,
+  kind = "PHASE",
 }: PhaseSignoffBannerProps) {
   const [comment, setComment] = useState("")
   const [loading, setLoading] = useState(false)
@@ -44,6 +47,20 @@ export function PhaseSignoffBanner({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const phaseLabel = STATUS_MAP[signoff.phase]?.label || signoff.phase
+  const isDesignChange = kind === "DESIGN_CHANGE"
+  const titleText = isDesignChange
+    ? `「${phaseLabel} - 設計變更」階段等待您的確認`
+    : `「${phaseLabel}」階段等待您的確認`
+  const Icon = isDesignChange ? FileEdit : ClipboardCheck
+  const borderClass = isDesignChange ? "border-indigo-300" : "border-amber-300"
+  const bgClass = isDesignChange ? "bg-indigo-50/80" : "bg-amber-50/80"
+  const iconClass = isDesignChange ? "text-indigo-600" : "text-amber-600"
+  const titleClass = isDesignChange ? "text-indigo-900" : "text-amber-900"
+  const subTextClass = isDesignChange ? "text-indigo-700/70" : "text-amber-700/70"
+  const textareaClass = isDesignChange
+    ? "bg-white border-indigo-200 focus-visible:ring-indigo-300"
+    : "bg-white border-amber-200 focus-visible:ring-amber-300"
+  const fileBorderClass = isDesignChange ? "border-indigo-200" : "border-amber-200"
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -103,15 +120,15 @@ export function PhaseSignoffBanner({
       {!inline && (
         <>
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-medium text-amber-900 text-sm">
-              「{phaseLabel}」階段等待您的確認
+            <p className={cn("font-medium text-sm", titleClass)}>
+              {titleText}
             </p>
             <Badge className={cn("text-[10px]", SIGNOFF_STATUS_MAP.PENDING.color)}>
               {SIGNOFF_STATUS_MAP.PENDING.label}
             </Badge>
           </div>
-          <p className="text-xs text-amber-700/70 mt-1">
-            由 {signoff.requestedBy.name} 於 {new Date(signoff.requestedAt).toLocaleDateString("zh-TW")} 發起簽核請求
+          <p className={cn("text-xs mt-1", subTextClass)}>
+            由 {signoff.requestedBy.name} 於 {new Date(signoff.requestedAt).toLocaleDateString("zh-TW")} 發起{isDesignChange ? "設計變更" : "簽核"}請求
           </p>
         </>
       )}
@@ -145,14 +162,14 @@ export function PhaseSignoffBanner({
                 value={comment}
                 onChange={(e) => { setComment(e.target.value); setError("") }}
                 rows={3}
-                className="text-sm bg-white border-amber-200 focus-visible:ring-amber-300"
+                className={cn("text-sm", textareaClass)}
               />
 
               {/* Selected files list */}
               {files.length > 0 && (
                 <div className="space-y-1">
                   {files.map((f, i) => (
-                    <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded bg-white border border-amber-200 px-2 py-1 text-xs">
+                    <div key={`${f.name}-${i}`} className={cn("flex items-center gap-2 rounded bg-white border px-2 py-1 text-xs", fileBorderClass)}>
                       <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
                       <span className="truncate flex-1">{f.name}</span>
                       <span className="text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
@@ -220,9 +237,9 @@ export function PhaseSignoffBanner({
   if (inline) return actionContent
 
   return (
-    <div className="rounded-lg border-2 border-amber-300 bg-amber-50/80 p-4">
+    <div className={cn("rounded-lg border-2 p-4", borderClass, bgClass)}>
       <div className="flex items-start gap-3">
-        <ClipboardCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+        <Icon className={cn("h-5 w-5 shrink-0 mt-0.5", iconClass)} />
         {actionContent}
       </div>
     </div>

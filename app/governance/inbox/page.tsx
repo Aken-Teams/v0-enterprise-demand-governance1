@@ -48,6 +48,7 @@ interface Demand {
   contactPerson: string | null
   documentCount: number
   commentCount: number
+  hasPendingDesignChange: boolean
 }
 
 interface FilterOption {
@@ -423,6 +424,7 @@ export default function InboxPage() {
                         <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
                         <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
                           {statusInfo.label}
+                          {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
                         </Badge>
                       </div>
 

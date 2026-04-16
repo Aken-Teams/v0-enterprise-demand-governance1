@@ -108,7 +108,10 @@ export async function GET(
     const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
     if (signoffPhases.includes(demand.status)) {
       const phase = demand.status as DemandStatus
-      const currentPhaseSignoffs = demand.phaseSignoffs.filter((s) => s.phase === demand.status)
+      // Only consider PHASE signoffs for self-healing (exclude DESIGN_CHANGE)
+      const currentPhaseSignoffs = demand.phaseSignoffs.filter(
+        (s) => s.phase === demand.status && (s.kind ?? "PHASE") === "PHASE"
+      )
 
       // Determine if the phase is actively waiting (has PENDING or has no signoffs at all)
       const hasPending = currentPhaseSignoffs.some((s) => s.status === "PENDING")

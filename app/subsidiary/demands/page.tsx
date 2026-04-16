@@ -23,6 +23,7 @@ interface Demand {
   createdAt: string
   manager: string | null
   developer: string | null
+  hasPendingDesignChange: boolean
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; badge: string }> = {
@@ -63,6 +64,7 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
         <div className="flex items-center gap-1.5">
           <span className={cn("inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold ring-1 ring-inset", statusInfo.badge)}>
             {statusInfo.label}
+            {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
           </span>
           {hasPendingSignoff && (
             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 text-[10px] font-semibold">

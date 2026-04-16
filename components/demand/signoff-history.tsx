@@ -26,6 +26,7 @@ interface SignoffDocument {
 interface SignoffRecord {
   id: string
   phase: string
+  kind?: string
   status: string
   targetUserId: string | null
   targetUser: { id: string; name: string } | null
@@ -81,6 +82,15 @@ const STATUS_BG: Record<string, string> = {
   SKIPPED: "bg-gray-50 border-gray-200",
 }
 
+// Design-change cards use an indigo palette so they are visually
+// distinct from regular phase signoff cards.
+const DESIGN_CHANGE_BG: Record<string, string> = {
+  PENDING: "bg-indigo-50/70 border-indigo-200",
+  APPROVED: "bg-indigo-50/40 border-indigo-200",
+  REJECTED: "bg-rose-50/60 border-rose-200",
+  SKIPPED: "bg-gray-50 border-gray-200",
+}
+
 function fmtDate(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
@@ -97,6 +107,7 @@ function formatFileSize(bytes: number) {
 interface SignoffGroup {
   key: string
   phase: string
+  kind: string
   requestedAt: string
   requestedBy: { id: string; name: string }
   requestComment: string | null
@@ -124,10 +135,12 @@ function groupSignoffs(signoffs: SignoffRecord[]): SignoffGroup[] {
     if (assigned.has(s.id)) continue
 
     const time = new Date(s.requestedAt).getTime()
+    const sKind = s.kind || "PHASE"
     const members = sorted.filter(
       (other) =>
         !assigned.has(other.id) &&
         other.phase === s.phase &&
+        (other.kind || "PHASE") === sKind &&
         Math.abs(new Date(other.requestedAt).getTime() - time) <= 5000,
     )
 
@@ -138,8 +151,9 @@ function groupSignoffs(signoffs: SignoffRecord[]): SignoffGroup[] {
     members.sort((a, b) => (roleOrder[a.targetRole || ""] ?? 9) - (roleOrder[b.targetRole || ""] ?? 9))
 
     groups.push({
-      key: `${s.phase}:${s.id}`,
+      key: `${sKind}:${s.phase}:${s.id}`,
       phase: s.phase,
+      kind: sKind,
       requestedAt: s.requestedAt,
       requestedBy: s.requestedBy,
       requestComment: members.find((m) => m.requestComment)?.requestComment || null,
@@ -794,7 +808,11 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
                     {/* Group card */}
                     <div className={cn(
                       "rounded-lg border transition-colors",
-                      isExpanded ? STATUS_BG[cardStatus] || "bg-white border-border" : "bg-white border-border/60 hover:border-border",
+                      isExpanded
+                        ? (group.kind === "DESIGN_CHANGE"
+                            ? DESIGN_CHANGE_BG[cardStatus] || "bg-white border-border"
+                            : STATUS_BG[cardStatus] || "bg-white border-border")
+                        : "bg-white border-border/60 hover:border-border",
                     )}>
                       {/* Collapsed header */}
                       <button
@@ -813,7 +831,12 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, onRefresh,
                         </div>
 
                         {/* Phase label */}
-                        <span className="text-xs sm:text-sm font-medium shrink-0">{phaseLabel}</span>
+                        <span className="text-xs sm:text-sm font-medium shrink-0">
+                          {phaseLabel}
+                          {group.kind === "DESIGN_CHANGE" && (
+                            <span className="ml-1 text-indigo-600">- 設計變更</span>
+                          )}
+                        </span>
 
                         {/* Single-signer: role badge + status + name */}
                         {!isMulti && singleSignoff && (

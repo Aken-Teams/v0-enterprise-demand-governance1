@@ -422,6 +422,80 @@ function SubsidiaryGuide() {
         </CardContent>
       </Card>
 
+      {/* 設計變更流程（需求者視角） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Badge className="bg-indigo-100 text-indigo-700">設計變更</Badge>
+            流程說明
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            設計變更是用於記錄專案進行中需求內容新增或調整的機制，
+            通知工程團隊有新任務並作為後續 SP 增減的依據。此流程非必要，僅在需要留下正式紀錄時啟動。
+          </p>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-4">
+          <div>
+            <p className="font-medium text-foreground mb-2">可發起階段</p>
+            <p>
+              僅能在以下三個階段發起設計變更：
+              <Badge className="ml-1 bg-amber-100 text-amber-700">MVP 確認</Badge>
+              <Badge className="ml-1 bg-orange-100 text-orange-700">開案確認</Badge>
+              <Badge className="ml-1 bg-purple-100 text-purple-700">驗收中</Badge>
+            </p>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="font-medium text-foreground mb-2">審核流程</p>
+            <ol className="space-y-1.5 list-decimal list-inside">
+              <li>收到設計變更通知後，進入需求詳情頁</li>
+              <li>閱讀變更原因與上傳的附件</li>
+              <li>判斷是否認同此次需求內容的調整</li>
+              <li>選擇<span className="font-medium text-foreground">通過</span>或<span className="font-medium text-foreground">退回</span>（退回時請填寫原因）</li>
+            </ol>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="font-medium text-foreground mb-2">重要說明</p>
+            <ul className="space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  設計變更期間，階段狀態會顯示為
+                  <span className="font-medium text-foreground mx-1">「階段名稱 - 設計變更」</span>
+                  （例如：驗收中 - 設計變更）。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  <span className="font-medium text-foreground">通過設計變更 ≠ 通過該階段簽核。</span>
+                  設計變更僅表示認同需求內容有新增／調整；階段簽核（MVP／開案／驗收）仍須另行完成。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  審核人為<span className="font-medium text-foreground">需求窗口</span>（必要）；若有指派<span className="font-medium text-foreground">主管</span>則兩位皆須通過才算完成。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  通過後<span className="font-medium text-foreground">不會</span>自動調整需求狀態或 SP 點數，相關 SP 增減於結案時一併處理。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
+                <span>
+                  退回時請填寫原因（例如：紀錄內容不完整、變更已不需要）。發起人會依原因決定補充資訊重新發起，或不再發起。
+                </span>
+              </li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 如何使用系統 */}
       <Card>
         <CardHeader>
@@ -676,6 +750,97 @@ function AdminDeliveryGuide() {
         </CardContent>
       </Card>
 
+      {/* 設計變更流程（管理/交付視角） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Badge className="bg-indigo-100 text-indigo-700">設計變更</Badge>
+            流程說明
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            設計變更是用於記錄專案進行中需求內容新增或調整的機制，通知工程團隊有新任務並作為結案時 SP 增減的依據。
+            此流程非必要，僅在需要留下正式紀錄時發起。
+          </p>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-4">
+          <div>
+            <p className="font-medium text-foreground mb-2">可發起階段</p>
+            <p>
+              僅能在以下三個階段發起：
+              <Badge className="ml-1 bg-amber-100 text-amber-700">MVP 確認</Badge>
+              <Badge className="ml-1 bg-orange-100 text-orange-700">開案確認</Badge>
+              <Badge className="ml-1 bg-purple-100 text-purple-700">驗收中</Badge>
+            </p>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="font-medium text-foreground mb-2">發起流程</p>
+            <ol className="space-y-1.5 list-decimal list-inside">
+              <li>於需求詳情頁點擊「提出設計變更」按鈕</li>
+              <li>填寫<span className="font-medium text-foreground">變更原因</span>（必填），說明新增或調整的需求內容</li>
+              <li>上傳相關附件（會議紀錄、修訂的設計稿等）</li>
+              <li>確認審核名單後送出，系統會自動通知所有審核人</li>
+            </ol>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="font-medium text-foreground mb-2">審核人員</p>
+            <ul className="space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
+                <span>
+                  <span className="font-medium text-foreground">需求窗口（必要）</span> — 未指派時無法發起，請先完成指派
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
+                <span>
+                  <span className="font-medium text-foreground">主管（若有指派）</span> — 兩位皆須通過才算完成
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="font-medium text-foreground mb-2">重要說明</p>
+            <ul className="space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  設計變更期間，階段狀態會顯示為
+                  <span className="font-medium text-foreground mx-1">「階段名稱 - 設計變更」</span>
+                  （例如：驗收中 - 設計變更）。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  設計變更<span className="font-medium text-foreground">僅為紀錄</span>，與階段簽核為獨立流程，通過後不自動改變需求狀態、SP 或既有簽核。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  相關的 SP 增減請於<span className="font-medium text-foreground">結案階段</span>一併調整，勿於中途修改已確認的 SP。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                <span>
+                  同一階段同時僅能存在一筆尚未完成（未被通過或退回）的設計變更。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
+                <span>
+                  被退回時請依退回原因判斷：若是資訊不足，補充後再次發起；若變更本身不成立，則無需再發起。
+                </span>
+              </li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 常見問題 */}
       <Card>
         <CardHeader>
@@ -705,6 +870,40 @@ function AdminDeliveryGuide() {
                 <p className="text-sm text-muted-foreground">
                   駁回後需求不再進入流程，佔用的 SP 會釋放。需求者需根據駁回原因重新建立新需求。
                 </p>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q4">
+              <AccordionTrigger>什麼情況該用設計變更而不是駁回？</AccordionTrigger>
+              <AccordionContent>
+                <div className="text-sm text-muted-foreground space-y-3">
+                  <p>
+                    簡單說：
+                    <span className="text-red-700 font-medium">駁回</span>是「目前完成的內容不符合需求方要求」；
+                    <span className="text-indigo-700 font-medium">設計變更</span>是「需求方有新需求，且認為需要討論」。
+                  </p>
+                  <div className="rounded-md border border-red-200 bg-red-50/40 p-3 space-y-1.5">
+                    <p className="font-medium text-red-900">駁回 — 現有內容不符合要求</p>
+                    <ul className="text-red-900/80 space-y-1 list-none">
+                      <li>• 觸發：審核者在簽核當下選擇不通過</li>
+                      <li>• 影響：當前階段簽核不通過，需依退回原因補充或修正後重新提交，流程暫停在該階段</li>
+                      <li>• 常見情境：內容不完整、品質不達標、文件缺漏</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-md border border-indigo-200 bg-indigo-50/40 p-3 space-y-1.5">
+                    <p className="font-medium text-indigo-900">設計變更 — 需求方有新需求需要討論</p>
+                    <ul className="text-indigo-900/80 space-y-1 list-none">
+                      <li>• 觸發：管理者在專案進行中主動發起</li>
+                      <li>• 影響：獨立於簽核流程，不改變需求狀態、SP 或既有簽核；僅作為紀錄，並供結案時 SP 調整參考</li>
+                      <li>• 常見情境：過程中新增、刪減或調整項目、需求方提出新想法</li>
+                    </ul>
+                  </div>
+                  <p>
+                    判斷方式：先問「問題出在現有內容，還是在有新需求？」 —
+                    <span className="text-red-700">現有內容不符合 → 駁回</span>；
+                    <span className="text-indigo-700">有新需求需要討論 → 設計變更</span>。
+                  </p>
+                  <p>設計變更僅限 MVP 確認、開案確認、驗收中三個階段可發起。</p>
+                </div>
               </AccordionContent>
             </AccordionItem>
           </Accordion>

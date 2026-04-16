@@ -11,13 +11,14 @@ import {
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
   Clock, SkipForward, ClipboardCheck, Share2, Copy, Link2, Package,
+  FileEdit,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -29,6 +30,7 @@ import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
+import { DesignChangeDialog } from "@/components/demand/design-change-dialog"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 import ReactMarkdown from "react-markdown"
@@ -382,6 +384,9 @@ export default function DemandDetailPage() {
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
 
+  // Design change dialog
+  const [designChangeOpen, setDesignChangeOpen] = useState(false)
+
   // Share link state
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
@@ -601,9 +606,11 @@ export default function DemandDetailPage() {
 
   // Latest round of signoffs for current phase (ignore historical rounds)
   // Exclude orphan signoffs (no assigned user) regardless of status
+  // Only include PHASE signoffs (exclude DESIGN_CHANGE)
   const allCurrentSignoffs = demand.phaseSignoffs?.filter(
     (s) => s.phase === demand.status && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status)
       && s.targetUserId
+      && ((s as unknown as { kind?: string }).kind ?? "PHASE") === "PHASE"
   ) || []
   const latestRoundTime = allCurrentSignoffs.length > 0
     ? Math.max(...allCurrentSignoffs.map(s => new Date(s.requestedAt).getTime()))
@@ -617,6 +624,30 @@ export default function DemandDetailPage() {
   const curHasPending = currentPhaseSignoffs.some(s => s.status === "PENDING")
   const curAllApproved = currentPhaseSignoffs.length > 0 && currentPhaseSignoffs.every(s => s.status === "APPROVED")
   const curHasRejected = currentPhaseSignoffs.some(s => s.status === "REJECTED")
+
+  // Design change signoffs (latest round at current phase)
+  const allDesignChangeSignoffs = demand.phaseSignoffs?.filter(
+    (s) => s.phase === demand.status
+      && (s as unknown as { kind?: string }).kind === "DESIGN_CHANGE"
+      && s.targetUserId
+  ) || []
+  const latestDcRoundTime = allDesignChangeSignoffs.length > 0
+    ? Math.max(...allDesignChangeSignoffs.map(s => new Date(s.requestedAt).getTime()))
+    : 0
+  const currentDesignChangeSignoffs = allDesignChangeSignoffs.filter(
+    s => new Date(s.requestedAt).getTime() === latestDcRoundTime
+  )
+  const dcHasPending = currentDesignChangeSignoffs.some(s => s.status === "PENDING")
+  const dcAllApproved = currentDesignChangeSignoffs.length > 0
+    && currentDesignChangeSignoffs.every(s => s.status === "APPROVED")
+  const dcHasRejected = currentDesignChangeSignoffs.some(s => s.status === "REJECTED")
+  const designChangePendingCount = currentDesignChangeSignoffs.filter(s => s.status === "PENDING").length
+
+  // Can propose design change: admin/delivery + current phase allowed + no pending DC
+  const canProposeDesignChange =
+    effectiveCanManage
+    && (DESIGN_CHANGE_ALLOWED_PHASES as readonly string[]).includes(demand.status)
+    && !dcHasPending
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -630,6 +661,7 @@ export default function DemandDetailPage() {
               <span className="text-sm font-mono text-muted-foreground">{demand.demandNumber}</span>
               <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", statusInfo.color)}>
                 {statusInfo.label}
+                {dcHasPending && <span className="ml-1">- 設計變更</span>}
               </Badge>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground ml-11">{demand.title}</h1>
@@ -829,6 +861,7 @@ export default function DemandDetailPage() {
                                 isFuture && "text-muted-foreground/50",
                               )}>
                                 {info.label}
+                                {isCurrent && dcHasPending && " - 設計變更"}
                               </span>
                               {isSignoffPhase && phaseSignoff && (
                                 <span className={cn(
@@ -908,34 +941,55 @@ export default function DemandDetailPage() {
               const actions = PHASE_ACTIONS[currentPhase] || []
               const needsAssignment = (currentPhase === "PRD_REVIEW" || currentPhase === "SP_REVIEW" || currentPhase === "DEVELOPING") && !demand.manager && !demand.developer
               const hasSignoff = currentPhaseSignoff != null
+              const hasDesignChange = currentDesignChangeSignoffs.length > 0
 
-              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff) return null
+              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange && !canProposeDesignChange) return null
 
               return (
                 <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
                   <div className="flex items-start gap-2">
                     <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-                    <div className="space-y-1.5 flex-1">
+                    <div className="space-y-1.5 flex-1 min-w-0">
                       <p className="text-xs font-medium text-blue-700">
                         {PHASE_DESCRIPTIONS[currentPhase]}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {hasSignoff && curHasPending && (
+                        {/* Phase signoff badges — hidden while a design change is pending,
+                            to avoid confusing signers with duplicate approvals */}
+                        {hasSignoff && curHasPending && !dcHasPending && (
                           <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200">
                             <ClipboardCheck className="h-3 w-3 mr-1" />
                             等待簽核確認中
                           </Badge>
                         )}
-                        {hasSignoff && curAllApproved && (
+                        {hasSignoff && curAllApproved && !dcHasPending && (
                           <Badge variant="outline" className="text-[11px] bg-emerald-50 text-emerald-700 border-emerald-200">
                             <Check className="h-3 w-3 mr-1" />
                             已簽核確認
                           </Badge>
                         )}
-                        {hasSignoff && curHasRejected && !curHasPending && (
+                        {hasSignoff && curHasRejected && !curHasPending && !dcHasPending && (
                           <Badge variant="outline" className="text-[11px] bg-red-50 text-red-700 border-red-200">
                             <AlertCircle className="h-3 w-3 mr-1" />
                             簽核已退回
+                          </Badge>
+                        )}
+                        {dcHasPending && (
+                          <Badge variant="outline" className="text-[11px] bg-indigo-50 text-indigo-700 border-indigo-200">
+                            <FileEdit className="h-3 w-3 mr-1" />
+                            設計變更待確認 ({designChangePendingCount})
+                          </Badge>
+                        )}
+                        {dcAllApproved && !dcHasPending && (
+                          <Badge variant="outline" className="text-[11px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                            <Check className="h-3 w-3 mr-1" />
+                            設計變更已確認
+                          </Badge>
+                        )}
+                        {dcHasRejected && !dcHasPending && (
+                          <Badge variant="outline" className="text-[11px] bg-red-50 text-red-700 border-red-200">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            設計變更已退回
                           </Badge>
                         )}
                         {needsAssignment && (
@@ -952,20 +1006,55 @@ export default function DemandDetailPage() {
                         ))}
                       </div>
                     </div>
+                    {canProposeDesignChange && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 shrink-0 h-7 text-xs"
+                        onClick={() => setDesignChangeOpen(true)}
+                      >
+                        <FileEdit className="h-3.5 w-3.5 mr-1" />
+                        提出設計變更
+                      </Button>
+                    )}
                   </div>
                 </div>
               )
             })()}
 
-            {/* Board member signoff — inside card (org accounts excluded) */}
+            {/* Board member signoff — inside card (org accounts excluded).
+                Hidden if this user also has a pending design change at the
+                same phase — their DC approval will auto-approve the phase. */}
             {!canManage && !user?.isOrgAccount && (() => {
               const mySignoff = currentPhaseSignoffs.find(
                 (s) => s.status === "PENDING" && s.targetUserId === user?.id
               )
-              return mySignoff ? (
+              const myPendingDc = currentDesignChangeSignoffs.find(
+                (s) => s.status === "PENDING" && s.targetUserId === user?.id
+              )
+              if (!mySignoff || myPendingDc) return null
+              return (
                 <div className="mt-3">
                   <PhaseSignoffBanner
                     signoff={mySignoff}
+                    demandId={demand.id}
+                    token={token}
+                    onComplete={fetchDemand}
+                  />
+                </div>
+              )
+            })()}
+
+            {/* Design change signoff banner for requester/manager */}
+            {!user?.isOrgAccount && (() => {
+              const myDesignChange = currentDesignChangeSignoffs.find(
+                (s) => s.status === "PENDING" && s.targetUserId === user?.id
+              )
+              return myDesignChange ? (
+                <div className="mt-3">
+                  <PhaseSignoffBanner
+                    signoff={myDesignChange}
+                    kind="DESIGN_CHANGE"
                     demandId={demand.id}
                     token={token}
                     onComplete={fetchDemand}
@@ -1799,6 +1888,28 @@ export default function DemandDetailPage() {
             style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
           />
         </div>
+      )}
+
+      {/* Design change dialog */}
+      {canProposeDesignChange && (
+        <DesignChangeDialog
+          open={designChangeOpen}
+          onOpenChange={setDesignChangeOpen}
+          demandId={demand.id}
+          demandNumber={demand.demandNumber}
+          demandTitle={demand.title}
+          phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
+          targets={[
+            ...(demand.contactPerson
+              ? [{ userId: demand.contactPerson.id, name: demand.contactPerson.name, role: "REQUESTER" }]
+              : []),
+            ...(demand.demandManager
+              ? [{ userId: demand.demandManager.id, name: demand.demandManager.name, role: "MANAGER" }]
+              : []),
+          ]}
+          token={token}
+          onComplete={fetchDemand}
+        />
       )}
     </AppLayout>
   )

@@ -300,6 +300,10 @@ export async function GET(request: NextRequest) {
           contactPerson_: { select: { name: true } },
           demandManager: { select: { name: true } },
           _count: { select: { documents: true, comments: true } },
+          phaseSignoffs: {
+            where: { kind: "DESIGN_CHANGE", status: "PENDING" },
+            select: { id: true, phase: true },
+          },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -382,6 +386,9 @@ export async function GET(request: NextRequest) {
         demandManager: d.demandManager?.name || null,
         documentCount: d._count.documents,
         commentCount: d._count.comments,
+        hasPendingDesignChange: (d as unknown as { phaseSignoffs: { phase: string }[] }).phaseSignoffs.some(
+          (s) => s.phase === d.status,
+        ),
       })),
       total,
       statusCounts,

@@ -119,6 +119,19 @@ export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }
   SKIPPED: { label: "管理者略過", color: "bg-gray-100 text-gray-600" },
 }
 
+/** 可發起設計變更的階段 (MVP/開案/驗收) */
+export const DESIGN_CHANGE_ALLOWED_PHASES = [
+  "PRD_REVIEW",
+  "SP_REVIEW",
+  "ACCEPTANCE",
+] as const
+
+/** 簽核種類標籤 */
+export const SIGNOFF_KIND_LABELS: Record<string, string> = {
+  PHASE: "階段簽核",
+  DESIGN_CHANGE: "設計變更",
+}
+
 /** SP 漸進消耗比例：需求確認 50% → MVP 確認 80% → 結案 100% */
 export const SP_PROGRESS_RATE: Record<string, number> = {
   SUBMITTED: 0.5,

@@ -444,12 +444,13 @@ model AdminAccess {
   @@map("admin_access")
 }
 
-/// 階段簽核 (需求者背書確認)
+/// 階段簽核 (需求者背書確認) / 設計變更 (kind = DESIGN_CHANGE)
 model PhaseSignoff {
   id            String        @id @default(cuid())
   demandId      String
   demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   phase         DemandStatus
+  kind          String        @default("PHASE") /// "PHASE" (階段簽核) | "DESIGN_CHANGE" (設計變更)
   status        SignoffStatus @default(PENDING)
   targetUserId  String?       /// 指定簽核人 (null = 舊資料, 任何有權限的人可簽)
   targetUser    User?         @relation("SignoffTarget", fields: [targetUserId], references: [id])
@@ -466,6 +467,7 @@ model PhaseSignoff {
 
   @@index([demandId])
   @@index([demandId, phase])
+  @@index([demandId, kind])
   @@index([status])
   @@map("phase_signoffs")
 }
