@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit } from "lucide-react"
+import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, MessageSquare, Download } from "lucide-react"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
@@ -15,6 +15,8 @@ interface PhaseSignoffBannerProps {
     status: string
     requestedAt: string
     requestedBy: { id: string; name: string }
+    requestComment?: string | null
+    documents?: { id: string; fileName: string; fileUrl?: string | null; fileSize?: number | null }[]
   }
   demandId: string
   token: string | null
@@ -49,7 +51,7 @@ export function PhaseSignoffBanner({
   const phaseLabel = STATUS_MAP[signoff.phase]?.label || signoff.phase
   const isDesignChange = kind === "DESIGN_CHANGE"
   const titleText = isDesignChange
-    ? `「${phaseLabel} - 設計變更」階段等待您的確認`
+    ? "「設計變更」等待您的確認"
     : `「${phaseLabel}」階段等待您的確認`
   const Icon = isDesignChange ? FileEdit : ClipboardCheck
   const borderClass = isDesignChange ? "border-indigo-300" : "border-amber-300"
@@ -61,6 +63,10 @@ export function PhaseSignoffBanner({
     ? "bg-white border-indigo-200 focus-visible:ring-indigo-300"
     : "bg-white border-amber-200 focus-visible:ring-amber-300"
   const fileBorderClass = isDesignChange ? "border-indigo-200" : "border-amber-200"
+
+  // DC content to display inline (only when banner is not in inline/compact mode)
+  const dcDocs = (signoff.documents || []).filter((d) => d.fileUrl)
+  const showDcContent = isDesignChange && !inline && (signoff.requestComment || dcDocs.length > 0)
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -120,38 +126,85 @@ export function PhaseSignoffBanner({
       {!inline && (
         <>
           <div className="flex items-center gap-2 flex-wrap">
-            <p className={cn("font-medium text-sm", titleClass)}>
+            <p className={cn("font-semibold text-[15px] sm:text-sm leading-tight", titleClass)}>
               {titleText}
             </p>
             <Badge className={cn("text-[10px]", SIGNOFF_STATUS_MAP.PENDING.color)}>
               {SIGNOFF_STATUS_MAP.PENDING.label}
             </Badge>
           </div>
-          <p className={cn("text-xs mt-1", subTextClass)}>
-            由 {signoff.requestedBy.name} 於 {new Date(signoff.requestedAt).toLocaleDateString("zh-TW")} 發起{isDesignChange ? "設計變更" : "簽核"}請求
+          <p className={cn("text-xs mt-1 leading-relaxed", subTextClass)}>
+            由 {signoff.requestedBy.name} 於 {new Date(signoff.requestedAt).toLocaleDateString("zh-TW")}
+            {isDesignChange ? ` 在「${phaseLabel}」階段發起設計變更` : ` 發起簽核請求`}
           </p>
         </>
       )}
 
+      {/* DC inline content: request comment + attachments */}
+      {showDcContent && (
+        <div className="mt-3 space-y-2">
+          {signoff.requestComment && (
+            <div className="rounded-md bg-white/80 border border-indigo-200 p-2.5 sm:p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <MessageSquare className="h-3.5 w-3.5 text-indigo-500" />
+                <span className="text-xs font-medium text-indigo-700">提出說明</span>
+              </div>
+              <p className="text-[13px] sm:text-sm text-indigo-900/80 whitespace-pre-line break-words leading-relaxed">
+                {signoff.requestComment}
+              </p>
+            </div>
+          )}
+
+          {dcDocs.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5 text-indigo-500" />
+                <span className="text-xs font-medium text-indigo-700">附件文件</span>
+              </div>
+              <div className="space-y-1">
+                {dcDocs.map((doc) => (
+                  <a
+                    key={doc.id}
+                    href={doc.fileUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-md bg-white/80 border border-indigo-200 px-3 py-1.5 text-xs sm:text-sm hover:bg-white transition-colors"
+                  >
+                    <FileIcon className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                    <span className="truncate flex-1 text-indigo-900/80">{doc.fileName}</span>
+                    {doc.fileSize != null && (
+                      <span className="text-[10px] text-indigo-500/70 shrink-0">
+                        {formatFileSize(doc.fileSize)}
+                      </span>
+                    )}
+                    <Download className="h-3 w-3 text-indigo-400 shrink-0" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {!showForm ? (
-            <div className={cn("flex items-center gap-2 justify-end", !inline && "mt-3")}>
+            <div className={cn("flex items-center gap-2 sm:justify-end", !inline && "mt-3")}>
               <Button
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 sm:flex-none h-10 sm:h-9"
                 onClick={() => handleAction("approve")}
                 disabled={loading}
               >
-                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
                 確認通過
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-red-300 text-red-600 hover:bg-red-50"
+                className="border-red-300 text-red-600 hover:bg-red-50 bg-white flex-1 sm:flex-none h-10 sm:h-9"
                 onClick={() => setShowForm(true)}
                 disabled={loading}
               >
-                <X className="h-3.5 w-3.5 mr-1" />
+                <X className="h-4 w-4 mr-1" />
                 退回修改
               </Button>
             </div>
@@ -185,7 +238,7 @@ export function PhaseSignoffBanner({
                 </div>
               )}
 
-              {/* Action row: buttons left, attach right */}
+              {/* Action row: attach left, cancel/reject right (wraps on mobile) */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -194,23 +247,23 @@ export function PhaseSignoffBanner({
                 onChange={handleFileChange}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.jpg,.jpeg,.png,.gif,.webp"
               />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="text-muted-foreground"
+                  className="text-muted-foreground bg-white h-10 sm:h-9 w-full sm:w-auto"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
                 >
                   <Paperclip className="h-3.5 w-3.5 mr-1" />
                   附加檔案
                 </Button>
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-2 sm:ml-auto">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-muted-foreground"
+                    className="text-muted-foreground bg-white flex-1 sm:flex-none h-10 sm:h-9"
                     onClick={() => { setShowForm(false); setComment(""); setError(""); setFiles([]) }}
                     disabled={loading}
                   >
@@ -221,6 +274,7 @@ export function PhaseSignoffBanner({
                     variant="destructive"
                     onClick={() => handleAction("reject")}
                     disabled={loading}
+                    className="flex-1 sm:flex-none h-10 sm:h-9"
                   >
                     {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                     確認退回
@@ -237,9 +291,9 @@ export function PhaseSignoffBanner({
   if (inline) return actionContent
 
   return (
-    <div className={cn("rounded-lg border-2 p-4", borderClass, bgClass)}>
-      <div className="flex items-start gap-3">
-        <Icon className={cn("h-5 w-5 shrink-0 mt-0.5", iconClass)} />
+    <div className={cn("rounded-lg border-2 p-3 sm:p-4", borderClass, bgClass)}>
+      <div className="flex items-start gap-2.5 sm:gap-3">
+        <Icon className={cn("h-5 w-5 shrink-0 mt-px sm:mt-0.5", iconClass)} />
         {actionContent}
       </div>
     </div>
