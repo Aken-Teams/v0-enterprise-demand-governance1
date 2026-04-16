@@ -383,6 +383,10 @@ export default function DemandDetailPage() {
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
+  // Tracks if user just approved a DESIGN_CHANGE in this session — used to
+  // suppress the PHASE banner so they don't see a second "approve" prompt
+  // immediately after. Resets naturally on any new page load.
+  const [justApprovedDc, setJustApprovedDc] = useState(false)
 
   // Design change dialog
   const [designChangeOpen, setDesignChangeOpen] = useState(false)
@@ -1024,7 +1028,9 @@ export default function DemandDetailPage() {
 
             {/* Board member signoff — inside card (org accounts excluded).
                 Hidden if this user also has a pending design change at the
-                same phase — their DC approval will auto-approve the phase. */}
+                same phase, OR if they just approved a DC this session — they
+                shouldn't see a second "approve" prompt right after. The PHASE
+                banner will reappear naturally on next page load. */}
             {!canManage && !user?.isOrgAccount && (() => {
               const mySignoff = currentPhaseSignoffs.find(
                 (s) => s.status === "PENDING" && s.targetUserId === user?.id
@@ -1032,7 +1038,7 @@ export default function DemandDetailPage() {
               const myPendingDc = currentDesignChangeSignoffs.find(
                 (s) => s.status === "PENDING" && s.targetUserId === user?.id
               )
-              if (!mySignoff || myPendingDc) return null
+              if (!mySignoff || myPendingDc || justApprovedDc) return null
               return (
                 <div className="mt-3">
                   <PhaseSignoffBanner
@@ -1057,7 +1063,10 @@ export default function DemandDetailPage() {
                     kind="DESIGN_CHANGE"
                     demandId={demand.id}
                     token={token}
-                    onComplete={fetchDemand}
+                    onComplete={() => {
+                      setJustApprovedDc(true)
+                      fetchDemand()
+                    }}
                   />
                 </div>
               ) : null

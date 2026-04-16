@@ -368,6 +368,10 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
+  // Tracks if user just approved a DESIGN_CHANGE in this session — used to
+  // suppress the PHASE banner so they don't see a second "approve" prompt
+  // immediately after. Resets naturally on any new page load.
+  const [justApprovedDc, setJustApprovedDc] = useState(false)
 
   const fetchDemand = useCallback(async () => {
     if (!token) return
@@ -482,10 +486,15 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
         (s) => s.status === "PENDING" && s.targetUserId === user?.id,
       ) || [])
     : []
-  // Prefer DESIGN_CHANGE signoff over PHASE when both exist for the same user
+  // Prefer DESIGN_CHANGE signoff over PHASE when both exist for the same user.
+  // After the user approves a DC in this session (justApprovedDc), suppress
+  // the PHASE banner so they aren't prompted for a second approval right
+  // after — the PHASE banner will reappear naturally on next page load.
+  const pendingDcSignoff = myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "DESIGN_CHANGE")
+  const pendingPhaseSignoff = myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "PHASE")
   const pendingSignoff =
-    myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "DESIGN_CHANGE") ||
-    myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "PHASE") ||
+    pendingDcSignoff ||
+    (justApprovedDc ? null : pendingPhaseSignoff) ||
     null
   const pendingSignoffKind: "PHASE" | "DESIGN_CHANGE" =
     (pendingSignoff?.kind ?? "PHASE") === "DESIGN_CHANGE" ? "DESIGN_CHANGE" : "PHASE"
@@ -568,7 +577,10 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             kind={pendingSignoffKind}
             demandId={demand.id}
             token={token}
-            onComplete={fetchDemand}
+            onComplete={() => {
+              if (pendingSignoffKind === "DESIGN_CHANGE") setJustApprovedDc(true)
+              fetchDemand()
+            }}
           />
         )}
 
