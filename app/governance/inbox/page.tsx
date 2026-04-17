@@ -290,14 +290,12 @@ export default function InboxPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-3 md:grid-cols-4">
           {[
             { label: "全部需求", sub: canSeeAll ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
             { label: "確認階段", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
             { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
-            { label: "已駁回", sub: "簽核退回", value: getCount("REJECTED"), color: "border-l-red-500", icon: AlertTriangle },
-            { label: "暫緩", sub: "暫停中", value: getCount("ON_HOLD"), color: "border-l-yellow-500", icon: PauseCircle },
           ].map((item) => (
             <div key={item.label} className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}>
               <span className="text-3xl font-bold">{item.value}</span>
@@ -472,7 +470,7 @@ export default function InboxPage() {
                             {statusInfo.label}
                             {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
                           </Badge>
-                          {demand.hasCurrentPhaseReject && (
+                          {demand.hasCurrentPhaseReject && (isAdmin || user?.role === "delivery") && (
                             <Badge variant="secondary" className="text-xs px-2 py-0 bg-red-100 text-red-700">
                               已駁回
                             </Badge>
