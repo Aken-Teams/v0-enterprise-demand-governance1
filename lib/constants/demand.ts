@@ -6,6 +6,7 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700" },
   CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700" },
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
+  ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
 }
 
 export const PIPELINE_STEPS = [
@@ -141,11 +142,12 @@ export const SP_PROGRESS_RATE: Record<string, number> = {
   DEVELOPING: 0.8,
   ACCEPTANCE: 0.8,
   CLOSED: 1.0,
+  ON_HOLD: 0,
 }
 
 /** 依據狀態計算漸進已使用 SP */
 export function calcUsedSp(status: string, effectiveSp: number): number {
-  if (status === "REJECTED") return 0
+  if (status === "REJECTED" || status === "ON_HOLD") return 0
   const rate = SP_PROGRESS_RATE[status] ?? 0
   return Math.round(effectiveSp * rate)
 }

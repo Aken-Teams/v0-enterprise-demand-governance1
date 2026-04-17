@@ -18,10 +18,16 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import {
   Search, Inbox, Plus, Loader2, Building2,
   Paperclip, User, MoreHorizontal, Eye, Trash2,
   ClipboardList, Code2, CircleCheckBig, ChevronLeft, ChevronRight,
-  ChevronsUpDown, Check,
+  ChevronsUpDown, Check, PauseCircle, PlayCircle, AlertTriangle,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -49,6 +55,8 @@ interface Demand {
   documentCount: number
   commentCount: number
   hasPendingDesignChange: boolean
+  hasCurrentPhaseReject: boolean
+  holdReason: string | null
 }
 
 interface FilterOption {
@@ -71,6 +79,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700" },
   CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700" },
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
+  ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
 }
 
 const STORAGE_KEY = "inbox-filters"
@@ -113,6 +122,9 @@ export default function InboxPage() {
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
   const [submitterOpen, setSubmitterOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Demand | null>(null)
+  const [holdTarget, setHoldTarget] = useState<Demand | null>(null)
+  const [holdReason, setHoldReason] = useState("")
+  const [holdLoading, setHoldLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(() => {
     const p = parseInt(s.page || "1", 10)
     return p > 0 ? p : 1
@@ -185,6 +197,37 @@ export default function InboxPage() {
     } catch { /* ignore */ }
   }
 
+  const handleHold = async () => {
+    if (!token || !holdTarget) return
+    setHoldLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${holdTarget.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ON_HOLD", holdReason: holdReason.trim() || null }),
+      })
+      if (res.ok) {
+        setHoldTarget(null)
+        setHoldReason("")
+        fetchDemands()
+      }
+    } catch { /* ignore */ } finally {
+      setHoldLoading(false)
+    }
+  }
+
+  const handleResume = async (demand: Demand) => {
+    if (!token) return
+    try {
+      const res = await fetch(`/api/demands/${demand.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ resume: true }),
+      })
+      if (res.ok) fetchDemands()
+    } catch { /* ignore */ }
+  }
+
   // Reset page when filters change (skip first render — state already restored from storage)
   const didMount = useRef(false)
   useEffect(() => {
@@ -247,12 +290,14 @@ export default function InboxPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
           {[
             { label: "全部需求", sub: canSeeAll ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
             { label: "確認階段", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
             { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
+            { label: "已駁回", sub: "簽核退回", value: getCount("REJECTED"), color: "border-l-red-500", icon: AlertTriangle },
+            { label: "暫緩", sub: "暫停中", value: getCount("ON_HOLD"), color: "border-l-yellow-500", icon: PauseCircle },
           ].map((item) => (
             <div key={item.label} className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}>
               <span className="text-3xl font-bold">{item.value}</span>
@@ -422,14 +467,29 @@ export default function InboxPage() {
                       {/* Row 1: number + status */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
-                        <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
-                          {statusInfo.label}
-                          {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
-                        </Badge>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
+                            {statusInfo.label}
+                            {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
+                          </Badge>
+                          {demand.hasCurrentPhaseReject && (
+                            <Badge variant="secondary" className="text-xs px-2 py-0 bg-red-100 text-red-700">
+                              已駁回
+                            </Badge>
+                          )}
+                        </div>
                       </div>
 
                       {/* Title */}
                       <p className="font-semibold leading-snug line-clamp-2">{demand.title}</p>
+
+                      {/* Hold reason */}
+                      {demand.status === "ON_HOLD" && demand.holdReason && (
+                        <div className="flex items-start gap-1.5 text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1">
+                          <PauseCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          <span className="line-clamp-2">{demand.holdReason}</span>
+                        </div>
+                      )}
 
                       <hr className="border-border/60" />
 
@@ -467,6 +527,17 @@ export default function InboxPage() {
                                 <Eye className="h-3.5 w-3.5 mr-2" />
                                 查看詳情
                               </DropdownMenuItem>
+                              {demand.status === "ON_HOLD" ? (
+                                <DropdownMenuItem onClick={() => handleResume(demand)}>
+                                  <PlayCircle className="h-3.5 w-3.5 mr-2 text-emerald-600" />
+                                  恢復進行
+                                </DropdownMenuItem>
+                              ) : demand.status !== "CLOSED" && demand.status !== "REJECTED" ? (
+                                <DropdownMenuItem onClick={() => { setHoldTarget(demand); setHoldReason("") }}>
+                                  <PauseCircle className="h-3.5 w-3.5 mr-2 text-yellow-600" />
+                                  設為暫緩
+                                </DropdownMenuItem>
+                              ) : null}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
@@ -554,6 +625,37 @@ export default function InboxPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Hold reason dialog */}
+      <Dialog open={!!holdTarget} onOpenChange={(open) => { if (!open) { setHoldTarget(null); setHoldReason("") } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>設為暫緩</DialogTitle>
+            <DialogDescription>
+              將需求「{holdTarget?.title}」（{holdTarget?.demandNumber}）設為暫緩狀態。此專案不會被取消，後續可隨時恢復進行。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="holdReason">暫緩原因</Label>
+            <Textarea
+              id="holdReason"
+              placeholder="請輸入暫緩原因（例如：等待使用者提供完整 Mapping 表）"
+              value={holdReason}
+              onChange={(e) => setHoldReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setHoldTarget(null); setHoldReason("") }}>
+              取消
+            </Button>
+            <Button onClick={handleHold} disabled={holdLoading} className="bg-yellow-600 hover:bg-yellow-700 text-white">
+              {holdLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PauseCircle className="h-4 w-4 mr-2" />}
+              確定暫緩
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   )
 }

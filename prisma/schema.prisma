@@ -31,6 +31,7 @@ enum DemandStatus {
   ACCEPTANCE  // 驗收中
   CLOSED      // 已結案
   REJECTED    // 已駁回
+  ON_HOLD     // 暫緩
 }
 
 enum DemandPriority {
@@ -220,6 +221,7 @@ model Demand {
   expectedDate    DateTime? /// 預計完成時間
   completedDate   DateTime? /// 實際完成時間
   rejectReason    String?        @db.Text
+  holdReason      String?        @db.Text /// 暫緩原因
   adminNotes      String?        @db.Text /// 管理者備註 (內部)
   contactPersonId String? /// 需求窗口 (從 DemandAccess REQUESTER 中選)
   contactPerson_  User?          @relation("DemandContactPerson", fields: [contactPersonId], references: [id])

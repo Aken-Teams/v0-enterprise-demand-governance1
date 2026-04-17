@@ -301,8 +301,16 @@ export async function GET(request: NextRequest) {
           demandManager: { select: { name: true } },
           _count: { select: { documents: true, comments: true } },
           phaseSignoffs: {
-            where: { kind: "DESIGN_CHANGE", status: "PENDING" },
-            select: { id: true, phase: true },
+            where: {
+              OR: [
+                { kind: "DESIGN_CHANGE", status: "PENDING" },
+                { kind: "PHASE", status: { in: ["REJECTED", "PENDING"] } },
+              ],
+            },
+            select: {
+              id: true, phase: true, status: true, kind: true,
+              requestedAt: true,
+            },
           },
         },
         orderBy: { createdAt: "desc" },
@@ -354,7 +362,7 @@ export async function GET(request: NextRequest) {
           select: { totalQuota: true },
         }),
         prisma.demand.findMany({
-          where: { organizationId, status: { not: "REJECTED" } },
+          where: { organizationId, status: { notIn: ["REJECTED", "ON_HOLD"] } },
           select: { status: true, estimatedSp: true, confirmedSp: true },
         }),
       ])
@@ -366,30 +374,46 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      demands: demands.map((d) => ({
-        id: d.id,
-        demandNumber: d.demandNumber,
-        title: d.title,
-        description: d.description,
-        status: d.status,
-        priority: d.priority,
-        estimatedSp: d.estimatedSp,
-        confirmedSp: d.confirmedSp,
-        desiredDate: d.desiredDate,
-        createdAt: d.createdAt,
-        organization: d.organization.name,
-        submitter: d.submitter.name,
-        creator: d.creator.name,
-        manager: d.manager?.name || null,
-        developer: d.developer?.name || null,
-        contactPerson: (d as unknown as { contactPerson_: { name: string } | null }).contactPerson_?.name || null,
-        demandManager: d.demandManager?.name || null,
-        documentCount: d._count.documents,
-        commentCount: d._count.comments,
-        hasPendingDesignChange: (d as unknown as { phaseSignoffs: { phase: string }[] }).phaseSignoffs.some(
-          (s) => s.phase === d.status,
-        ),
-      })),
+      demands: demands.map((d) => {
+        type SignoffRow = {
+          phase: string; status: string; kind: string;
+          requestedAt: Date;
+        }
+        const signoffs = d.phaseSignoffs as unknown as SignoffRow[]
+        // Only show rejection if the LATEST round of signoffs has a REJECTED entry
+        const phaseSignoffs = signoffs.filter(s => s.kind === "PHASE" && s.phase === d.status)
+        const latestRoundTime = phaseSignoffs.length > 0
+          ? Math.max(...phaseSignoffs.map(s => new Date(s.requestedAt).getTime()))
+          : 0
+        const latestRound = phaseSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestRoundTime)
+        const hasCurrentPhaseReject = latestRound.some(s => s.status === "REJECTED")
+        return {
+          id: d.id,
+          demandNumber: d.demandNumber,
+          title: d.title,
+          description: d.description,
+          status: d.status,
+          priority: d.priority,
+          estimatedSp: d.estimatedSp,
+          confirmedSp: d.confirmedSp,
+          desiredDate: d.desiredDate,
+          createdAt: d.createdAt,
+          organization: d.organization.name,
+          submitter: d.submitter.name,
+          creator: d.creator.name,
+          manager: d.manager?.name || null,
+          developer: d.developer?.name || null,
+          contactPerson: (d as unknown as { contactPerson_: { name: string } | null }).contactPerson_?.name || null,
+          demandManager: d.demandManager?.name || null,
+          documentCount: d._count.documents,
+          commentCount: d._count.comments,
+          hasPendingDesignChange: signoffs.some(
+            (s) => s.kind === "DESIGN_CHANGE" && s.phase === d.status,
+          ),
+          hasCurrentPhaseReject,
+          holdReason: (d as unknown as { holdReason: string | null }).holdReason || null,
+        }
+      }),
       total,
       statusCounts,
       ...(spSummary ? { spSummary } : {}),

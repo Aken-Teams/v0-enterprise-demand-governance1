@@ -63,6 +63,7 @@ interface DemandDetail {
   expectedDate: string | null
   completedDate: string | null
   rejectReason: string | null
+  holdReason: string | null
   adminNotes: string | null
   contactPersonId: string | null
   contactPerson: { id: string; name: string } | null
@@ -604,6 +605,7 @@ export default function DemandDetailPage() {
   const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
+  const isOnHold = demand.status === "ON_HOLD"
   const isClosed = demand.status === "CLOSED"
   // When CLOSED, only admin with write retains modification rights
   const effectiveCanManage = canManage && (!isClosed || isAdminWithWrite)
@@ -1080,8 +1082,16 @@ export default function DemandDetailPage() {
                 )}
               </div>
             )}
+            {isOnHold && (
+              <div className="mt-3 text-center">
+                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 text-xs">暫緩中</Badge>
+                {demand.holdReason && (
+                  <p className="text-xs text-muted-foreground mt-1">暫緩原因：{demand.holdReason}</p>
+                )}
+              </div>
+            )}
             {/* Step Navigation */}
-            {canManage && !isRejected && (
+            {canManage && !isRejected && !isOnHold && (
               <div className="mt-3">
               <StepNavigation
                 currentStatus={demand.status}
