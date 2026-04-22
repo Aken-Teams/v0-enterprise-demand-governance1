@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
             confirmedSp: true,
             organization: { select: { id: true, name: true } },
             submitter: { select: { id: true, name: true } },
+            contactPerson_: { select: { id: true, name: true } },
             developer: { select: { id: true, name: true } },
           },
         },
@@ -87,6 +88,7 @@ export async function GET(request: NextRequest) {
         confirmedSp: s.demand.confirmedSp,
         organization: s.demand.organization,
         submitter: s.demand.submitter,
+        contactPerson: s.demand.contactPerson_,
         developer: s.demand.developer,
       },
     }))

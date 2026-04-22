@@ -212,6 +212,17 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
     })
   }, [])
 
+  // Mobile detection — sidebar always shows expanded on mobile
+  const [isMobile, setIsMobile] = React.useState(false)
+  React.useEffect(() => {
+    const mql = window.matchMedia("(max-width: 1023px)")
+    setIsMobile(mql.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mql.addEventListener("change", handler)
+    return () => mql.removeEventListener("change", handler)
+  }, [])
+  const effectiveCollapsed = sidebarCollapsed && !isMobile
+
   const detectedRole = React.useMemo((): UserRole => {
     // Use actual user role when available (handles shared pages like /governance/inbox for delivery users)
     if (user?.role && ["admin", "delivery", "subsidiary", "viewer"].includes(user.role)) {
@@ -257,17 +268,17 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
         className={cn(
           "fixed inset-y-0 left-0 z-50 border-r border-sidebar-border bg-sidebar transition-all duration-300 lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
-          sidebarCollapsed ? "w-16" : "w-56",
+          effectiveCollapsed ? "w-16" : "w-56",
         )}
       >
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className={cn("flex h-16 items-center justify-between border-b border-sidebar-border", sidebarCollapsed ? "px-3" : "px-4")}>
-            <Link href="/" className={cn("flex items-center gap-2", sidebarCollapsed && "justify-center w-full")}>
+          <div className={cn("flex h-16 items-center justify-between border-b border-sidebar-border", effectiveCollapsed ? "px-3" : "px-4")}>
+            <Link href="/" className={cn("flex items-center gap-2", effectiveCollapsed && "justify-center w-full")}>
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
                 <Building2 className="h-5 w-5 text-primary-foreground" />
               </div>
-              {!sidebarCollapsed && <span className="text-sm font-semibold text-sidebar-foreground">JV 需求管理平台</span>}
+              {!effectiveCollapsed && <span className="text-sm font-semibold text-sidebar-foreground">JV 需求管理平台</span>}
             </Link>
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
               <X className="h-5 w-5" />
@@ -288,12 +299,12 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
 
                 return (
                   <div key={section.title}>
-                    {!sidebarCollapsed && (
+                    {!effectiveCollapsed && (
                       <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {section.title}
                       </h3>
                     )}
-                    {sidebarCollapsed && <div className="my-2 mx-2 border-t border-sidebar-border/50" />}
+                    {effectiveCollapsed && <div className="my-2 mx-2 border-t border-sidebar-border/50" />}
                     <div className="space-y-0.5">
                       {visibleItems.map((item) => {
                         const Icon = item.icon
@@ -312,20 +323,20 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                               isActive
                                 ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent/50",
-                              sidebarCollapsed && "justify-center px-2",
+                              effectiveCollapsed && "justify-center px-2",
                             )}
                             onClick={() => setSidebarOpen(false)}
                           >
                             <span className="relative">
-                              <Icon className={cn(sidebarCollapsed ? "h-5 w-5" : "h-4 w-4")} />
-                              {sidebarCollapsed && showSignoffBadge && (
+                              <Icon className={cn(effectiveCollapsed ? "h-5 w-5" : "h-4 w-4")} />
+                              {effectiveCollapsed && showSignoffBadge && (
                                 <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[8px] font-bold text-white">
                                   {pendingSignoffCount}
                                 </span>
                               )}
                             </span>
-                            {!sidebarCollapsed && item.title}
-                            {!sidebarCollapsed && showSignoffBadge && (
+                            {!effectiveCollapsed && item.title}
+                            {!effectiveCollapsed && showSignoffBadge && (
                               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-medium text-white">
                                 {pendingSignoffCount}
                               </span>
@@ -333,7 +344,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                           </Link>
                         )
 
-                        if (sidebarCollapsed) {
+                        if (effectiveCollapsed) {
                           return (
                             <Tooltip key={item.href}>
                               <TooltipTrigger asChild>{linkEl}</TooltipTrigger>
@@ -352,7 +363,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
             </TooltipProvider>
           </nav>
 
-          <div className="border-t border-sidebar-border p-3">
+          <div className="border-t border-sidebar-border p-3 hidden lg:block">
             <TooltipProvider delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
