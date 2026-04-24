@@ -532,18 +532,20 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             </Link>
           </Button>
 
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
             <div className="min-w-0">
-              <p className="text-xs font-mono text-muted-foreground mb-1">{demand.demandNumber}</p>
-              <h1 className="text-xl font-bold tracking-tight leading-snug">{demand.title}</h1>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</p>
+                <Badge className={cn("text-[10px] sm:text-xs whitespace-nowrap shrink-0", statusInfo.color)}>
+                  {statusInfo.label}
+                  {dcHasPending && <span className="ml-1">- 設計變更</span>}
+                </Badge>
+              </div>
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight leading-snug break-words">{demand.title}</h1>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              <Badge className={cn("text-xs whitespace-nowrap", statusInfo.color)}>
-                {statusInfo.label}
-                {dcHasPending && <span className="ml-1">- 設計變更</span>}
-              </Badge>
               <div className="text-right">
-                <span className="text-2xl font-bold text-primary">{sp}</span>
+                <span className="text-xl sm:text-2xl font-bold text-primary">{sp}</span>
                 <span className="text-xs text-muted-foreground ml-1">SP</span>
               </div>
             </div>
@@ -586,52 +588,54 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
         {/* ── Tabs ── */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="w-full justify-start bg-muted/50 h-10">
-            <TabsTrigger value="overview" className="gap-1.5">
-              <Layers className="h-3.5 w-3.5" />
+          <div className="overflow-x-auto scrollbar-hide">
+          <TabsList className="inline-flex w-max sm:w-full justify-start bg-muted/50 h-10 p-1">
+            <TabsTrigger value="overview" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
+              <Layers className="h-3.5 w-3.5 hidden sm:block" />
               概覽
             </TabsTrigger>
-            <TabsTrigger value="gantt" className="gap-1.5">
-              <BarChart3 className="h-3.5 w-3.5" />
+            <TabsTrigger value="gantt" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
+              <BarChart3 className="h-3.5 w-3.5 hidden sm:block" />
               甘特圖
             </TabsTrigger>
-            <TabsTrigger value="deliverables" className="gap-1.5">
-              <Package className="h-3.5 w-3.5" />
+            <TabsTrigger value="deliverables" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
+              <Package className="h-3.5 w-3.5 hidden sm:block" />
               交付成果
               {(() => {
                 const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
                 const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
                 const count = devLinks.length > 0 ? devLinks.length : prdLinks.length
                 return count > 0 ? (
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
+                  <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
                     {count}
                   </Badge>
                 ) : null
               })()}
             </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-1.5">
-              <Paperclip className="h-3.5 w-3.5" />
+            <TabsTrigger value="documents" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
+              <Paperclip className="h-3.5 w-3.5 hidden sm:block" />
               文件
               {demand.documents.filter((d) => d.type !== "GITHUB_REPO").length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
+                <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
                   {demand.documents.filter((d) => d.type !== "GITHUB_REPO").length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="signoffs" className="gap-1.5">
-              <ClipboardCheck className="h-3.5 w-3.5" />
+            <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
+              <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />
               簽核紀錄
               {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-0.5">
+                <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
                   {demand.phaseSignoffs.length}
                 </Badge>
               )}
             </TabsTrigger>
           </TabsList>
+          </div>
 
           {/* ══════ Tab: 概覽 ══════ */}
           <TabsContent value="overview" className="mt-5">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="grid gap-5 lg:grid-cols-3">
               {/* Left */}
               <div className="lg:col-span-2 space-y-5">
                 <Card>

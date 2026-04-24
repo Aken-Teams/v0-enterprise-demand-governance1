@@ -387,6 +387,7 @@ export async function GET(request: NextRequest) {
           : 0
         const latestRound = phaseSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestRoundTime)
         const hasCurrentPhaseReject = latestRound.some(s => s.status === "REJECTED")
+        const hasCurrentPhaseApproved = latestRound.length > 0 && latestRound.every(s => s.status === "APPROVED")
         return {
           id: d.id,
           demandNumber: d.demandNumber,
@@ -411,6 +412,7 @@ export async function GET(request: NextRequest) {
             (s) => s.kind === "DESIGN_CHANGE" && s.phase === d.status,
           ),
           hasCurrentPhaseReject,
+          hasCurrentPhaseApproved,
           holdReason: (d as unknown as { holdReason: string | null }).holdReason || null,
         }
       }),
@@ -425,7 +427,7 @@ export async function GET(request: NextRequest) {
         organizations: organizations.map((o: { id: string; name: string }) => ({ id: o.id, name: o.name })),
         assignableUsers: [
           ...developers.map((u) => ({ id: u.id, name: u.name, role: u.role })),
-          ...submitters.map((u: { id: string; name: string }) => ({ id: u.id, name: u.name, role: "subsidiary" as const })),
+          ...submitters.map((u: { id: string; name: string; organizationId: string | null }) => ({ id: u.id, name: u.name, role: "subsidiary" as const, organizationId: u.organizationId })),
         ],
       },
     })

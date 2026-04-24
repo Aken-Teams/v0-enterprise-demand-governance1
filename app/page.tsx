@@ -101,11 +101,15 @@ export default function HomePage() {
     }
   }, [selectedOrgId, organizations])
 
-  // Auto-select first account when admin role changes
+  // Auto-select default account when admin role changes
+  // Prefer "智合 - Aken" (admin@panjit.com) for admin role
   useEffect(() => {
     const users = adminUsers.filter((u) => u.role === selectedAdminRole)
     if (users.length > 0) {
-      setSelectedAdminEmail(users[0].email)
+      const preferred = selectedAdminRole === "admin"
+        ? users.find((u) => u.email === "admin@panjit.com")
+        : undefined
+      setSelectedAdminEmail(preferred?.email || users[0].email)
     } else {
       setSelectedAdminEmail("")
     }

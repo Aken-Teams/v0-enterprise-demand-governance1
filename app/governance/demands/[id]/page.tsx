@@ -371,11 +371,12 @@ export default function DemandDetailPage() {
 
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string }[]>([])
+  const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string; organizationId?: string | null }[]>([])
   const [accessUsers, setAccessUsers] = useState<{ id: string; name: string; signoffRole: string }[]>([])
   const [activeTab, setActiveTab] = useState("overview")
   const [docPhaseKey, setDocPhaseKey] = useState(0)
   const [spPlanOpen, setSpPlanOpen] = useState<boolean | null>(null)
+  const [spPlanDialogOpen, setSpPlanDialogOpen] = useState(false)
   const [subTasksOpen, setSubTasksOpen] = useState<boolean | null>(null)
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [textContent, setTextContent] = useState("")
@@ -658,21 +659,21 @@ export default function DemandDetailPage() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
                 <Link href="/governance/inbox"><ArrowLeft className="h-4 w-4" /></Link>
               </Button>
-              <span className="text-sm font-mono text-muted-foreground">{demand.demandNumber}</span>
-              <Badge variant="secondary" className={cn("text-xs px-2 py-0.5", statusInfo.color)}>
+              <span className="text-xs sm:text-sm font-mono text-muted-foreground shrink-0">{demand.demandNumber}</span>
+              <Badge variant="secondary" className={cn("text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 shrink-0", statusInfo.color)}>
                 {statusInfo.label}
                 {dcHasPending && <span className="ml-1">- 設計變更</span>}
               </Badge>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground ml-11">{demand.title}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground ml-10 sm:ml-11 break-words">{demand.title}</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-10 sm:ml-0 shrink-0">
             {/* Share button (admin + delivery) */}
             {canManage && (
               <Dialog open={shareDialogOpen} onOpenChange={(open) => { setShareDialogOpen(open); if (open) fetchShareLinks() }}>
@@ -800,9 +801,9 @@ export default function DemandDetailPage() {
 
         {/* Status Pipeline */}
         <Card>
-          <CardContent className="py-4">
+          <CardContent className="py-3 sm:py-4 px-2 sm:px-6">
             <TooltipProvider delayDuration={200}>
-              <div className="flex items-center">
+              <div className="flex items-center overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
                 {PIPELINE_STEPS.map((step, i) => {
                   const info = STATUS_MAP[step]
                   const isPast = !isRejected && currentStepIndex >= 0 && i < currentStepIndex
@@ -840,13 +841,13 @@ export default function DemandDetailPage() {
                   const phaseSignoff = stepSignoffs.length > 0 ? stepSignoffs[0] : null
 
                   return (
-                    <div key={step} className="flex items-center flex-1 last:flex-none">
+                    <div key={step} className="flex items-center flex-1 last:flex-none min-w-fit sm:min-w-0">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex flex-col items-center gap-2 cursor-default">
+                          <div className="flex flex-col items-center gap-1.5 sm:gap-2 cursor-default shrink-0">
                             <div className="relative">
                               <div className={cn(
-                                "h-9 w-9 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors",
+                                "h-7 w-7 sm:h-9 sm:w-9 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium border-2 transition-colors",
                                 isCurrent && "border-primary bg-primary text-primary-foreground",
                                 isPast && "border-primary bg-primary/10 text-primary",
                                 isFuture && "border-muted-foreground/30 bg-background text-muted-foreground/50",
@@ -861,7 +862,7 @@ export default function DemandDetailPage() {
                             </div>
                             <div className="flex flex-col items-center gap-0.5">
                               <span className={cn(
-                                "text-sm whitespace-nowrap",
+                                "text-[10px] sm:text-sm whitespace-nowrap",
                                 isCurrent && "font-semibold text-foreground",
                                 isPast && "text-primary",
                                 isFuture && "text-muted-foreground/50",
@@ -926,7 +927,7 @@ export default function DemandDetailPage() {
                       </Tooltip>
                       {i < PIPELINE_STEPS.length - 1 && (
                         <div className={cn(
-                          "flex-1 h-px mx-2 mt-[-1.5rem]",
+                          "flex-1 h-px mx-1 sm:mx-2 mt-[-1.5rem] min-w-2",
                           isPast ? "bg-primary" : "bg-muted-foreground/20",
                         )} />
                       )}
@@ -1114,17 +1115,18 @@ export default function DemandDetailPage() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full justify-start h-10 p-1 bg-muted/60">
-            <TabsTrigger value="overview" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <BarChart3 className="h-3.5 w-3.5" />
+          <div className="overflow-x-auto scrollbar-hide">
+          <TabsList className="inline-flex w-max sm:w-full justify-start h-10 p-1 bg-muted/60">
+            <TabsTrigger value="overview" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <BarChart3 className="h-3.5 w-3.5 hidden sm:block" />
               概覽
             </TabsTrigger>
-            <TabsTrigger value="gantt" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <GanttChart className="h-3.5 w-3.5" />
+            <TabsTrigger value="gantt" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <GanttChart className="h-3.5 w-3.5 hidden sm:block" />
               甘特圖
             </TabsTrigger>
-            <TabsTrigger value="deliverables" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <Package className="h-3.5 w-3.5" />
+            <TabsTrigger value="deliverables" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Package className="h-3.5 w-3.5 hidden sm:block" />
               交付成果
               {(() => {
                 const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
@@ -1137,8 +1139,8 @@ export default function DemandDetailPage() {
                 ) : null
               })()}
             </TabsTrigger>
-            <TabsTrigger value="documents" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <FolderOpen className="h-3.5 w-3.5" />
+            <TabsTrigger value="documents" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <FolderOpen className="h-3.5 w-3.5 hidden sm:block" />
               文件
               {demand.documents.length > 0 && (
                 <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
@@ -1146,8 +1148,8 @@ export default function DemandDetailPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="signoffs" className="flex-1 gap-1.5 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <ClipboardCheck className="h-3.5 w-3.5" />
+            <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />
               簽核紀錄
               {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
                 <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
@@ -1156,6 +1158,7 @@ export default function DemandDetailPage() {
               )}
             </TabsTrigger>
           </TabsList>
+          </div>
 
           {/* 概覽 Tab */}
           <TabsContent value="overview" className="mt-4">
@@ -1188,6 +1191,12 @@ export default function DemandDetailPage() {
                             demandId={demand.id}
                             token={token}
                             staffUsers={staffUsers}
+                            demandContext={{
+                              developerId: demand.developer?.id,
+                              contactPersonId: demand.contactPerson?.id,
+                              organizationId: demand.organization.id,
+                              organizationName: demand.organization.name,
+                            }}
                             onSaved={() => { setSpPlanOpen(false); fetchDemand() }}
                           />
                         </CardContent>
@@ -1551,10 +1560,18 @@ export default function DemandDetailPage() {
           <TabsContent value="gantt" className="mt-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <GanttChart className="h-4 w-4" />
-                  甘特圖
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <GanttChart className="h-4 w-4" />
+                    甘特圖
+                  </CardTitle>
+                  {isAdminWithWrite && !isClosed && (
+                    <Button variant="outline" size="sm" onClick={() => setSpPlanDialogOpen(true)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                      編輯時程
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <ProjectGantt
@@ -1568,6 +1585,33 @@ export default function DemandDetailPage() {
                 />
               </CardContent>
             </Card>
+
+            {/* SP 時程編輯 Dialog */}
+            <Dialog open={spPlanDialogOpen} onOpenChange={setSpPlanDialogOpen}>
+              <DialogContent className="sm:max-w-4xl w-[95vw]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-orange-600" />
+                    SP 與時程規劃
+                  </DialogTitle>
+                </DialogHeader>
+                <PhasePlanInlineEditor
+                  phasePlans={demand.phasePlans}
+                  totalSp={demand.confirmedSp ?? demand.estimatedSp}
+                  demandId={demand.id}
+                  token={token}
+                  staffUsers={staffUsers}
+                  demandContext={{
+                    developerId: demand.developer?.id,
+                    contactPersonId: demand.contactPerson?.id,
+                    organizationId: demand.organization.id,
+                    organizationName: demand.organization.name,
+                  }}
+                  hideSp
+                  onSaved={() => { setSpPlanDialogOpen(false); fetchDemand() }}
+                />
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* 交付成果 Tab */}

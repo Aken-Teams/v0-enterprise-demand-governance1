@@ -56,6 +56,7 @@ interface Demand {
   commentCount: number
   hasPendingDesignChange: boolean
   hasCurrentPhaseReject: boolean
+  hasCurrentPhaseApproved: boolean
   holdReason: string | null
 }
 
@@ -117,6 +118,7 @@ export default function InboxPage() {
   const [filterOrg, setFilterOrg] = useState(s.org || "all")
   const [filterSubmitter, setFilterSubmitter] = useState(s.submitter || "all")
   const [filterDeveloper, setFilterDeveloper] = useState(s.developer || "all")
+  const [filterSignoff, setFilterSignoff] = useState(s.signoff || "all")
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
@@ -138,10 +140,11 @@ export default function InboxPage() {
     if (filterOrg !== "all") data.org = filterOrg
     if (filterSubmitter !== "all") data.submitter = filterSubmitter
     if (filterDeveloper !== "all") data.developer = filterDeveloper
+    if (filterSignoff !== "all") data.signoff = filterSignoff
     if (debouncedSearch) data.q = debouncedSearch
     if (currentPage > 1) data.page = String(currentPage)
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
-  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch, currentPage])
+  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterSignoff, debouncedSearch, currentPage])
 
   // Debounce search
   useEffect(() => {
@@ -233,13 +236,21 @@ export default function InboxPage() {
   useEffect(() => {
     if (!didMount.current) { didMount.current = true; return }
     setCurrentPage(1)
-  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch])
+  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterSignoff, debouncedSearch])
 
-  const totalPages = Math.max(1, Math.ceil(demands.length / ITEMS_PER_PAGE))
+  // Client-side signoff status filter
+  const filteredDemands = useMemo(() => {
+    if (filterSignoff === "all") return demands
+    if (filterSignoff === "approved") return demands.filter(d => d.hasCurrentPhaseApproved)
+    if (filterSignoff === "rejected") return demands.filter(d => d.hasCurrentPhaseReject)
+    return demands
+  }, [demands, filterSignoff])
+
+  const totalPages = Math.max(1, Math.ceil(filteredDemands.length / ITEMS_PER_PAGE))
   const paginatedDemands = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE
-    return demands.slice(start, start + ITEMS_PER_PAGE)
-  }, [demands, currentPage, ITEMS_PER_PAGE])
+    return filteredDemands.slice(start, start + ITEMS_PER_PAGE)
+  }, [filteredDemands, currentPage, ITEMS_PER_PAGE])
 
   const getCount = (status: string) => statusCounts[status] || 0
   const confirmStage = getCount("SUBMITTED") + getCount("PRD_REVIEW") + getCount("SP_REVIEW")
@@ -265,46 +276,47 @@ export default function InboxPage() {
     return Array.from(map.entries())
   }, [filteredSubmitterOptions])
 
-  const hasActiveFilters = filterStatus !== "all" || filterOrg !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all"
+  const hasActiveFilters = filterStatus !== "all" || filterOrg !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all" || filterSignoff !== "all"
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               {canSeeAll ? "需求管理" : "需求列表"}
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-sm sm:text-base text-muted-foreground">
               {isViewer ? "查看所有需求與開發進度" : isAdmin ? "建立與追蹤所有需求的開案流程" : "查看指派給您的需求與開發進度"}
             </p>
           </div>
           {isFullAdmin && (
-            <Button asChild>
+            <Button asChild size="sm" className="shrink-0 sm:size-default">
               <Link href="/governance/create">
-                <Plus className="mr-2 h-4 w-4" />
-                建立需求
+                <Plus className="mr-1 sm:mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">建立需求</span>
+                <span className="sm:hidden">新增</span>
               </Link>
             </Button>
           )}
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
           {[
             { label: "全部需求", sub: canSeeAll ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
             { label: "確認階段", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
             { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
           ].map((item) => (
-            <div key={item.label} className={`flex items-center gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-4`}>
-              <span className="text-3xl font-bold">{item.value}</span>
+            <div key={item.label} className={`flex items-center gap-3 sm:gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-3 sm:p-4`}>
+              <span className="text-2xl sm:text-3xl font-bold">{item.value}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <p className="font-medium text-sm">{item.label}</p>
+                  <p className="font-medium text-xs sm:text-sm">{item.label}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">{item.sub}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">{item.sub}</p>
               </div>
             </div>
           ))}
@@ -321,27 +333,14 @@ export default function InboxPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="狀態" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部狀態</SelectItem>
-                {Object.entries(STATUS_MAP).map(([key, info]) => (
-                  <SelectItem key={key} value={key}>
-                    {info.label} ({getCount(key)})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-center gap-2">
             {canSeeAll && orgOptions.length > 0 && (
               <Select value={filterOrg} onValueChange={(v) => {
                 setFilterOrg(v)
                 // Reset submitter when org changes (selected submitter may not belong to new org)
                 setFilterSubmitter("all")
               }}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
                   <SelectValue placeholder="組織" />
                 </SelectTrigger>
                 <SelectContent>
@@ -355,7 +354,7 @@ export default function InboxPage() {
             {canSeeAll && (
               <Popover open={submitterOpen} onOpenChange={setSubmitterOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={submitterOpen} className="w-[160px] justify-between font-normal">
+                  <Button variant="outline" role="combobox" aria-expanded={submitterOpen} className="w-auto min-w-[100px] sm:w-[160px] justify-between font-normal">
                     <span className="truncate">
                       {filterSubmitter === "all"
                         ? "全部需求者"
@@ -399,7 +398,7 @@ export default function InboxPage() {
             )}
             {canSeeAll && (
               <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
                   <SelectValue placeholder="開發者" />
                 </SelectTrigger>
                 <SelectContent>
@@ -408,6 +407,31 @@ export default function InboxPage() {
                   {developerOptions.map((u) => (
                     <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
+                <SelectValue placeholder="狀態" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部狀態</SelectItem>
+                {Object.entries(STATUS_MAP).map(([key, info]) => (
+                  <SelectItem key={key} value={key}>
+                    {info.label} ({getCount(key)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(isAdmin || user?.role === "delivery") && (
+              <Select value={filterSignoff} onValueChange={setFilterSignoff}>
+                <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
+                  <SelectValue placeholder="審核狀態" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部審核</SelectItem>
+                  <SelectItem value="approved">已通過</SelectItem>
+                  <SelectItem value="rejected">已駁回</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -421,6 +445,7 @@ export default function InboxPage() {
                   setFilterOrg("all")
                   setFilterSubmitter("all")
                   setFilterDeveloper("all")
+                  setFilterSignoff("all")
                 }}
               >
                 清除篩選
@@ -437,7 +462,7 @@ export default function InboxPage() {
               <span className="ml-2 text-muted-foreground">載入中...</span>
             </CardContent>
           </Card>
-        ) : demands.length === 0 ? (
+        ) : filteredDemands.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Inbox className="h-12 w-12 text-muted-foreground/30 mb-4" />
@@ -470,6 +495,11 @@ export default function InboxPage() {
                             {statusInfo.label}
                             {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
                           </Badge>
+                          {demand.hasCurrentPhaseApproved && (isAdmin || user?.role === "delivery") && (
+                            <Badge variant="secondary" className="text-xs px-2 py-0 bg-green-100 text-green-700">
+                              已通過
+                            </Badge>
+                          )}
                           {demand.hasCurrentPhaseReject && (isAdmin || user?.role === "delivery") && (
                             <Badge variant="secondary" className="text-xs px-2 py-0 bg-red-100 text-red-700">
                               已駁回
@@ -492,22 +522,22 @@ export default function InboxPage() {
                       <hr className="border-border/60" />
 
                       {/* Meta row + actions */}
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <span className="flex items-center gap-1">
-                            <Building2 className="h-3.5 w-3.5" />
-                            {demand.organization}
+                      <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground gap-2">
+                        <div className="flex items-center gap-x-1.5 sm:gap-x-2 gap-y-0.5 flex-wrap min-w-0">
+                          <span className="flex items-center gap-1 shrink-0">
+                            <Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                            <span className="truncate max-w-[5rem] sm:max-w-none">{demand.organization}</span>
                           </span>
                           {demand.contactPerson && (
                             <>
                               <span>·</span>
-                              <span>{demand.contactPerson}</span>
+                              <span className="truncate max-w-[4rem] sm:max-w-none">{demand.contactPerson}</span>
                             </>
                           )}
                           <span>·</span>
-                          <span>{demand.confirmedSp ?? demand.estimatedSp} SP</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1">
+                          <span className="shrink-0">{demand.confirmedSp ?? demand.estimatedSp} SP</span>
+                          <span className="hidden sm:inline">·</span>
+                          <span className="hidden sm:flex items-center gap-1">
                             <User className="h-3.5 w-3.5" />
                             {demand.developer || "尚未指派"}
                           </span>
@@ -561,17 +591,18 @@ export default function InboxPage() {
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3 pt-4">
+              <div className="flex items-center justify-center gap-2 sm:gap-3 pt-4">
                 <Button
                   variant="outline" size="sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="h-9 px-3"
+                  className="h-10 sm:h-9 px-3"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   上一頁
                 </Button>
-                <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground sm:hidden">{currentPage} / {totalPages}</span>
+                <div className="hidden sm:flex items-center gap-2">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <Button
                       key={page}
@@ -588,7 +619,7 @@ export default function InboxPage() {
                   variant="outline" size="sm"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="h-9 px-3"
+                  className="h-10 sm:h-9 px-3"
                 >
                   下一頁
                   <ChevronRight className="h-4 w-4 ml-1" />
@@ -597,7 +628,7 @@ export default function InboxPage() {
             )}
 
             <div className="text-center text-sm text-muted-foreground pt-2">
-              顯示 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, demands.length)} 筆，共 {demands.length} 筆需求
+              顯示 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredDemands.length)} 筆，共 {filteredDemands.length} 筆需求
             </div>
           </>
         )}

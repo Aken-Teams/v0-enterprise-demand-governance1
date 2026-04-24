@@ -199,24 +199,24 @@ export default function MyDemandsPage() {
     <AppLayout userRole="subsidiary">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">我的需求</h1>
             <p className="text-sm text-muted-foreground mt-0.5">追蹤您提交的所有需求狀態</p>
           </div>
           {!user?.restrictedView && (
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 sm:gap-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-emerald-600">{remainingSp}</div>
-                <div className="text-xs text-muted-foreground">可用 SP</div>
+                <div className="text-xl sm:text-2xl font-bold text-emerald-600">{remainingSp}</div>
+                <div className="text-[10px] sm:text-xs text-muted-foreground">可用 SP</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-primary">{spSummary.usedSp}</div>
-                <div className="text-xs text-muted-foreground">已使用 SP</div>
+                <div className="text-xl sm:text-2xl font-bold text-primary">{spSummary.usedSp}</div>
+                <div className="text-[10px] sm:text-xs text-muted-foreground">已使用 SP</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
-                <div className="text-xs text-muted-foreground">年度配額</div>
+                <div className="text-xl sm:text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
+                <div className="text-[10px] sm:text-xs text-muted-foreground">年度配額</div>
               </div>
             </div>
           )}
@@ -277,24 +277,25 @@ export default function MyDemandsPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {paginatedDemands.map((demand) => (
                 <DemandCard key={demand.id} demand={demand} hasPendingSignoff={demand.status !== "CLOSED" && demand.status !== "REJECTED" && pendingSignoffIds.has(demand.id)} />
               ))}
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-4">
+              <div className="flex items-center justify-center gap-2 sm:gap-3 pt-4">
                 <Button
                   variant="outline" size="sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="h-9 px-3"
+                  className="h-10 sm:h-9 px-3"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   上一頁
                 </Button>
-                <div className="flex items-center gap-1">
+                <span className="text-sm text-muted-foreground sm:hidden">{currentPage} / {totalPages}</span>
+                <div className="hidden sm:flex items-center gap-1">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <Button
                       key={page}
@@ -311,7 +312,7 @@ export default function MyDemandsPage() {
                   variant="outline" size="sm"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="h-9 px-3"
+                  className="h-10 sm:h-9 px-3"
                 >
                   下一頁
                   <ChevronRight className="h-4 w-4 ml-1" />

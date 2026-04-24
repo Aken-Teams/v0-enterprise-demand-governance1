@@ -21,12 +21,21 @@ interface PhasePlan {
   pm: { id: string; name: string } | null
 }
 
+interface DemandContext {
+  developerId?: string | null
+  contactPersonId?: string | null
+  organizationId?: string
+  organizationName?: string
+}
+
 interface PhasePlanInlineEditorProps {
   phasePlans: PhasePlan[]
   totalSp: number
   demandId: string
   token: string | null
-  staffUsers: { id: string; name: string; role?: string }[]
+  staffUsers: { id: string; name: string; role?: string; organizationId?: string | null }[]
+  demandContext?: DemandContext
+  hideSp?: boolean
   onSaved: () => void
 }
 
@@ -41,6 +50,8 @@ export function PhasePlanInlineEditor({
   demandId,
   token,
   staffUsers,
+  demandContext,
+  hideSp,
   onSaved,
 }: PhasePlanInlineEditorProps) {
   const [rows, setRows] = useState<
@@ -96,14 +107,15 @@ export function PhasePlanInlineEditor({
 
   return (
     <div className="space-y-3">
+      <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="text-center">階段</TableHead>
-            <TableHead className="text-center w-[80px]">SP</TableHead>
-            <TableHead className="text-center w-[130px]">計畫開始</TableHead>
-            <TableHead className="text-center w-[130px]">計畫結束</TableHead>
-            <TableHead className="text-center w-[140px]">負責人</TableHead>
+            <TableHead className="text-center w-[120px]">階段</TableHead>
+            {!hideSp && <TableHead className="text-center w-[70px]">SP</TableHead>}
+            <TableHead className="text-center min-w-[150px]">計畫開始</TableHead>
+            <TableHead className="text-center min-w-[150px]">計畫結束</TableHead>
+            <TableHead className="text-center min-w-[160px]">負責人</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -118,16 +130,18 @@ export function PhasePlanInlineEditor({
                   <span className="text-sm">{STATUS_MAP[row.phase]?.label}</span>
                 </div>
               </TableCell>
-              <TableCell className="text-center">
-                <Input
-                  type="number"
-                  min={0}
-                  className="h-8 text-xs text-center"
-                  placeholder="0"
-                  value={row.plannedSp}
-                  onChange={(e) => updateRow(idx, "plannedSp", e.target.value)}
-                />
-              </TableCell>
+              {!hideSp && (
+                <TableCell className="text-center">
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-8 text-xs text-center"
+                    placeholder="0"
+                    value={row.plannedSp}
+                    onChange={(e) => updateRow(idx, "plannedSp", e.target.value)}
+                  />
+                </TableCell>
+              )}
               <TableCell>
                 <Input
                   type="date"
@@ -155,8 +169,30 @@ export function PhasePlanInlineEditor({
                   <SelectContent>
                     <SelectItem value="none">未指派</SelectItem>
                     {(() => {
+                      // Filter staffUsers based on demand context
+                      const ctx = demandContext
+                      const filtered = ctx
+                        ? staffUsers.filter((u) => {
+                            if (u.role === "delivery") {
+                              // Only show the assigned engineer
+                              return ctx.developerId ? u.id === ctx.developerId : false
+                            }
+                            if (u.role === "admin") {
+                              // Admin/managers: show all
+                              return true
+                            }
+                            if (u.role === "subsidiary") {
+                              // Only show org-named account + contact person
+                              const isOrgAccount = ctx.organizationName && u.name === ctx.organizationName
+                              const isContact = ctx.contactPersonId && u.id === ctx.contactPersonId
+                              return isOrgAccount || isContact
+                            }
+                            return true
+                          })
+                        : staffUsers
+
                       const groups: Record<string, typeof staffUsers> = {}
-                      for (const u of staffUsers) {
+                      for (const u of filtered) {
                         const g = u.role || "other"
                         ;(groups[g] ??= []).push(u)
                       }
@@ -184,17 +220,22 @@ export function PhasePlanInlineEditor({
           ))}
         </TableBody>
       </Table>
+      </div>
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-border/50">
         <div className="text-sm">
-          <span className="text-muted-foreground">已分配：</span>
-          <span className="font-semibold">{allocatedSp}</span>
-          <span className="text-muted-foreground"> / {totalSp} SP</span>
-          {remaining !== 0 && (
-            <span className={remaining > 0 ? "text-amber-600 ml-2" : "text-destructive ml-2"}>
-              ({remaining > 0 ? `剩餘 ${remaining}` : `超出 ${Math.abs(remaining)}`})
-            </span>
+          {!hideSp && (
+            <>
+              <span className="text-muted-foreground">已分配：</span>
+              <span className="font-semibold">{allocatedSp}</span>
+              <span className="text-muted-foreground"> / {totalSp} SP</span>
+              {remaining !== 0 && (
+                <span className={remaining > 0 ? "text-amber-600 ml-2" : "text-destructive ml-2"}>
+                  ({remaining > 0 ? `剩餘 ${remaining}` : `超出 ${Math.abs(remaining)}`})
+                </span>
+              )}
+            </>
           )}
         </div>
         <Button size="sm" onClick={handleSave} disabled={saving}>
