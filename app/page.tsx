@@ -170,7 +170,7 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <section className="flex-1 bg-gradient-to-br from-blue-50 via-white to-blue-50">
-        <div className="mx-auto flex min-h-[calc(100vh-64px-73px)] max-w-7xl items-center px-6 py-8">
+        <div className="mx-auto flex min-h-[calc(100vh-64px-73px)] max-w-7xl items-center px-4 py-4 sm:px-6 sm:py-8">
           <div className="grid w-full gap-12 lg:grid-cols-2 lg:gap-16 items-center">
             {/* Left - Animation */}
             <div className="hidden lg:flex items-center justify-center">
@@ -187,19 +187,19 @@ export default function HomePage() {
             {/* Right - Hero Text + Login */}
             <div>
               {/* Hero Text */}
-              <div className="mb-8">
-                <h1 className="mb-2 text-3xl font-bold tracking-tight text-gray-900 lg:text-4xl">
+              <div className="mb-4 sm:mb-8">
+                <h1 className="mb-1 text-2xl font-bold tracking-tight text-gray-900 sm:mb-2 sm:text-3xl lg:text-4xl">
                   JV 需求管理平台
                 </h1>
-                <p className="text-base text-gray-500">需求提案 · 資源配置 · 開發追蹤 · 交付管控</p>
+                <p className="text-sm text-gray-500 sm:text-base">需求提案 · 資源配置 · 開發追蹤 · 交付管控</p>
               </div>
 
               {/* Login Card */}
               <Card className="overflow-hidden shadow-xl">
                 <>
                   {/* Login Type Toggle */}
-                  <div className="border-b bg-gray-50 px-6 py-4">
-                    <div className="flex items-center justify-center gap-4">
+                  <div className="border-b bg-gray-50 px-4 py-3 sm:px-6 sm:py-4">
+                    <div className="flex items-center justify-center gap-2 sm:gap-4">
                       <button
                         type="button"
                         onClick={() => {
@@ -207,7 +207,7 @@ export default function HomePage() {
                           setPassword("")
                           setError("")
                         }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                        className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
                           loginType === "company"
                             ? "bg-blue-500 text-white shadow-md"
                             : "bg-white text-gray-600 hover:bg-gray-100"
@@ -223,7 +223,7 @@ export default function HomePage() {
                           setPassword("")
                           setError("")
                         }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                        className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-all ${
                           loginType === "admin"
                             ? "bg-orange-500 text-white shadow-md"
                             : "bg-white text-gray-600 hover:bg-gray-100"
@@ -236,7 +236,7 @@ export default function HomePage() {
                   </div>
 
                   {/* Login Form */}
-                  <CardContent className="p-6">
+                  <CardContent className="p-4 sm:p-6">
                     {dataLoading ? (
                       <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -290,7 +290,7 @@ export default function HomePage() {
                                       {selectedAccountEmail ? (
                                         <span className="truncate">
                                           {orgUsers.find((u) => u.email === selectedAccountEmail)?.name || ""}
-                                          <span className="ml-2 text-muted-foreground text-xs">
+                                          <span className="ml-2 text-muted-foreground text-xs hidden sm:inline">
                                             ({selectedAccountEmail})
                                           </span>
                                         </span>
@@ -300,10 +300,10 @@ export default function HomePage() {
                                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" collisionPadding={16}>
                                     <Command>
                                       <CommandInput placeholder="搜尋姓名或信箱..." />
-                                      <CommandList>
+                                      <CommandList className="max-h-[40vh] sm:max-h-[300px]">
                                         <CommandEmpty>找不到帳號</CommandEmpty>
                                         {orgUsers.map((user) => (
                                           <CommandItem
@@ -317,12 +317,12 @@ export default function HomePage() {
                                           >
                                             <Check
                                               className={cn(
-                                                "mr-2 h-4 w-4",
+                                                "mr-2 h-4 w-4 shrink-0",
                                                 selectedAccountEmail === user.email ? "opacity-100" : "opacity-0",
                                               )}
                                             />
-                                            <span className="font-medium">{user.name}</span>
-                                            <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
+                                            <span className="font-medium truncate">{user.name}</span>
+                                            <span className="ml-2 text-muted-foreground text-xs truncate">({user.email})</span>
                                           </CommandItem>
                                         ))}
                                       </CommandList>
@@ -381,7 +381,7 @@ export default function HomePage() {
                                       {selectedAdminEmail ? (
                                         <span className="truncate">
                                           {roleUsers.find((u) => u.email === selectedAdminEmail)?.name || ""}
-                                          <span className="ml-2 text-muted-foreground text-xs">
+                                          <span className="ml-2 text-muted-foreground text-xs hidden sm:inline">
                                             ({selectedAdminEmail})
                                           </span>
                                         </span>
@@ -391,10 +391,10 @@ export default function HomePage() {
                                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" collisionPadding={16}>
                                     <Command>
                                       <CommandInput placeholder="搜尋姓名或信箱..." />
-                                      <CommandList>
+                                      <CommandList className="max-h-[40vh] sm:max-h-[300px]">
                                         <CommandEmpty>找不到帳號</CommandEmpty>
                                         {roleUsers.map((user) => (
                                           <CommandItem
@@ -408,12 +408,12 @@ export default function HomePage() {
                                           >
                                             <Check
                                               className={cn(
-                                                "mr-2 h-4 w-4",
+                                                "mr-2 h-4 w-4 shrink-0",
                                                 selectedAdminEmail === user.email ? "opacity-100" : "opacity-0",
                                               )}
                                             />
-                                            <span className="font-medium">{user.name}</span>
-                                            <span className="ml-2 text-muted-foreground text-xs">({user.email})</span>
+                                            <span className="font-medium truncate">{user.name}</span>
+                                            <span className="ml-2 text-muted-foreground text-xs truncate">({user.email})</span>
                                           </CommandItem>
                                         ))}
                                       </CommandList>
@@ -481,16 +481,16 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white py-6">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+      <footer className="border-t border-gray-200 bg-white py-4 sm:py-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="flex flex-col items-center justify-between gap-2 sm:gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <Building2 className="h-4 w-4 text-white" />
               </div>
               <span className="font-semibold text-gray-900">JV 需求管理平台</span>
             </div>
-            <p className="text-sm text-gray-500">© 2025 JV 需求管理平台 Powered by <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">智合科技</a></p>
+            <p className="text-xs sm:text-sm text-gray-500">© 2025 JV 需求管理平台 Powered by <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">智合科技</a></p>
           </div>
         </div>
       </footer>
