@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
           priority: true,
           estimatedSp: true,
           confirmedSp: true,
+          heldFromStatus: true,
           desiredDate: true,
           expectedDate: true,
           completedDate: true,
@@ -182,7 +183,7 @@ export async function GET(request: NextRequest) {
       let usedSp = 0
       for (const d of orgDemands) {
         const sp = d.confirmedSp ?? d.estimatedSp
-        usedSp += calcUsedSp(d.status, sp)
+        usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
       }
       const totalQuota = w?.totalQuota ?? 0
       return {
@@ -332,7 +333,7 @@ export async function GET(request: NextRequest) {
       devWorkload[key].count++
       const sp = d.confirmedSp ?? d.estimatedSp ?? 0
       devWorkload[key].totalSp += sp
-      devWorkload[key].usedSp += calcUsedSp(d.status, sp)
+      devWorkload[key].usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
     }
 
     // --- Financial data (permission-gated) ---
@@ -364,7 +365,7 @@ export async function GET(request: NextRequest) {
         for (const dem of orgDemands) {
           const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
           totalSp += sp
-          usedSp += calcUsedSp(dem.status, sp)
+          usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus)
         }
         return {
           name: org.name,
@@ -386,7 +387,7 @@ export async function GET(request: NextRequest) {
         .filter((d) => d.status !== "REJECTED")
         .map((d) => {
           const sp = d.confirmedSp ?? d.estimatedSp ?? 0
-          const used = calcUsedSp(d.status, sp)
+          const used = calcUsedSp(d.status, sp, d.heldFromStatus)
           return {
             organization: d.organization.name,
             demandNumber: d.demandNumber,
@@ -423,12 +424,16 @@ export async function GET(request: NextRequest) {
         const effectiveSp = dem.confirmedSp ?? dem.estimatedSp ?? 0
         let oldUsed: number, newUsed: number
 
+        // For ON_HOLD / REJECTED transitions, infer heldFromStatus from the other side
+        const inferHeld = (s: string | null, other: string | null) =>
+          (s === "ON_HOLD" || s === "REJECTED") ? other : null
+
         if (spAdj) {
-          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, spAdj.oldSp) : 0
-          newUsed = calcUsedSp(h.toStatus, spAdj.newSp)
+          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, spAdj.oldSp, inferHeld(h.fromStatus, h.toStatus)) : 0
+          newUsed = calcUsedSp(h.toStatus, spAdj.newSp, inferHeld(h.toStatus, h.fromStatus))
         } else {
-          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, effectiveSp) : 0
-          newUsed = calcUsedSp(h.toStatus, effectiveSp)
+          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, effectiveSp, inferHeld(h.fromStatus, h.toStatus)) : 0
+          newUsed = calcUsedSp(h.toStatus, effectiveSp, inferHeld(h.toStatus, h.fromStatus))
         }
 
         const deltaSp = newUsed - oldUsed

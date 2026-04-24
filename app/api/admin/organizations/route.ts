@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.demand.findMany({
         where: { status: { not: "REJECTED" } },
-        select: { organizationId: true, status: true, confirmedSp: true, estimatedSp: true },
+        select: { organizationId: true, status: true, confirmedSp: true, estimatedSp: true, heldFromStatus: true },
       }),
     ])
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
       if (!spByOrg[d.organizationId]) spByOrg[d.organizationId] = { used: 0 }
-      spByOrg[d.organizationId].used += calcUsedSp(d.status, sp)
+      spByOrg[d.organizationId].used += calcUsedSp(d.status, sp, d.heldFromStatus)
     }
 
     const result = organizations.map((org) => {

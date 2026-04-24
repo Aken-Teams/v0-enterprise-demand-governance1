@@ -36,6 +36,7 @@ const DOC_DESCRIPTIONS: Record<string, string> = {
   TDD: "單元測試與整合測試的設計與執行結果",
   TEST_REPORT: "測試範圍、通過率與缺陷清單",
   APP_RESULT: "部署連結、安裝包或展示截圖",
+  ATDD: "以使用者驗收標準驅動的測試案例設計",
   ATTACHMENT: "一般附件",
   AUDIO: "音訊檔案",
   VIDEO: "影片檔案",
@@ -68,7 +69,7 @@ const DOC_STANDARD_FORMAT: Record<string, { sections: { title: string; content: 
       { title: "SP 總點數", content: "需求的總 SP 點數與分配依據" },
       { title: "各階段 SP 分配", content: "每個開發階段的 SP 點數" },
       { title: "甘特圖時程", content: "各階段的計畫開始與結束時間" },
-      { title: "人力配置", content: "PM、工程師等角色分配" },
+      { title: "主要開發模組", content: "需開發的模組清單、功能說明與預估 SP" },
     ],
   },
   SDD: {
@@ -94,6 +95,15 @@ const DOC_STANDARD_FORMAT: Record<string, { sections: { title: string; content: 
       { title: "測試案例", content: "每個功能模組的測試案例清單" },
       { title: "測試結果", content: "各測試案例的通過/失敗狀態" },
       { title: "覆蓋率", content: "程式碼覆蓋率統計" },
+    ],
+  },
+  ATDD: {
+    sections: [
+      { title: "驗收標準", content: "根據需求規格定義的驗收條件，以使用者角度撰寫" },
+      { title: "測試場景", content: "以 Given-When-Then 格式描述驗收測試場景" },
+      { title: "測試資料", content: "測試所需的前置資料與環境準備" },
+      { title: "預期結果", content: "每個場景的預期行為與輸出" },
+      { title: "執行結果", content: "各場景的通過/失敗狀態與截圖佐證" },
     ],
   },
   TEST_REPORT: {

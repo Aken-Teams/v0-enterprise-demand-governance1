@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
           priority: true,
           estimatedSp: true,
           confirmedSp: true,
+          heldFromStatus: true,
           createdAt: true,
           desiredDate: true,
           expectedDate: true,
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
     let usedSp = 0
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
-      usedSp += calcUsedSp(d.status, sp)
+      usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
     }
     const availableSp = totalQuota - usedSp
 

@@ -416,6 +416,7 @@ export async function PATCH(
           data: {
             status: "ON_HOLD",
             holdReason,
+            heldFromStatus: demand.status,
           },
         })
         await tx.demandStatusHistory.create({
@@ -476,6 +477,7 @@ export async function PATCH(
           data: {
             status: targetStatus as DemandStatus,
             holdReason: null,
+            heldFromStatus: null,
           },
         })
         await tx.demandStatusHistory.create({

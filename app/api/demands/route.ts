@@ -362,11 +362,11 @@ export async function GET(request: NextRequest) {
           select: { totalQuota: true },
         }),
         prisma.demand.findMany({
-          where: { organizationId, status: { notIn: ["REJECTED", "ON_HOLD"] } },
-          select: { status: true, estimatedSp: true, confirmedSp: true },
+          where: { organizationId, status: { notIn: ["REJECTED"] } },
+          select: { status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
         }),
       ])
-      const usedSp = orgDemands.reduce((sum, d) => sum + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp), 0)
+      const usedSp = orgDemands.reduce((sum, d) => sum + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus), 0)
       spSummary = {
         totalQuota: wallet?.totalQuota ?? 0,
         usedSp,

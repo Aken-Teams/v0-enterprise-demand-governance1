@@ -18,9 +18,12 @@ const SP_PROGRESS_RATE: Record<string, number> = {
   CLOSED: 1.0,
 }
 
-function calcUsedSp(status: string, effectiveSp: number): number {
-  if (status === "REJECTED") return 0
-  const rate = SP_PROGRESS_RATE[status] ?? 0
+function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
+  let effectiveStatus = status
+  if (status === "ON_HOLD" || status === "REJECTED") {
+    effectiveStatus = heldFromStatus || status
+  }
+  const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
   return Math.round(effectiveSp * rate)
 }
 
@@ -39,18 +42,17 @@ async function main() {
     console.log(`Found ${wallets.length} wallets for year ${currentYear}`)
 
     for (const wallet of wallets) {
-      // Get all non-rejected demands for this org
+      // Get all demands for this org (ON_HOLD/REJECTED still consume SP)
       const demands = await prisma.demand.findMany({
         where: {
           organizationId: wallet.organizationId,
-          status: { not: "REJECTED" },
         },
-        select: { status: true, estimatedSp: true, confirmedSp: true },
+        select: { status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
       })
 
       const usedSp = demands.reduce((sum, d) => {
         const sp = d.confirmedSp ?? d.estimatedSp
-        return sum + calcUsedSp(d.status, sp)
+        return sum + calcUsedSp(d.status, sp, d.heldFromStatus)
       }, 0)
 
       await prisma.spWallet.update({

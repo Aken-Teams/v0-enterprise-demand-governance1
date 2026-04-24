@@ -145,10 +145,13 @@ export const SP_PROGRESS_RATE: Record<string, number> = {
   ON_HOLD: 0,
 }
 
-/** 依據狀態計算漸進已使用 SP */
-export function calcUsedSp(status: string, effectiveSp: number): number {
-  if (status === "REJECTED" || status === "ON_HOLD") return 0
-  const rate = SP_PROGRESS_RATE[status] ?? 0
+/** 依據狀態計算漸進已使用 SP（暫緩/駁回照扣，用暫緩前階段比例） */
+export function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
+  let effectiveStatus = status
+  if (status === "ON_HOLD" || status === "REJECTED") {
+    effectiveStatus = heldFromStatus || status
+  }
+  const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
   return Math.round(effectiveSp * rate)
 }
 

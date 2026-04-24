@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
           status: true,
           estimatedSp: true,
           confirmedSp: true,
+          heldFromStatus: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -69,9 +70,8 @@ export async function GET(request: NextRequest) {
     }[] = []
 
     for (const d of demands) {
-      if (d.status === "REJECTED") continue
       const sp = d.confirmedSp ?? d.estimatedSp
-      const spUsed = calcUsedSp(d.status, sp)
+      const spUsed = calcUsedSp(d.status, sp, d.heldFromStatus)
       usedSp += spUsed
       demandBreakdown.push({
         id: d.id, demandNumber: d.demandNumber, title: d.title,
