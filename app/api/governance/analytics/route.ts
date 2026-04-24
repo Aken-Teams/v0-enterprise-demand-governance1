@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
-import { calcUsedSp } from "@/lib/constants/demand"
-
-const SP_RATE = 20000 // 1 SP = NT$20,000
+import { calcUsedSp, SP_RATE } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {

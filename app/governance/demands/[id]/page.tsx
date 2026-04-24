@@ -11,7 +11,7 @@ import {
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
   Clock, SkipForward, ClipboardCheck, Share2, Copy, Link2, Package,
-  FileEdit,
+  FileEdit, Mail,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -31,6 +31,7 @@ import { StepNavigation } from "@/components/demand/step-navigation"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { DesignChangeDialog } from "@/components/demand/design-change-dialog"
+import { NotifySignersDialog } from "@/components/demand/notify-signers-dialog"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
 import ReactMarkdown from "react-markdown"
@@ -392,6 +393,8 @@ export default function DemandDetailPage() {
 
   // Design change dialog
   const [designChangeOpen, setDesignChangeOpen] = useState(false)
+  // Notify signers dialog
+  const [notifySignersOpen, setNotifySignersOpen] = useState(false)
 
   // Share link state
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
@@ -1022,6 +1025,17 @@ export default function DemandDetailPage() {
                       >
                         <FileEdit className="h-3.5 w-3.5 mr-1" />
                         提出設計變更
+                      </Button>
+                    )}
+                    {canManage && curHasPending && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-blue-300 text-blue-700 hover:bg-blue-50 shrink-0 h-7 text-xs"
+                        onClick={() => setNotifySignersOpen(true)}
+                      >
+                        <Mail className="h-3.5 w-3.5 mr-1" />
+                        通知簽核人
                       </Button>
                     )}
                   </div>
@@ -1975,6 +1989,18 @@ export default function DemandDetailPage() {
           onComplete={fetchDemand}
         />
       )}
+
+      {/* Notify signers dialog */}
+      <NotifySignersDialog
+        open={notifySignersOpen}
+        onOpenChange={setNotifySignersOpen}
+        demandId={demand.id}
+        demandNumber={demand.demandNumber}
+        demandTitle={demand.title}
+        phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
+        pendingSignoffs={currentPhaseSignoffs.filter((s) => s.status === "PENDING")}
+        organizationId={demand.organizationId}
+      />
     </AppLayout>
   )
 }

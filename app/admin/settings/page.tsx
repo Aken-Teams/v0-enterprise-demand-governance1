@@ -8,8 +8,6 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Settings, Database, Mail, Bell, Globe, Shield, Zap, Save, RotateCcw, AlertTriangle, CheckCircle } from "lucide-react"
 import { useState } from "react"
@@ -631,6 +629,7 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
         </Tabs>
       </div>
     </AppLayout>

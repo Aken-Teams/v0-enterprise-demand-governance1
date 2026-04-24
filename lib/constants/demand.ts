@@ -134,6 +134,9 @@ export const SIGNOFF_KIND_LABELS: Record<string, string> = {
   DESIGN_CHANGE: "設計變更",
 }
 
+/** SP 單價 (NT$) */
+export const SP_RATE = 20000
+
 /** SP 漸進消耗比例：需求確認 50% → MVP 確認 80% → 結案 100% */
 export const SP_PROGRESS_RATE: Record<string, number> = {
   SUBMITTED: 0.5,

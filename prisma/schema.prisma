@@ -102,6 +102,16 @@ enum DemandSignoffRole {
   OBSERVER    // 觀察者（只能看）
 }
 
+enum MailLogType {
+  SIGNOFF_NOTIFY  // 簽核通知
+  MONTHLY_REPORT  // 月度 SP 報表
+}
+
+enum MailLogStatus {
+  SUCCESS
+  FAILED
+}
+
 // ============================================================
 // MODELS
 // ============================================================
@@ -120,6 +130,7 @@ model Organization {
   demands      Demand[]
   spWallets    SpWallet[]
   adminAccess  AdminAccess[]
+  emailSetting EmailSetting?
 
   @@map("organizations")
 }
@@ -166,6 +177,7 @@ model User {
   signoffTargets     PhaseSignoff[]  @relation("SignoffTarget")
   createdShares      DemandShare[]
   auditLogs          AuditLog[]
+  sentMailLogs       MailLog[]
 
   @@map("users")
 }
@@ -253,6 +265,7 @@ model Demand {
   phaseSignoffs     PhaseSignoff[]
   shares            DemandShare[]
   auditLogs         AuditLog[]
+  mailLogs          MailLog[]
 
   @@index([organizationId])
   @@index([status])
@@ -489,4 +502,38 @@ model DemandShare {
 
   @@index([demandId])
   @@map("demand_shares")
+}
+
+/// 組織郵件設定
+model EmailSetting {
+  id              String       @id @default(cuid())
+  organizationId  String       @unique
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  signoffCcList   String?      @db.Text /// JSON array: ["a@b.com","c@d.com"]
+  accountingEmail String?
+  reportSendDay   Int          @default(5) /// 每月幾號寄報表 (1-28)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@map("email_settings")
+}
+
+/// 郵件發送紀錄
+model MailLog {
+  id           String        @id @default(cuid())
+  type         MailLogType
+  status       MailLogStatus
+  toAddresses  String        @db.Text /// JSON array
+  ccAddresses  String?       @db.Text /// JSON array
+  subject      String
+  errorMessage String?       @db.Text
+  demandId     String?
+  demand       Demand?       @relation(fields: [demandId], references: [id], onDelete: SetNull)
+  sentById     String?
+  sentBy       User?         @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@map("mail_logs")
 }
