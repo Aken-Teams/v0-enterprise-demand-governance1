@@ -304,7 +304,7 @@ export async function GET(request: NextRequest) {
             where: {
               OR: [
                 { kind: "DESIGN_CHANGE", status: "PENDING" },
-                { kind: "PHASE", status: { in: ["REJECTED", "PENDING"] } },
+                { kind: "PHASE" },
               ],
             },
             select: {
