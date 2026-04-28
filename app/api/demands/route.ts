@@ -3,7 +3,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
-import { calcUsedSp } from "@/lib/constants/demand"
+import { calcUsedSp, calcUsedSpRaw } from "@/lib/constants/demand"
 import { createDemandSchema } from "@/lib/validations/demand"
 import { generateDemandNumber } from "@/lib/demand-number"
 import { buildDemandVisibilityFilter } from "@/lib/demand-access"
@@ -366,7 +366,7 @@ export async function GET(request: NextRequest) {
           select: { status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
         }),
       ])
-      const usedSp = orgDemands.reduce((sum, d) => sum + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus), 0)
+      const usedSp = Math.round(orgDemands.reduce((sum, d) => sum + calcUsedSpRaw(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus), 0))
       spSummary = {
         totalQuota: wallet?.totalQuota ?? 0,
         usedSp,

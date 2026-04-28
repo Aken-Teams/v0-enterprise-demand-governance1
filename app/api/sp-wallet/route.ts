@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
-import { calcUsedSp } from "@/lib/constants/demand"
+import { calcUsedSp, calcUsedSpRaw } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
     const totalQuota = wallet?.totalQuota ?? 0
 
     // Calculate progressive SP consumption from actual demands
-    let usedSp = 0
+    // Sum raw values first, round at org level for accuracy
+    let rawUsedSp = 0
     const demandBreakdown: {
       id: string; demandNumber: string; title: string
       status: string; sp: number; spUsed: number; updatedAt: Date
@@ -71,14 +72,15 @@ export async function GET(request: NextRequest) {
 
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
-      const spUsed = calcUsedSp(d.status, sp, d.heldFromStatus)
-      usedSp += spUsed
+      const spUsedRaw = calcUsedSpRaw(d.status, sp, d.heldFromStatus)
+      rawUsedSp += spUsedRaw
       demandBreakdown.push({
         id: d.id, demandNumber: d.demandNumber, title: d.title,
-        status: d.status, sp, spUsed, updatedAt: d.updatedAt,
+        status: d.status, sp, spUsed: calcUsedSp(d.status, sp, d.heldFromStatus), updatedAt: d.updatedAt,
       })
     }
 
+    const usedSp = Math.round(rawUsedSp)
     const availableSp = totalQuota - usedSp
 
     return NextResponse.json({

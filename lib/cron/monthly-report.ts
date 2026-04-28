@@ -2,7 +2,7 @@ import cron from "node-cron"
 import { prisma } from "@/lib/prisma"
 import { sendMailAndLog } from "@/lib/mail"
 import { monthlyReportTemplate } from "@/lib/mail-templates"
-import { STATUS_MAP, SP_RATE, calcUsedSp } from "@/lib/constants/demand"
+import { STATUS_MAP, SP_RATE, calcUsedSp, calcUsedSpRaw } from "@/lib/constants/demand"
 import ExcelJS from "exceljs"
 
 /**
@@ -152,11 +152,11 @@ async function generateMonthlyReport(organizationId: string, year: number): Prom
     cell.alignment = { vertical: "middle", horizontal: "center" }
   })
 
-  let totalUsedSp = 0
+  let rawTotalUsedSp = 0
   for (const d of demands) {
     const sp = d.confirmedSp ?? d.estimatedSp
     const usedSp = calcUsedSp(d.status, sp, d.heldFromStatus)
-    totalUsedSp += usedSp
+    rawTotalUsedSp += calcUsedSpRaw(d.status, sp, d.heldFromStatus)
 
     sheet.addRow({
       demandNumber: d.demandNumber,
@@ -178,8 +178,8 @@ async function generateMonthlyReport(organizationId: string, year: number): Prom
   const summaryRow = sheet.addRow({
     demandNumber: "合計",
     title: `共 ${demands.length} 筆需求`,
-    usedSp: totalUsedSp,
-    amount: totalUsedSp * SP_RATE,
+    usedSp: Math.round(rawTotalUsedSp),
+    amount: Math.round(rawTotalUsedSp) * SP_RATE,
   })
   summaryRow.font = { bold: true }
 

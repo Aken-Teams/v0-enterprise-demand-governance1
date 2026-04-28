@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
-import { calcUsedSp } from "@/lib/constants/demand"
+import { calcUsedSpRaw } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -75,11 +75,12 @@ export async function GET(request: NextRequest) {
 
     // SP data (progressive consumption)
     const totalQuota = wallet?.totalQuota ?? 0
-    let usedSp = 0
+    let rawUsedSp = 0
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
-      usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
+      rawUsedSp += calcUsedSpRaw(d.status, sp, d.heldFromStatus)
     }
+    const usedSp = Math.round(rawUsedSp)
     const availableSp = totalQuota - usedSp
 
     // Completion rate (completed / total excluding rejected)

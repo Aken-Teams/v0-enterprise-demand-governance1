@@ -12,7 +12,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 
 const STATUS_LABEL: Record<string, { label: string; color: string; rate: string }> = {
-  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700", rate: "50%" },
+  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700", rate: "不扣除" },
   PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-100 text-amber-700", rate: "80%" },
   SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700", rate: "80%" },
   DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700", rate: "80%" },

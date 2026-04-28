@@ -495,12 +495,12 @@ export default function InboxPage() {
                             {statusInfo.label}
                             {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
                           </Badge>
-                          {demand.hasCurrentPhaseApproved && (isAdmin || user?.role === "delivery") && (
+                          {demand.status !== "CLOSED" && demand.hasCurrentPhaseApproved && (isAdmin || user?.role === "delivery") && (
                             <Badge variant="secondary" className="text-xs px-2 py-0 bg-green-100 text-green-700">
                               已通過
                             </Badge>
                           )}
-                          {demand.hasCurrentPhaseReject && (isAdmin || user?.role === "delivery") && (
+                          {demand.status !== "CLOSED" && demand.hasCurrentPhaseReject && (isAdmin || user?.role === "delivery") && (
                             <Badge variant="secondary" className="text-xs px-2 py-0 bg-red-100 text-red-700">
                               已駁回
                             </Badge>

@@ -10,7 +10,7 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 import "dotenv/config"
 
 const SP_PROGRESS_RATE: Record<string, number> = {
-  SUBMITTED: 0.5,
+  SUBMITTED: 0,
   PRD_REVIEW: 0.8,
   SP_REVIEW: 0.8,
   DEVELOPING: 0.8,
@@ -18,13 +18,13 @@ const SP_PROGRESS_RATE: Record<string, number> = {
   CLOSED: 1.0,
 }
 
-function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
+function calcUsedSpRaw(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
   let effectiveStatus = status
   if (status === "ON_HOLD" || status === "REJECTED") {
     effectiveStatus = heldFromStatus || status
   }
   const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
-  return Math.round(effectiveSp * rate)
+  return effectiveSp * rate
 }
 
 async function main() {
@@ -50,10 +50,10 @@ async function main() {
         select: { status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
       })
 
-      const usedSp = demands.reduce((sum, d) => {
+      const usedSp = Math.round(demands.reduce((sum, d) => {
         const sp = d.confirmedSp ?? d.estimatedSp
-        return sum + calcUsedSp(d.status, sp, d.heldFromStatus)
-      }, 0)
+        return sum + calcUsedSpRaw(d.status, sp, d.heldFromStatus)
+      }, 0))
 
       await prisma.spWallet.update({
         where: { id: wallet.id },

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
-import { calcUsedSp, SP_RATE } from "@/lib/constants/demand"
+import { calcUsedSp, calcUsedSpRaw, SP_RATE } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -178,11 +178,12 @@ export async function GET(request: NextRequest) {
     const orgSpData = allOrgs.map((org) => {
       const w = walletMap.get(org.id)
       const orgDemands = demands.filter((d) => d.organizationId === org.id)
-      let usedSp = 0
+      let rawUsedSp = 0
       for (const d of orgDemands) {
         const sp = d.confirmedSp ?? d.estimatedSp
-        usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
+        rawUsedSp += calcUsedSpRaw(d.status, sp, d.heldFromStatus)
       }
+      const usedSp = Math.round(rawUsedSp)
       const totalQuota = w?.totalQuota ?? 0
       return {
         name: org.name,
@@ -331,7 +332,7 @@ export async function GET(request: NextRequest) {
       devWorkload[key].count++
       const sp = d.confirmedSp ?? d.estimatedSp ?? 0
       devWorkload[key].totalSp += sp
-      devWorkload[key].usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
+      devWorkload[key].usedSp += calcUsedSpRaw(d.status, sp, d.heldFromStatus)
     }
 
     // --- Financial data (permission-gated) ---
@@ -359,12 +360,13 @@ export async function GET(request: NextRequest) {
         const quotaSp = w?.totalQuota ?? 0
         const orgDemands = demands.filter((d) => d.organizationId === org.id && d.status !== "REJECTED")
         let totalSp = 0
-        let usedSp = 0
+        let rawUsedSp = 0
         for (const dem of orgDemands) {
           const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
           totalSp += sp
-          usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus)
+          rawUsedSp += calcUsedSpRaw(dem.status, sp, dem.heldFromStatus)
         }
+        const usedSp = Math.round(rawUsedSp)
         return {
           name: org.name,
           quotaSp,
@@ -427,11 +429,11 @@ export async function GET(request: NextRequest) {
           (s === "ON_HOLD" || s === "REJECTED") ? other : null
 
         if (spAdj) {
-          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, spAdj.oldSp, inferHeld(h.fromStatus, h.toStatus)) : 0
-          newUsed = calcUsedSp(h.toStatus, spAdj.newSp, inferHeld(h.toStatus, h.fromStatus))
+          oldUsed = h.fromStatus ? calcUsedSpRaw(h.fromStatus, spAdj.oldSp, inferHeld(h.fromStatus, h.toStatus)) : 0
+          newUsed = calcUsedSpRaw(h.toStatus, spAdj.newSp, inferHeld(h.toStatus, h.fromStatus))
         } else {
-          oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, effectiveSp, inferHeld(h.fromStatus, h.toStatus)) : 0
-          newUsed = calcUsedSp(h.toStatus, effectiveSp, inferHeld(h.toStatus, h.fromStatus))
+          oldUsed = h.fromStatus ? calcUsedSpRaw(h.fromStatus, effectiveSp, inferHeld(h.fromStatus, h.toStatus)) : 0
+          newUsed = calcUsedSpRaw(h.toStatus, effectiveSp, inferHeld(h.toStatus, h.fromStatus))
         }
 
         const deltaSp = newUsed - oldUsed
@@ -472,10 +474,15 @@ export async function GET(request: NextRequest) {
         const data: MonthlyLedgerOrg[] = []
         if (orgMap) {
           for (const [org, details] of orgMap) {
-            const deltaSp = details.reduce((s, d) => s + d.deltaSp, 0)
+            const rawDeltaSp = details.reduce((s, d) => s + d.deltaSp, 0)
+            const deltaSp = Math.round(rawDeltaSp)
+            // Round individual detail deltaSp for display
+            const roundedDetails = details
+              .map((d) => ({ ...d, deltaSp: Math.round(d.deltaSp), deltaAmount: Math.round(d.deltaSp) * SP_RATE }))
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             data.push({
               organization: org, deltaSp, deltaAmount: deltaSp * SP_RATE,
-              details: details.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+              details: roundedDetails,
             })
           }
           data.sort((a, b) => b.deltaAmount - a.deltaAmount)
@@ -518,7 +525,7 @@ export async function GET(request: NextRequest) {
         staleDemands,
       },
       phaseAvgDays,
-      devWorkload: Object.values(devWorkload).sort((a, b) => b.usedSp - a.usedSp),
+      devWorkload: Object.values(devWorkload).map((w) => ({ ...w, usedSp: Math.round(w.usedSp) })).sort((a, b) => b.usedSp - a.usedSp),
       ...(financial ? { financial } : {}),
     })
   } catch (error) {
