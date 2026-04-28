@@ -178,6 +178,7 @@ model User {
   createdShares      DemandShare[]
   auditLogs          AuditLog[]
   sentMailLogs       MailLog[]
+  apiKeys            ApiKey[]
 
   @@map("users")
 }
@@ -536,4 +537,20 @@ model MailLog {
   @@index([type])
   @@index([createdAt])
   @@map("mail_logs")
+}
+
+/// 外部 API 金鑰
+model ApiKey {
+  id          String    @id @default(cuid())
+  keyHash     String    @unique @map("key_hash") /// SHA-256 hash of the full key
+  prefix      String                              /// 前 8 碼供顯示
+  name        String                              /// 用途名稱
+  createdById String    @map("created_by_id")
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
+
+  @@index([keyHash])
+  @@map("api_keys")
 }

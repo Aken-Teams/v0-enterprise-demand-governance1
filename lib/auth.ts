@@ -1,5 +1,7 @@
 import jwt from "jsonwebtoken"
+import { createHash } from "crypto"
 import { NextRequest } from "next/server"
+import { prisma } from "@/lib/prisma"
 
 const JWT_SECRET = process.env.JWT_SECRET || "REDACTED-SECRET-ROTATED"
 
@@ -50,5 +52,41 @@ export function verifyRole(
 export function verifyAdminFull(payload: JwtPayload): void {
   if (payload.role === "admin" && payload.adminScopeType && payload.adminScopeType !== "all") {
     throw new AuthError("此管理員無完整管理權限", 403)
+  }
+}
+
+export interface ApiKeyPayload {
+  apiKeyId: string
+  name: string
+  createdById: string
+}
+
+/** 驗證外部 API 金鑰（X-API-Key header） */
+export async function verifyApiKey(request: NextRequest): Promise<ApiKeyPayload> {
+  const rawKey = request.headers.get("X-API-Key")
+  if (!rawKey) {
+    throw new AuthError("未提供 API 金鑰", 401)
+  }
+
+  const keyHash = createHash("sha256").update(rawKey).digest("hex")
+
+  const apiKey = await prisma.apiKey.findUnique({
+    where: { keyHash },
+  })
+
+  if (!apiKey || apiKey.revokedAt) {
+    throw new AuthError("API 金鑰無效或已撤銷", 401)
+  }
+
+  // Fire-and-forget: update lastUsedAt
+  prisma.apiKey.update({
+    where: { id: apiKey.id },
+    data: { lastUsedAt: new Date() },
+  }).catch(() => {})
+
+  return {
+    apiKeyId: apiKey.id,
+    name: apiKey.name,
+    createdById: apiKey.createdById,
   }
 }

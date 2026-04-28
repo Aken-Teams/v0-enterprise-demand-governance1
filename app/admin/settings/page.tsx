@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 import { Settings, Database, Mail, Bell, Globe, Shield, Zap, Save, RotateCcw, AlertTriangle, CheckCircle } from "lucide-react"
 import { useState } from "react"
 
