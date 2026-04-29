@@ -11,7 +11,7 @@ import "dotenv/config"
 
 const SP_PROGRESS_RATE: Record<string, number> = {
   SUBMITTED: 0,
-  PRD_REVIEW: 0.8,
+  PRD_REVIEW: 0,
   SP_REVIEW: 0.8,
   DEVELOPING: 0.8,
   ACCEPTANCE: 0.8,
