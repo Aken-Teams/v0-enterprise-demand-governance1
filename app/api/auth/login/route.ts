@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
         organizationId: user.organizationId,
         restrictedView,
         isOrgAccount: user.isOrgAccount,
+        isBoardMember: user.isBoardMember || false,
         adminScopeType: user.role === "admin" ? (user.adminScopeType || "all") : undefined,
         boardExemptFromSignoff: user.role === "viewer" ? user.boardExemptFromSignoff : undefined,
         canViewFinancial: (user.role === "viewer" || user.role === "admin") ? user.canViewFinancial : undefined,

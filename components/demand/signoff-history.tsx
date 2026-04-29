@@ -44,6 +44,7 @@ const TARGET_ROLE_LABELS: Record<string, string> = {
   REQUESTER: "需求窗口",
   MANAGER: "需求主管",
   BOARD: "董事會",
+  BOARD_OVERRIDE: "專案 Master 代簽",
 }
 
 interface SpAdjustment {
@@ -134,6 +135,11 @@ function computeGroupStatus(signoffs: SignoffRecord[]): string {
   if (signoffs.some((s) => s.status === "REJECTED")) return "REJECTED"
   if (signoffs.some((s) => s.status === "PENDING")) return "PENDING"
   if (signoffs.every((s) => s.status === "APPROVED")) return "APPROVED"
+  // BOARD_OVERRIDE approved + others skipped = effectively approved
+  if (signoffs.some((s) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")) return "APPROVED"
+  // All non-override approved (override skipped) = effectively approved
+  const nonOverride = signoffs.filter((s) => s.targetRole !== "BOARD_OVERRIDE")
+  if (nonOverride.length > 0 && nonOverride.every((s) => s.status === "APPROVED")) return "APPROVED"
   return "SKIPPED"
 }
 

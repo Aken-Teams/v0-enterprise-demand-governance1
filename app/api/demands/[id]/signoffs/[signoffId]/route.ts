@@ -191,6 +191,64 @@ export async function PATCH(
       })
     }
 
+    // When a BOARD_OVERRIDE signoff is approved, auto-skip all other PENDING in same round
+    if (action === "approve" && signoff.targetRole === "BOARD_OVERRIDE") {
+      const roundTime = signoff.requestedAt.getTime()
+      await prisma.phaseSignoff.updateMany({
+        where: {
+          demandId: id,
+          phase: signoff.phase as DemandStatus,
+          kind: signoff.kind,
+          status: "PENDING",
+          id: { not: signoffId },
+          requestedAt: {
+            gte: new Date(roundTime - 5000),
+            lte: new Date(roundTime + 5000),
+          },
+        },
+        data: {
+          status: "SKIPPED",
+          comment: "專案 Master 代簽，自動略過",
+          respondedAt: new Date(),
+          respondedById: auth.userId,
+        },
+      })
+    }
+
+    // When a non-override signoff is approved, check if all non-override signoffs
+    // in the round are now approved — if so, auto-skip pending BOARD_OVERRIDE signoffs
+    if (action === "approve" && signoff.targetRole !== "BOARD_OVERRIDE") {
+      const roundTime = signoff.requestedAt.getTime()
+      const sameRoundNonOverride = await prisma.phaseSignoff.findMany({
+        where: {
+          demandId: id,
+          phase: signoff.phase as DemandStatus,
+          kind: signoff.kind,
+          targetRole: { not: "BOARD_OVERRIDE" },
+          requestedAt: {
+            gte: new Date(roundTime - 5000),
+            lte: new Date(roundTime + 5000),
+          },
+        },
+      })
+      if (sameRoundNonOverride.every(s => s.status === "APPROVED")) {
+        await prisma.phaseSignoff.updateMany({
+          where: {
+            demandId: id,
+            phase: signoff.phase as DemandStatus,
+            kind: signoff.kind,
+            targetRole: "BOARD_OVERRIDE",
+            status: "PENDING",
+          },
+          data: {
+            status: "SKIPPED",
+            comment: "所有審核人已確認，代簽自動略過",
+            respondedAt: new Date(),
+          },
+        })
+      }
+    }
+
     // Save attached files (if any)
     if (validFiles.length > 0) {
       const uploadDir = path.join(process.cwd(), "uploads", "demands", id)

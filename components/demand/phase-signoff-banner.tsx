@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, MessageSquare, Download } from "lucide-react"
+import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, MessageSquare, Download, ShieldCheck } from "lucide-react"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
@@ -13,6 +13,7 @@ interface PhaseSignoffBannerProps {
     id: string
     phase: string
     status: string
+    targetRole?: string | null
     requestedAt: string
     requestedBy: { id: string; name: string }
     requestComment?: string | null
@@ -50,23 +51,29 @@ export function PhaseSignoffBanner({
 
   const phaseLabel = STATUS_MAP[signoff.phase]?.label || signoff.phase
   const isDesignChange = kind === "DESIGN_CHANGE"
-  const titleText = isDesignChange
+  const isBoardOverride = signoff.targetRole === "BOARD_OVERRIDE"
+
+  const titleText = isBoardOverride
+    ? `專案 Master 代簽 —「${phaseLabel}」階段等待您的確認`
+    : isDesignChange
     ? "「設計變更」等待您的確認"
     : `「${phaseLabel}」階段等待您的確認`
-  const Icon = isDesignChange ? FileEdit : ClipboardCheck
-  const borderClass = isDesignChange ? "border-indigo-300" : "border-amber-300"
-  const bgClass = isDesignChange ? "bg-indigo-50/80" : "bg-amber-50/80"
-  const iconClass = isDesignChange ? "text-indigo-600" : "text-amber-600"
-  const titleClass = isDesignChange ? "text-indigo-900" : "text-amber-900"
-  const subTextClass = isDesignChange ? "text-indigo-700/70" : "text-amber-700/70"
-  const textareaClass = isDesignChange
+  const Icon = isBoardOverride ? ShieldCheck : isDesignChange ? FileEdit : ClipboardCheck
+  const borderClass = isBoardOverride ? "border-orange-300" : isDesignChange ? "border-indigo-300" : "border-amber-300"
+  const bgClass = isBoardOverride ? "bg-orange-50/80" : isDesignChange ? "bg-indigo-50/80" : "bg-amber-50/80"
+  const iconClass = isBoardOverride ? "text-orange-600" : isDesignChange ? "text-indigo-600" : "text-amber-600"
+  const titleClass = isBoardOverride ? "text-orange-900" : isDesignChange ? "text-indigo-900" : "text-amber-900"
+  const subTextClass = isBoardOverride ? "text-orange-700/70" : isDesignChange ? "text-indigo-700/70" : "text-amber-700/70"
+  const textareaClass = isBoardOverride
+    ? "bg-white border-orange-200 focus-visible:ring-orange-300"
+    : isDesignChange
     ? "bg-white border-indigo-200 focus-visible:ring-indigo-300"
     : "bg-white border-amber-200 focus-visible:ring-amber-300"
-  const fileBorderClass = isDesignChange ? "border-indigo-200" : "border-amber-200"
+  const fileBorderClass = isBoardOverride ? "border-orange-200" : isDesignChange ? "border-indigo-200" : "border-amber-200"
 
-  // DC content to display inline (only when banner is not in inline/compact mode)
+  // DC / board-override content to display inline (only when banner is not in inline/compact mode)
   const dcDocs = (signoff.documents || []).filter((d) => d.fileUrl)
-  const showDcContent = isDesignChange && !inline && (signoff.requestComment || dcDocs.length > 0)
+  const showDcContent = (isDesignChange || isBoardOverride) && !inline && (signoff.requestComment || dcDocs.length > 0)
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -144,12 +151,14 @@ export function PhaseSignoffBanner({
       {showDcContent && (
         <div className="mt-3 space-y-2">
           {signoff.requestComment && (
-            <div className="rounded-md bg-white/80 border border-indigo-200 p-2.5 sm:p-3">
+            <div className={cn("rounded-md bg-white/80 border p-2.5 sm:p-3", isBoardOverride ? "border-orange-200" : "border-indigo-200")}>
               <div className="flex items-center gap-1.5 mb-1">
-                <MessageSquare className="h-3.5 w-3.5 text-indigo-500" />
-                <span className="text-xs font-medium text-indigo-700">提出說明</span>
+                <MessageSquare className={cn("h-3.5 w-3.5", isBoardOverride ? "text-orange-500" : "text-indigo-500")} />
+                <span className={cn("text-xs font-medium", isBoardOverride ? "text-orange-700" : "text-indigo-700")}>
+                  {isBoardOverride ? "代簽原因" : "提出說明"}
+                </span>
               </div>
-              <p className="text-[13px] sm:text-sm text-indigo-900/80 whitespace-pre-line break-words leading-relaxed">
+              <p className={cn("text-[13px] sm:text-sm whitespace-pre-line break-words leading-relaxed", isBoardOverride ? "text-orange-900/80" : "text-indigo-900/80")}>
                 {signoff.requestComment}
               </p>
             </div>
@@ -158,8 +167,8 @@ export function PhaseSignoffBanner({
           {dcDocs.length > 0 && (
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
-                <Paperclip className="h-3.5 w-3.5 text-indigo-500" />
-                <span className="text-xs font-medium text-indigo-700">附件文件</span>
+                <Paperclip className={cn("h-3.5 w-3.5", isBoardOverride ? "text-orange-500" : "text-indigo-500")} />
+                <span className={cn("text-xs font-medium", isBoardOverride ? "text-orange-700" : "text-indigo-700")}>附件文件</span>
               </div>
               <div className="space-y-1">
                 {dcDocs.map((doc) => (
@@ -168,16 +177,16 @@ export function PhaseSignoffBanner({
                     href={doc.fileUrl!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-md bg-white/80 border border-indigo-200 px-3 py-1.5 text-xs sm:text-sm hover:bg-white transition-colors"
+                    className={cn("flex items-center gap-2 rounded-md bg-white/80 border px-3 py-1.5 text-xs sm:text-sm hover:bg-white transition-colors", isBoardOverride ? "border-orange-200" : "border-indigo-200")}
                   >
-                    <FileIcon className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                    <span className="truncate flex-1 text-indigo-900/80">{doc.fileName}</span>
+                    <FileIcon className={cn("h-3.5 w-3.5 shrink-0", isBoardOverride ? "text-orange-500" : "text-indigo-500")} />
+                    <span className={cn("truncate flex-1", isBoardOverride ? "text-orange-900/80" : "text-indigo-900/80")}>{doc.fileName}</span>
                     {doc.fileSize != null && (
-                      <span className="text-[10px] text-indigo-500/70 shrink-0">
+                      <span className={cn("text-[10px] shrink-0", isBoardOverride ? "text-orange-500/70" : "text-indigo-500/70")}>
                         {formatFileSize(doc.fileSize)}
                       </span>
                     )}
-                    <Download className="h-3 w-3 text-indigo-400 shrink-0" />
+                    <Download className={cn("h-3 w-3 shrink-0", isBoardOverride ? "text-orange-400" : "text-indigo-400")} />
                   </a>
                 ))}
               </div>

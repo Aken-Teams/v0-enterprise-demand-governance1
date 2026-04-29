@@ -11,7 +11,7 @@ import {
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
   Clock, SkipForward, ClipboardCheck, Share2, Copy, Link2, Package,
-  FileEdit, Mail,
+  FileEdit, Mail, ShieldCheck,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -396,6 +396,12 @@ export default function DemandDetailPage() {
   // Notify signers dialog
   const [notifySignersOpen, setNotifySignersOpen] = useState(false)
 
+  // Board override dialog
+  const [boardOverrideOpen, setBoardOverrideOpen] = useState(false)
+  const [boardOverrideComment, setBoardOverrideComment] = useState("")
+  const [boardOverrideSubmitting, setBoardOverrideSubmitting] = useState(false)
+  const [boardOverrideKind, setBoardOverrideKind] = useState<"PHASE" | "DESIGN_CHANGE">("PHASE")
+
   // Share link state
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
@@ -535,6 +541,26 @@ export default function DemandDetailPage() {
     } catch { /* ignore */ }
   }
 
+  // Board override handler
+  const handleBoardOverride = async () => {
+    if (!token || !boardOverrideComment.trim() || !demand) return
+    setBoardOverrideSubmitting(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/signoffs/board-override`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: boardOverrideComment.trim(), kind: boardOverrideKind }),
+      })
+      if (res.ok) {
+        setBoardOverrideOpen(false)
+        setBoardOverrideComment("")
+        fetchDemand()
+      }
+    } catch { /* ignore */ } finally {
+      setBoardOverrideSubmitting(false)
+    }
+  }
+
   // Share link functions
   const fetchShareLinks = async () => {
     if (!token) return
@@ -632,7 +658,13 @@ export default function DemandDetailPage() {
       || currentPhaseSignoffs[0]
     : null
   const curHasPending = currentPhaseSignoffs.some(s => s.status === "PENDING")
-  const curAllApproved = currentPhaseSignoffs.length > 0 && currentPhaseSignoffs.every(s => s.status === "APPROVED")
+  const curHasPendingOverride = currentPhaseSignoffs.some(s => s.targetRole === "BOARD_OVERRIDE" && s.status === "PENDING")
+  const curNonOverride = currentPhaseSignoffs.filter(s => s.targetRole !== "BOARD_OVERRIDE")
+  const curAllApproved = currentPhaseSignoffs.length > 0 && (
+    currentPhaseSignoffs.every(s => s.status === "APPROVED")
+    || currentPhaseSignoffs.some(s => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")
+    || (curNonOverride.length > 0 && curNonOverride.every(s => s.status === "APPROVED"))
+  )
   const curHasRejected = currentPhaseSignoffs.some(s => s.status === "REJECTED")
 
   // Design change signoffs (latest round at current phase)
@@ -648,8 +680,11 @@ export default function DemandDetailPage() {
     s => new Date(s.requestedAt).getTime() === latestDcRoundTime
   )
   const dcHasPending = currentDesignChangeSignoffs.some(s => s.status === "PENDING")
+  const dcNonOverride = currentDesignChangeSignoffs.filter(s => s.targetRole !== "BOARD_OVERRIDE")
   const dcAllApproved = currentDesignChangeSignoffs.length > 0
-    && currentDesignChangeSignoffs.every(s => s.status === "APPROVED")
+    && (currentDesignChangeSignoffs.every(s => s.status === "APPROVED")
+      || currentDesignChangeSignoffs.some(s => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")
+      || (dcNonOverride.length > 0 && dcNonOverride.every(s => s.status === "APPROVED")))
   const dcHasRejected = currentDesignChangeSignoffs.some(s => s.status === "REJECTED")
   const designChangePendingCount = currentDesignChangeSignoffs.filter(s => s.status === "PENDING").length
 
@@ -838,7 +873,10 @@ export default function DemandDetailPage() {
                   const stepSignoffs = allStepSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestTime)
                   // Aggregate status of latest round
                   const stepHasPending = stepSignoffs.some(s => s.status === "PENDING")
-                  const stepAllApproved = stepSignoffs.length > 0 && stepSignoffs.every(s => s.status === "APPROVED")
+                  const stepNonOverride = stepSignoffs.filter(s => s.targetRole !== "BOARD_OVERRIDE")
+                  const stepAllApproved = stepSignoffs.length > 0 && (stepSignoffs.every(s => s.status === "APPROVED")
+                    || stepSignoffs.some(s => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")
+                    || (stepNonOverride.length > 0 && stepNonOverride.every(s => s.status === "APPROVED")))
                   const stepHasRejected = stepSignoffs.some(s => s.status === "REJECTED")
                   const stepAllSkipped = stepSignoffs.length > 0 && stepSignoffs.every(s => s.status === "SKIPPED")
                   const phaseSignoff = stepSignoffs.length > 0 ? stepSignoffs[0] : null
@@ -1036,6 +1074,20 @@ export default function DemandDetailPage() {
                       >
                         <Mail className="h-3.5 w-3.5 mr-1" />
                         通知簽核人
+                      </Button>
+                    )}
+                    {canManage && (curHasPending || dcHasPending) && !curHasPendingOverride && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-orange-300 text-orange-700 hover:bg-orange-50 shrink-0 h-7 text-xs"
+                        onClick={() => {
+                          setBoardOverrideKind(dcHasPending ? "DESIGN_CHANGE" : "PHASE")
+                          setBoardOverrideOpen(true)
+                        }}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                        專案 Master 代簽
                       </Button>
                     )}
                   </div>
@@ -2001,6 +2053,36 @@ export default function DemandDetailPage() {
         pendingSignoffs={currentPhaseSignoffs.filter((s) => s.status === "PENDING")}
         organizationId={demand.organizationId}
       />
+
+      {/* Board override dialog */}
+      <AlertDialog open={boardOverrideOpen} onOpenChange={(open) => { setBoardOverrideOpen(open); if (!open) setBoardOverrideComment("") }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>專案 Master 代簽</AlertDialogTitle>
+            <AlertDialogDescription>
+              將通知專案 Master（董事會成員）代為確認{boardOverrideKind === "DESIGN_CHANGE" ? "設計變更" : "階段"}簽核。Master 確認後，其餘待確認簽核將自動略過。請填寫代簽原因。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <textarea
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            rows={3}
+            placeholder="請輸入代簽原因（必填）"
+            value={boardOverrideComment}
+            onChange={(e) => setBoardOverrideComment(e.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!boardOverrideComment.trim() || boardOverrideSubmitting}
+              onClick={(e) => { e.preventDefault(); handleBoardOverride() }}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {boardOverrideSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              發起代簽
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   )
 }

@@ -109,6 +109,7 @@ export const SIGNOFF_ROLE_LABELS: Record<string, string> = {
   REQUESTER: "需求者",
   MANAGER: "主管",
   BOARD: "董事會",
+  BOARD_OVERRIDE: "專案 Master 代簽",
   OBSERVER: "觀察者",
 }
 

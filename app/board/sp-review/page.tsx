@@ -20,7 +20,7 @@ import Link from "next/link"
 import {
   Building2, Coins, Loader2, Eye, Check, X, ExternalLink,
   FileIcon, Download, MessageSquare, CheckCircle2, Inbox,
-  AlertTriangle, Paperclip, Trash2,
+  AlertTriangle, Paperclip, Trash2, ShieldCheck,
 } from "lucide-react"
 
 interface SignoffDoc {
@@ -35,6 +35,7 @@ interface SpReviewItem {
     id: string
     phase: string
     status: string
+    targetRole?: string | null
     requestComment: string | null
     requestedAt: string
     requestedBy: { id: string; name: string }
@@ -146,6 +147,12 @@ function SpReviewCard({ item, token, onComplete }: {
             <Badge className={`text-[10px] sm:text-xs shrink-0 ${STATUS_MAP[item.signoff.phase]?.color || "bg-gray-100 text-gray-700"}`}>
               {STATUS_MAP[item.signoff.phase]?.label || item.signoff.phase}
             </Badge>
+            {item.signoff.targetRole === "BOARD_OVERRIDE" && (
+              <Badge className="text-[10px] sm:text-xs bg-orange-50 text-orange-600 border border-orange-200 gap-0.5 shrink-0">
+                <ShieldCheck className="h-3 w-3" />
+                代簽
+              </Badge>
+            )}
           </div>
           <Badge className="bg-orange-100 text-orange-700 gap-1 shrink-0">
             <Coins className="h-3 w-3" />
@@ -452,7 +459,7 @@ export default function SpReviewPage() {
               <Badge className="bg-amber-100 text-amber-700 text-sm">{items.length} 件待審</Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求的 SP 規劃與資源分配</p>
+          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求與專案 Master 代簽請求</p>
         </div>
 
         {/* Content */}

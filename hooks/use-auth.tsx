@@ -12,6 +12,7 @@ interface User {
   organizationId?: string | null
   restrictedView?: boolean
   isOrgAccount?: boolean
+  isBoardMember?: boolean
   adminScopeType?: string // "all" | "organization" | "project"
   boardExemptFromSignoff?: boolean
   canViewFinancial?: boolean

@@ -4,7 +4,7 @@ import { verifyAuth, AuthError } from "@/lib/auth"
 
 /**
  * GET /api/board/sp-review
- * Returns pending SP_REVIEW signoffs for the current board member.
+ * Returns pending SP_REVIEW signoffs AND BOARD_OVERRIDE signoffs for the current board member.
  * ?countOnly=true  → { count } (lightweight, for nav badge)
  * Otherwise        → { count, items: [{ signoff, demand }] }
  */
@@ -22,32 +22,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Org-restricted board members only see their own org's demands
-    const demandFilter: Record<string, unknown> = { status: "SP_REVIEW" }
+    const orgDemandFilter: Record<string, unknown> = {}
     if (user.restrictBoardToOrg && user.organizationId) {
-      demandFilter.organizationId = user.organizationId
+      orgDemandFilter.organizationId = user.organizationId
     }
 
     const countOnly = request.nextUrl.searchParams.get("countOnly") === "true"
 
+    // Match both regular SP_REVIEW signoffs AND BOARD_OVERRIDE signoffs (any phase)
+    const whereClause = {
+      status: "PENDING" as const,
+      targetUserId: auth.userId,
+      OR: [
+        { phase: "SP_REVIEW" as const, demand: { status: "SP_REVIEW", ...orgDemandFilter } },
+        { targetRole: "BOARD_OVERRIDE", demand: orgDemandFilter },
+      ],
+    }
+
     if (countOnly) {
-      const count = await prisma.phaseSignoff.count({
-        where: {
-          phase: "SP_REVIEW",
-          status: "PENDING",
-          targetUserId: auth.userId,
-          demand: demandFilter,
-        },
-      })
+      const count = await prisma.phaseSignoff.count({ where: whereClause })
       return NextResponse.json({ count })
     }
 
     const pendingSignoffs = await prisma.phaseSignoff.findMany({
-      where: {
-        phase: "SP_REVIEW",
-        status: "PENDING",
-        targetUserId: auth.userId,
-        demand: demandFilter,
-      },
+      where: whereClause,
       include: {
         demand: {
           select: {
@@ -74,6 +72,7 @@ export async function GET(request: NextRequest) {
         id: s.id,
         phase: s.phase,
         status: s.status,
+        targetRole: s.targetRole,
         requestComment: s.requestComment,
         requestedAt: s.requestedAt,
         requestedBy: s.requestedBy,
