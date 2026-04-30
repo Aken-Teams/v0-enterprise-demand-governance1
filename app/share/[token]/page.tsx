@@ -53,6 +53,7 @@ import { ExcelPreview } from "@/components/excel-preview"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
+import rehypeRaw from "rehype-raw"
 import mermaid from "mermaid"
 
 mermaid.initialize({
@@ -866,7 +867,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                     <div>
                       <p className="text-xs font-semibold text-blue-600 mb-1.5">需求說明</p>
                       <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none overflow-x-auto prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mdComponents}>
                           {formatGherkinInMarkdown(demand.description)}
                         </ReactMarkdown>
                       </div>
@@ -1309,7 +1310,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                               if (ext === "md") {
                                 return (
                                   <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>
+                                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mdComponents}>
                                       {formatGherkinInMarkdown(textContent)}
                                     </ReactMarkdown>
                                   </div>

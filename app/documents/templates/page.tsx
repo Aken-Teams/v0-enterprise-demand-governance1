@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Eye, Download } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import rehypeRaw from "rehype-raw"
 import { STATUS_MAP } from "@/lib/constants/demand"
 
 /* ─── 各階段定義 ─── */
@@ -753,6 +754,8 @@ export default function DocumentTemplatesPage() {
             {previewDoc && (
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                remarkRehypeOptions={{ allowDangerousHtml: true }}
                 components={{
                   code({ className, children, ...props }) {
                     const match = /language-mermaid/.exec(className || "")
