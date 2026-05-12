@@ -42,14 +42,14 @@ export async function sendMail(options: SendMailOptions): Promise<MailResponse> 
   }
 
   if (options.bodyType === "html") {
-    payload.body_type = "html"
+    payload.is_html = true
   }
 
   if (options.attachments && options.attachments.length > 0) {
     payload.attachments = options.attachments
   }
 
-  const response = await fetch(`${MAIL_BASE_URL}/api/v1/mail/send`, {
+  const response = await fetch(`${MAIL_BASE_URL}/ldap/api/v1/mail/send`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

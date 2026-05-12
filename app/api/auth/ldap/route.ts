@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "LDAP 環境變數未設定" }, { status: 500 })
     }
 
-    const upstream = await fetch(`${baseUrl}/api/v1/ldap/auth`, {
+    const upstream = await fetch(`${baseUrl}/ldap/api/v1/auth`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

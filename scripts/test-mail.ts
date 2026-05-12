@@ -14,7 +14,7 @@ async function main() {
   // Test 1: Plain text email
   console.log("\n--- Test 1: Plain text email ---")
   try {
-    const res = await fetch(`${MAIL_BASE_URL}/api/v1/mail/send`, {
+    const res = await fetch(`${MAIL_BASE_URL}/ldap/api/v1/mail/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -55,7 +55,7 @@ async function main() {
       </div>
     `
 
-    const res = await fetch(`${MAIL_BASE_URL}/api/v1/mail/send`, {
+    const res = await fetch(`${MAIL_BASE_URL}/ldap/api/v1/mail/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

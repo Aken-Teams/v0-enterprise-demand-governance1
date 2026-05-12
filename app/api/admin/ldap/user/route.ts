@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     const domain = request.nextUrl.searchParams.get("domain")
     const qs = domain ? `?domain=${encodeURIComponent(domain)}` : ""
-    const url = `${baseUrl}/api/v1/ldap/users/${encodeURIComponent(username)}${qs}`
+    const url = `${baseUrl}/ldap/api/v1/users/${encodeURIComponent(username)}${qs}`
     const upstream = await fetch(url, {
       headers: { "X-API-Key": apiKey },
       cache: "no-store",

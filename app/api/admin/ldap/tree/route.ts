@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Upstream fetch
-    const url = `${baseUrl}/api/v1/ldap/organizations/tree?domain=${encodeURIComponent(domain)}`
+    const url = `${baseUrl}/ldap/api/v1/organizations/tree?domain=${encodeURIComponent(domain)}`
     const upstream = await fetch(url, {
       headers: { "X-API-Key": apiKey },
       // LDAP queries can be slow; don't let Next.js cache upstream
