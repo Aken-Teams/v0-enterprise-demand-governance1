@@ -1302,7 +1302,7 @@ export default function DemandDetailPage() {
                   </Card>
                 )}
 
-                {isAdminWithWrite && demand.status === "DEVELOPING" && (() => {
+                {isAdminWithWrite && !isClosed && PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number]) >= PIPELINE_STEPS.indexOf("DEVELOPING") && (() => {
                   const devPlan = demand.phasePlans.find((p) => p.phase === "DEVELOPING")
                   return (
                     <Collapsible open={subTasksOpen ?? false} onOpenChange={setSubTasksOpen}>
@@ -1676,7 +1676,6 @@ export default function DemandDetailPage() {
                     organizationId: demand.organization.id,
                     organizationName: demand.organization.name,
                   }}
-                  hideSp
                   onSaved={() => { setSpPlanDialogOpen(false); fetchDemand() }}
                 />
               </DialogContent>

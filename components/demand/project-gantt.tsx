@@ -681,35 +681,41 @@ export function ProjectGantt({
                           </div>
                         )
                       }) : (
-                        <div className="py-3 text-center text-xs text-muted-foreground/60">尚未建立子任務</div>
+                        <div className="grid" style={{ gridTemplateColumns: `${LEFT_COL} 1fr` }}>
+                          <div className="py-3 text-center text-xs text-muted-foreground/60 border-r border-border/30 border-b border-b-border/10 col-span-1">尚未建立子任務</div>
+                          <div className="border-b border-b-border/10" />
+                        </div>
                       )}
                       {canEdit && (
-                        <div className="flex items-center gap-2 pl-10 py-2 border-b border-border/10">
-                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setShowAddDialog(true) }}>
-                            <Plus className="h-3 w-3 mr-1" />
-                            新增子任務
-                          </Button>
-                          {subTasks.length === 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 text-xs px-2 text-muted-foreground/60"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                if (!token || !demandId) return
-                                for (let i = 0; i < DEFAULT_SUBTASK_TEMPLATES.length; i++) {
-                                  await fetch(`/api/demands/${demandId}/sub-tasks`, {
-                                    method: "POST",
-                                    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                                    body: JSON.stringify({ name: DEFAULT_SUBTASK_TEMPLATES[i], order: i }),
-                                  })
-                                }
-                                onRefresh?.()
-                              }}
-                            >
-                              使用預設模板
+                        <div className="grid items-center border-b border-border/10" style={{ gridTemplateColumns: `${LEFT_COL} 1fr` }}>
+                          <div className="flex items-center gap-1 pl-10 py-2 border-r border-border/30 overflow-hidden min-w-0 flex-wrap">
+                            <Button variant="ghost" size="sm" className="h-6 text-[11px] px-1.5 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setShowAddDialog(true) }}>
+                              <Plus className="h-3 w-3 mr-0.5" />
+                              新增子任務
                             </Button>
-                          )}
+                            {subTasks.length === 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[11px] px-1.5 text-muted-foreground/60"
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  if (!token || !demandId) return
+                                  for (let i = 0; i < DEFAULT_SUBTASK_TEMPLATES.length; i++) {
+                                    await fetch(`/api/demands/${demandId}/sub-tasks`, {
+                                      method: "POST",
+                                      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                                      body: JSON.stringify({ name: DEFAULT_SUBTASK_TEMPLATES[i], order: i }),
+                                    })
+                                  }
+                                  onRefresh?.()
+                                }}
+                              >
+                                預設模板
+                              </Button>
+                            )}
+                          </div>
+                          <div />
                         </div>
                       )}
                     </div>
