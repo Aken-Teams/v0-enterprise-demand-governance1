@@ -47,12 +47,14 @@ export async function GET(
     const decodedName = decodeURIComponent(filename).replace(/^\d+-/, "")
     const html = `<!DOCTYPE html>
 <html lang="zh-TW"><head><meta charset="utf-8"><title>檔案不存在</title>
-<style>body{font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f9fafb;color:#374151}
-.box{text-align:center;padding:2rem}.icon{font-size:3rem;margin-bottom:1rem}.title{font-size:1.25rem;font-weight:600;margin-bottom:.5rem}
-.desc{font-size:.875rem;color:#6b7280}.filename{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.25rem;padding:.25rem .5rem;font-size:.75rem;color:#6b7280;margin-bottom:1rem;display:inline-block;word-break:break-all}</style></head>
-<body><div class="box"><div class="icon">📄</div><div class="title">檔案不存在</div>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:transparent;color:#71717a}
+.box{text-align:center}.title{font-size:.875rem;font-weight:500;margin-bottom:.375rem;color:#a1a1aa}
+.desc{font-size:.75rem;color:#a1a1aa}.filename{font-size:.75rem;color:#a1a1aa;margin-bottom:.25rem;word-break:break-all}
+svg{margin:0 auto .75rem;display:block}</style></head>
+<body><div class="box"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d4d4d8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+<div class="title">檔案不存在</div>
 <div class="filename">${decodedName}</div>
-<div class="desc">此檔案可能尚未同步至本機環境，或已被移除。</div></div></body></html>`
+<div class="desc">檔案可能尚未同步或已被移除</div></div></body></html>`
     return new NextResponse(html, {
       status: 404,
       headers: { "Content-Type": "text/html; charset=utf-8" },

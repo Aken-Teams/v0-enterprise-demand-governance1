@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { X, FileText, Loader2, Download, ExternalLink, FileAudio, ZoomIn } from "lucide-react"
@@ -158,9 +159,12 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, watermarkBg
     if (!["txt", "md"].includes(ext)) return
     setTextLoading(true)
     fetch(doc.fileUrl)
-      .then((res) => res.text())
-      .then((t) => setTextContent(t))
-      .catch(() => setTextContent("無法載入文件內容"))
+      .then((res) => {
+        if (!res.ok) { setTextContent(""); setTextLoading(false); return }
+        return res.text()
+      })
+      .then((t) => { if (t !== undefined) setTextContent(t) })
+      .catch(() => setTextContent(""))
       .finally(() => setTextLoading(false))
   }, [open, doc])
 
@@ -257,6 +261,15 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, watermarkBg
 
     if (["txt", "md"].includes(ext)) {
       if (textLoading) return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      if (!textContent) {
+        return (
+          <div className="text-center space-y-2">
+            <FileText className="h-10 w-10 mx-auto text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">檔案不存在</p>
+            <p className="text-xs text-muted-foreground/60">檔案可能尚未同步或已被移除</p>
+          </div>
+        )
+      }
       if (ext === "md") {
         return (
           <div className="w-full h-full overflow-auto p-8 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
@@ -333,7 +346,8 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, watermarkBg
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] h-[90vh] max-w-none p-0 flex flex-col gap-0 [&>button]:hidden">
+        <DialogContent className="w-[95vw] h-[90vh] !max-w-[95vw] p-0 flex flex-col gap-0 [&>button]:hidden">
+          <VisuallyHidden><DialogTitle>{doc.fileName}</DialogTitle></VisuallyHidden>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 shrink-0">
             <div className="flex items-center gap-2 min-w-0">

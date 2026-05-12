@@ -485,9 +485,12 @@ export default function DemandDetailPage() {
     if (!["txt", "md"].includes(ext)) return
     setTextLoading(true)
     fetch(selectedDoc.fileUrl)
-      .then((res) => res.text())
-      .then((t) => setTextContent(t))
-      .catch(() => setTextContent("無法載入文件內容"))
+      .then((res) => {
+        if (!res.ok) { setTextContent(""); setTextLoading(false); return }
+        return res.text()
+      })
+      .then((t) => { if (t !== undefined) setTextContent(t) })
+      .catch(() => setTextContent(""))
       .finally(() => setTextLoading(false))
   }, [selectedDoc])
 
@@ -1863,6 +1866,15 @@ export default function DemandDetailPage() {
                             if (["txt", "md"].includes(ext)) {
                               if (textLoading) {
                                 return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              }
+                              if (!textContent) {
+                                return (
+                                  <div className="text-center space-y-2">
+                                    <FileText className="h-10 w-10 mx-auto text-muted-foreground/30" />
+                                    <p className="text-sm text-muted-foreground">檔案不存在</p>
+                                    <p className="text-xs text-muted-foreground/60">檔案可能尚未同步或已被移除</p>
+                                  </div>
+                                )
                               }
                               if (ext === "md") {
                                 return (
