@@ -11,7 +11,7 @@ import {
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
   Clock, SkipForward, ClipboardCheck, Share2, Copy, Link2, Package,
-  FileEdit, Mail, ShieldCheck,
+  FileEdit, Mail, ShieldCheck, Maximize2,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -34,6 +34,7 @@ import { DesignChangeDialog } from "@/components/demand/design-change-dialog"
 import { NotifySignersDialog } from "@/components/demand/notify-signers-dialog"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
+import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
@@ -381,6 +382,8 @@ export default function DemandDetailPage() {
   const [spPlanDialogOpen, setSpPlanDialogOpen] = useState(false)
   const [subTasksOpen, setSubTasksOpen] = useState<boolean | null>(null)
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [docLinkCopied, setDocLinkCopied] = useState(false)
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
   const [excelReady, setExcelReady] = useState(false)
@@ -1302,7 +1305,7 @@ export default function DemandDetailPage() {
                   </Card>
                 )}
 
-                {isAdminWithWrite && !isClosed && PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number]) >= PIPELINE_STEPS.indexOf("DEVELOPING") && (() => {
+                {isAdminWithWrite && !isClosed && (demand.status === "DEVELOPING" || (PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number]) > PIPELINE_STEPS.indexOf("DEVELOPING") && demand.subTasks.length > 0 && demand.subTasks.every(t => t.status === "pending"))) && (() => {
                   const devPlan = demand.phasePlans.find((p) => p.phase === "DEVELOPING")
                   return (
                     <Collapsible open={subTasksOpen ?? false} onOpenChange={setSubTasksOpen}>
@@ -1733,6 +1736,49 @@ export default function DemandDetailPage() {
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
                       <div className="relative min-h-[520px] h-full">
+                        {/* Preview toolbar */}
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/20">
+                          <span className="text-xs text-muted-foreground truncate">{selectedDoc.fileName}</span>
+                          <div className="flex items-center gap-1">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => {
+                                      const activeShare = shareLinks.find(s => new Date(s.expiresAt) > new Date())
+                                      if (!activeShare) {
+                                        setShareDialogOpen(true)
+                                        return
+                                      }
+                                      const docUrl = `${window.location.origin}/share/${activeShare.token}?doc=${selectedDoc.id}`
+                                      navigator.clipboard.writeText(docUrl)
+                                      setDocLinkCopied(true)
+                                      setTimeout(() => setDocLinkCopied(false), 2000)
+                                    }}
+                                  >
+                                    {docLinkCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Link2 className="h-3.5 w-3.5" />}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {shareLinks.some(s => new Date(s.expiresAt) > new Date())
+                                    ? (docLinkCopied ? "已複製" : "複製文件分享連結")
+                                    : "先建立分享連結"}
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFullScreenDoc(selectedDoc)}>
+                                    <Maximize2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>全螢幕預覽</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </div>
                         <div className="h-full min-h-[520px] flex items-center justify-center p-4 overflow-hidden">
                           {(() => {
                             const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
@@ -2022,6 +2068,14 @@ export default function DemandDetailPage() {
           />
         </div>
       )}
+
+      {/* Full-screen document preview */}
+      <FullScreenDocumentPreview
+        open={!!fullScreenDoc}
+        onOpenChange={(open) => { if (!open) setFullScreenDoc(null) }}
+        doc={fullScreenDoc}
+        watermarkBg={watermarkBg}
+      />
 
       {/* Design change dialog */}
       {canProposeDesignChange && (

@@ -41,6 +41,7 @@ import {
   ChevronsUpDown,
   Check,
   Search,
+  Maximize2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
@@ -48,6 +49,7 @@ import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
+import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { ExcelPreview } from "@/components/excel-preview"
 import ReactMarkdown from "react-markdown"
@@ -520,6 +522,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
 
   // Document preview states
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
   const [excelReady, setExcelReady] = useState(false)
@@ -566,6 +569,18 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
   useEffect(() => {
     fetchDemand()
   }, [fetchDemand])
+
+  // Auto-open document from ?doc= query parameter
+  useEffect(() => {
+    if (!demand) return
+    const docId = new URLSearchParams(window.location.search).get("doc")
+    if (!docId) return
+    const doc = demand.documents.find((d: { id: string }) => d.id === docId)
+    if (doc) {
+      setSelectedDoc(doc)
+      setFullScreenDoc(doc)
+    }
+  }, [demand])
 
   const handleLoginSuccess = (user: ShareUser, jwtToken: string) => {
     setAuthUser(user)
@@ -1249,6 +1264,13 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
                       <div className="relative min-h-[520px] h-full">
+                        {/* Preview toolbar */}
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/20">
+                          <span className="text-xs text-muted-foreground truncate">{selectedDoc.fileName}</span>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFullScreenDoc(selectedDoc)} title="全螢幕預覽">
+                            <Maximize2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                         <div className="h-full min-h-[520px] flex items-center justify-center p-4 overflow-hidden">
                           {(() => {
                             if (isConfidential) {
@@ -1398,6 +1420,14 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Full-screen document preview */}
+      <FullScreenDocumentPreview
+        open={!!fullScreenDoc}
+        onOpenChange={(open) => { if (!open) setFullScreenDoc(null) }}
+        doc={fullScreenDoc}
+        userName={authUser?.name}
+      />
 
       {/* Image zoom overlay */}
       {zoomedImg && (
