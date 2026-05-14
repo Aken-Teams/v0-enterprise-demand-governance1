@@ -101,24 +101,17 @@ export default function InboxPage() {
   const canSeeAll = isAdmin || isViewer
   const isFullAdmin = isAdmin && (!user?.adminScopeType || user.adminScopeType === "all")
 
-  // Restore from sessionStorage on client mount
-  const saved = useRef<Record<string, string> | null>(null)
-  if (saved.current === null && typeof window !== "undefined") {
-    saved.current = readSavedFilters()
-  }
-  const s = saved.current || {}
-
   const [demands, setDemands] = useState<Demand[]>([])
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState(s.q || "")
-  const [debouncedSearch, setDebouncedSearch] = useState(s.q || "")
-  const [filterStatus, setFilterStatus] = useState(s.status || "all")
-  const [filterOrg, setFilterOrg] = useState(s.org || "all")
-  const [filterSubmitter, setFilterSubmitter] = useState(s.submitter || "all")
-  const [filterDeveloper, setFilterDeveloper] = useState(s.developer || "all")
-  const [filterSignoff, setFilterSignoff] = useState(s.signoff || "all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [filterOrg, setFilterOrg] = useState("all")
+  const [filterSubmitter, setFilterSubmitter] = useState("all")
+  const [filterDeveloper, setFilterDeveloper] = useState("all")
+  const [filterSignoff, setFilterSignoff] = useState("all")
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
@@ -127,11 +120,23 @@ export default function InboxPage() {
   const [holdTarget, setHoldTarget] = useState<Demand | null>(null)
   const [holdReason, setHoldReason] = useState("")
   const [holdLoading, setHoldLoading] = useState(false)
-  const [currentPage, setCurrentPage] = useState(() => {
-    const p = parseInt(s.page || "1", 10)
-    return p > 0 ? p : 1
-  })
+  const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 12
+
+  // Restore filters from sessionStorage after hydration
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    const s = readSavedFilters()
+    if (s.status) setFilterStatus(s.status)
+    if (s.org) setFilterOrg(s.org)
+    if (s.submitter) setFilterSubmitter(s.submitter)
+    if (s.developer) setFilterDeveloper(s.developer)
+    if (s.signoff) setFilterSignoff(s.signoff)
+    if (s.q) { setSearchQuery(s.q); setDebouncedSearch(s.q) }
+    if (s.page) { const p = parseInt(s.page, 10); if (p > 0) setCurrentPage(p) }
+  }, [])
 
   // Persist filters to sessionStorage on change
   useEffect(() => {

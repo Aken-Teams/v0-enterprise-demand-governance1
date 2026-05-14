@@ -309,7 +309,7 @@ export async function GET(request: NextRequest) {
             },
             select: {
               id: true, phase: true, status: true, kind: true,
-              requestedAt: true,
+              requestedAt: true, targetUserId: true,
             },
           },
         },
@@ -377,17 +377,18 @@ export async function GET(request: NextRequest) {
       demands: demands.map((d) => {
         type SignoffRow = {
           phase: string; status: string; kind: string;
-          requestedAt: Date;
+          requestedAt: Date; targetUserId: string | null;
         }
         const signoffs = d.phaseSignoffs as unknown as SignoffRow[]
         // Only show rejection if the LATEST round of signoffs has a REJECTED entry
-        const phaseSignoffs = signoffs.filter(s => s.kind === "PHASE" && s.phase === d.status)
+        // Exclude orphan signoffs (no assigned user) to match detail page logic
+        const phaseSignoffs = signoffs.filter(s => s.kind === "PHASE" && s.phase === d.status && s.targetUserId)
         const latestRoundTime = phaseSignoffs.length > 0
           ? Math.max(...phaseSignoffs.map(s => new Date(s.requestedAt).getTime()))
           : 0
         const latestRound = phaseSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestRoundTime)
         const hasCurrentPhaseReject = latestRound.some(s => s.status === "REJECTED")
-        const hasCurrentPhaseApproved = latestRound.length > 0 && latestRound.every(s => s.status === "APPROVED")
+        const hasCurrentPhaseApproved = latestRound.length > 0 && latestRound.every(s => s.status === "APPROVED" || s.status === "SKIPPED") && latestRound.some(s => s.status === "APPROVED")
         return {
           id: d.id,
           demandNumber: d.demandNumber,
