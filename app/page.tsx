@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Building2, Settings, Eye, EyeOff, ArrowRight, Loader2, ChevronsUpDown, Check } from "lucide-react"
 import Image from "next/image"
@@ -26,6 +26,7 @@ interface AccountUser {
   name: string
   email: string
   role?: string
+  ldapUsername?: string | null
 }
 
 interface OrgWithUsers {
@@ -63,13 +64,16 @@ export default function HomePage() {
   // Company login state
   const [selectedOrgId, setSelectedOrgId] = useState("")
   const [selectedAccountEmail, setSelectedAccountEmail] = useState("")
+  const [companyAccountInput, setCompanyAccountInput] = useState("")
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false)
+  const companyInputRef = useRef<HTMLInputElement>(null)
+  const companyDropdownRef = useRef<HTMLDivElement>(null)
 
   // Admin login state
   const [selectedAdminRole, setSelectedAdminRole] = useState("admin")
   const [selectedAdminEmail, setSelectedAdminEmail] = useState("")
 
   // Combobox open states
-  const [companyAccountOpen, setCompanyAccountOpen] = useState(false)
   const [adminAccountOpen, setAdminAccountOpen] = useState(false)
 
   // Fetch accounts on mount
@@ -91,14 +95,10 @@ export default function HomePage() {
       .finally(() => setDataLoading(false))
   }, [])
 
-  // Auto-select first account when org changes
+  // Reset account when org changes
   useEffect(() => {
-    const org = organizations.find((o) => o.id === selectedOrgId)
-    if (org && org.users.length > 0) {
-      setSelectedAccountEmail(org.users[0].email)
-    } else {
-      setSelectedAccountEmail("")
-    }
+    setSelectedAccountEmail("")
+    setCompanyAccountInput("")
   }, [selectedOrgId, organizations])
 
   // Auto-select default account when admin role changes
@@ -122,6 +122,41 @@ export default function HomePage() {
   const adminRoleOptions = [...new Set(adminUsers.map((u) => u.role || ""))]
     .filter(Boolean)
     .sort((a, b) => (a === "admin" ? -1 : b === "admin" ? 1 : 0))
+
+  // Filtered company accounts based on input
+  const filteredOrgUsers = companyAccountInput.trim()
+    ? orgUsers.filter((u) => {
+        const q = companyAccountInput.trim().toLowerCase()
+        return (
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.ldapUsername && u.ldapUsername.toLowerCase().includes(q))
+        )
+      })
+    : orgUsers
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        companyInputRef.current && !companyInputRef.current.contains(e.target as Node) &&
+        companyDropdownRef.current && !companyDropdownRef.current.contains(e.target as Node)
+      ) {
+        setCompanyDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  const selectCompanyAccount = useCallback((user: AccountUser, fromDropdown = false) => {
+    setSelectedAccountEmail(user.email)
+    if (fromDropdown) {
+      setCompanyAccountInput(user.ldapUsername ? `${user.name} (${user.ldapUsername})` : user.name)
+    }
+    setCompanyDropdownOpen(false)
+    setError("")
+  }, [])
 
   const currentEmail = loginType === "company" ? selectedAccountEmail : selectedAdminEmail
 
@@ -271,7 +306,7 @@ export default function HomePage() {
                               </Select>
                             </div>
 
-                            {/* Select Account */}
+                            {/* Account Input with Autocomplete */}
                             <div>
                               <label className="mb-1.5 block text-sm font-medium text-gray-700">
                                 帳號
@@ -279,56 +314,82 @@ export default function HomePage() {
                               {orgUsers.length === 0 ? (
                                 <p className="text-sm text-muted-foreground py-2">此公司尚無可用帳號</p>
                               ) : (
-                                <Popover open={companyAccountOpen} onOpenChange={setCompanyAccountOpen}>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      aria-expanded={companyAccountOpen}
-                                      className="h-11 w-full justify-between font-normal"
+                                <div className="relative">
+                                  <Input
+                                    ref={companyInputRef}
+                                    className="h-11"
+                                    placeholder="輸入工號、姓名或信箱..."
+                                    value={companyAccountInput}
+                                    onChange={(e) => {
+                                      setCompanyAccountInput(e.target.value)
+                                      setCompanyDropdownOpen(true)
+                                      // Clear selection if user edits text
+                                      if (selectedAccountEmail) {
+                                        const match = orgUsers.find((u) => u.email === selectedAccountEmail)
+                                        const displayText = match
+                                          ? match.ldapUsername ? `${match.name} (${match.ldapUsername})` : match.name
+                                          : ""
+                                        if (e.target.value !== displayText) {
+                                          setSelectedAccountEmail("")
+                                        }
+                                      }
+                                      setError("")
+                                    }}
+                                    onFocus={() => setCompanyDropdownOpen(true)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Escape") {
+                                        setCompanyDropdownOpen(false)
+                                        companyInputRef.current?.blur()
+                                      }
+                                      // Select first match on Enter (if not submitting form)
+                                      if (e.key === "Enter" && companyDropdownOpen && filteredOrgUsers.length > 0 && !selectedAccountEmail) {
+                                        e.preventDefault()
+                                        selectCompanyAccount(filteredOrgUsers[0])
+                                      }
+                                    }}
+                                    autoComplete="off"
+                                  />
+                                  {selectedAccountEmail && (
+                                    <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                                  )}
+                                  {companyDropdownOpen && filteredOrgUsers.length > 0 && (
+                                    <div
+                                      ref={companyDropdownRef}
+                                      className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-[40vh] sm:max-h-[300px] overflow-y-auto"
                                     >
-                                      {selectedAccountEmail ? (
-                                        <span className="truncate">
-                                          {orgUsers.find((u) => u.email === selectedAccountEmail)?.name || ""}
-                                          <span className="ml-2 text-muted-foreground text-xs hidden sm:inline">
-                                            ({selectedAccountEmail})
+                                      {filteredOrgUsers.map((user) => (
+                                        <button
+                                          type="button"
+                                          key={user.id}
+                                          className={cn(
+                                            "flex items-center w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors",
+                                            selectedAccountEmail === user.email && "bg-accent",
+                                          )}
+                                          onMouseDown={(e) => {
+                                            e.preventDefault() // Prevent input blur
+                                            selectCompanyAccount(user, true)
+                                          }}
+                                        >
+                                          <span className="font-medium truncate">{user.name}</span>
+                                          {user.ldapUsername && (
+                                            <span className="ml-2 text-muted-foreground text-xs shrink-0">{user.ldapUsername}</span>
+                                          )}
+                                          <span className="ml-auto text-muted-foreground text-xs truncate pl-2">
+                                            {user.email}
                                           </span>
-                                        </span>
-                                      ) : (
-                                        <span className="text-muted-foreground">選擇帳號</span>
-                                      )}
-                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" collisionPadding={16}>
-                                    <Command>
-                                      <CommandInput placeholder="搜尋姓名或信箱..." />
-                                      <CommandList className="max-h-[40vh] sm:max-h-[300px]">
-                                        <CommandEmpty>找不到帳號</CommandEmpty>
-                                        {orgUsers.map((user) => (
-                                          <CommandItem
-                                            key={user.id}
-                                            value={`${user.name} ${user.email}`}
-                                            onSelect={() => {
-                                              setSelectedAccountEmail(user.email)
-                                              setError("")
-                                              setCompanyAccountOpen(false)
-                                            }}
-                                          >
-                                            <Check
-                                              className={cn(
-                                                "mr-2 h-4 w-4 shrink-0",
-                                                selectedAccountEmail === user.email ? "opacity-100" : "opacity-0",
-                                              )}
-                                            />
-                                            <span className="font-medium truncate">{user.name}</span>
-                                            <span className="ml-2 text-muted-foreground text-xs truncate">({user.email})</span>
-                                          </CommandItem>
-                                        ))}
-                                      </CommandList>
-                                    </Command>
-                                  </PopoverContent>
-                                </Popover>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {companyDropdownOpen && companyAccountInput.trim() && filteredOrgUsers.length === 0 && (
+                                    <div
+                                      ref={companyDropdownRef}
+                                      className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg"
+                                    >
+                                      <p className="px-3 py-2 text-sm text-muted-foreground">找不到帳號</p>
+                                    </div>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </>

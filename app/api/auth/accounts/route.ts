@@ -10,7 +10,7 @@ export async function GET() {
           users: {
             where: { isActive: true, role: { in: ["subsidiary", "viewer"] } },
             select: {
-              id: true, name: true, email: true, role: true,
+              id: true, name: true, email: true, role: true, ldapUsername: true,
               demandAccessGrants: { select: { signoffRole: true } },
             },
             orderBy: { name: "asc" },
@@ -44,6 +44,7 @@ export async function GET() {
               name: u.name,
               email: u.email,
               role: u.role,
+              ldapUsername: u.ldapUsername,
               signoffRoles: roles,
             }
           })
