@@ -37,13 +37,13 @@ export async function GET(
       include: {
         users: {
           where: { isActive: true, role: { in: ["subsidiary", "delivery", "viewer"] } },
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, ldapUsername: true },
           orderBy: { name: "asc" },
         },
       },
     })
 
-    const organizations: { id: string; name: string; users: { id: string; name: string; email: string }[] }[] = []
+    const organizations: { id: string; name: string; users: { id: string; name: string; email: string; ldapUsername: string | null }[] }[] = []
 
     if (demandOrg) {
       organizations.push({
@@ -63,7 +63,7 @@ export async function GET(
           isActive: true,
           role: "subsidiary",
         },
-        select: { id: true, name: true, email: true, organizationId: true },
+        select: { id: true, name: true, email: true, ldapUsername: true, organizationId: true },
         orderBy: { name: "asc" },
       })
 

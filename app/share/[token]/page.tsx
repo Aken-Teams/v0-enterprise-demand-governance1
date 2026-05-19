@@ -38,9 +38,7 @@ import {
   ClipboardCheck,
   ShieldAlert,
   Package,
-  ChevronsUpDown,
   Check,
-  Search,
   Maximize2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -290,7 +288,7 @@ function fmtDateFull(dateStr: string) {
 interface OrgWithUsers {
   id: string
   name: string
-  users: { id: string; name: string; email: string }[]
+  users: { id: string; name: string; email: string; ldapUsername?: string | null }[]
 }
 
 function LoginModal({
@@ -307,12 +305,14 @@ function LoginModal({
   const [organizations, setOrganizations] = useState<OrgWithUsers[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState("")
   const [selectedEmail, setSelectedEmail] = useState("")
+  const [accountInput, setAccountInput] = useState("")
+  const [accountDropdownOpen, setAccountDropdownOpen] = useState(false)
+  const accountInputRef = useRef<HTMLInputElement>(null)
+  const accountDropdownRef = useRef<HTMLDivElement>(null)
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [fetchingUsers, setFetchingUsers] = useState(false)
   const [error, setError] = useState("")
-  const [accountOpen, setAccountOpen] = useState(false)
-  const [accountSearch, setAccountSearch] = useState("")
 
   // Fetch organizations & users when modal opens
   useEffect(() => {
@@ -336,14 +336,43 @@ function LoginModal({
   // Users in the selected organization
   const orgUsers = organizations.find((o) => o.id === selectedOrgId)?.users || []
 
-  // Auto-select first account when org changes
+  // Reset account when org changes
   useEffect(() => {
-    if (orgUsers.length > 0) {
-      setSelectedEmail(orgUsers[0].email)
-    } else {
-      setSelectedEmail("")
+    setSelectedEmail("")
+    setAccountInput("")
+  }, [selectedOrgId])
+
+  // Sort by ldapUsername (工號), then filter by input
+  const sortedUsers = [...orgUsers].sort((a, b) => {
+    if (a.ldapUsername && b.ldapUsername) return a.ldapUsername.localeCompare(b.ldapUsername)
+    if (a.ldapUsername) return -1
+    if (b.ldapUsername) return 1
+    return a.name.localeCompare(b.name)
+  })
+  const filteredUsers = accountInput.trim()
+    ? sortedUsers.filter((u) => {
+        const q = accountInput.trim().toLowerCase()
+        return (
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.ldapUsername && u.ldapUsername.toLowerCase().includes(q))
+        )
+      })
+    : sortedUsers
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        accountInputRef.current && !accountInputRef.current.contains(e.target as Node) &&
+        accountDropdownRef.current && !accountDropdownRef.current.contains(e.target as Node)
+      ) {
+        setAccountDropdownOpen(false)
+      }
     }
-  }, [selectedOrgId]) // eslint-disable-line react-hooks/exhaustive-deps
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -411,58 +440,79 @@ function LoginModal({
               <p className="text-sm text-muted-foreground py-2">此公司尚無可用帳號</p>
             ) : (
               <div className="relative">
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={accountOpen}
-                  className="w-full justify-between font-normal h-9"
-                  onClick={() => setAccountOpen(!accountOpen)}
-                  type="button"
-                >
-                  <span className="truncate">
-                    {selectedEmail
-                      ? (() => { const u = orgUsers.find(u => u.email === selectedEmail); return u ? `${u.name}（${u.email}）` : selectedEmail })()
-                      : "選擇帳號"}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-                {accountOpen && (
-                  <div className="absolute z-50 top-[calc(100%+4px)] left-0 right-0 rounded-md border bg-popover shadow-md">
-                    <div className="flex items-center border-b px-3">
-                      <Search className="h-4 w-4 shrink-0 opacity-50 mr-2" />
-                      <input
-                        className="flex h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        placeholder="搜尋姓名或信箱..."
-                        value={accountSearch ?? ""}
-                        onChange={(e) => setAccountSearch(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="max-h-[200px] overflow-y-auto p-1">
-                      {(() => {
-                        const q = (accountSearch ?? "").toLowerCase()
-                        const filtered = orgUsers.filter((u) =>
-                          !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
-                        )
-                        if (filtered.length === 0) return <p className="text-sm text-muted-foreground text-center py-4">找不到符合的帳號</p>
-                        return filtered.map((u) => (
-                          <button
-                            key={u.id}
-                            type="button"
-                            className="flex items-center w-full gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
-                            onClick={() => {
-                              setSelectedEmail(u.email)
-                              setError("")
-                              setAccountOpen(false)
-                              setAccountSearch("")
-                            }}
-                          >
-                            <Check className={cn("h-4 w-4 shrink-0", selectedEmail === u.email ? "opacity-100" : "opacity-0")} />
-                            <span className="truncate">{u.name}（{u.email}）</span>
-                          </button>
-                        ))
-                      })()}
-                    </div>
+                <Input
+                  ref={accountInputRef}
+                  className="h-9"
+                  placeholder="輸入工號、姓名或信箱..."
+                  value={accountInput}
+                  onChange={(e) => {
+                    setAccountInput(e.target.value)
+                    setAccountDropdownOpen(true)
+                    if (selectedEmail) {
+                      const match = orgUsers.find((u) => u.email === selectedEmail)
+                      const displayText = match
+                        ? match.ldapUsername ? `${match.name} (${match.ldapUsername})` : match.name
+                        : ""
+                      if (e.target.value !== displayText) {
+                        setSelectedEmail("")
+                      }
+                    }
+                    setError("")
+                  }}
+                  onFocus={() => setAccountDropdownOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setAccountDropdownOpen(false)
+                      accountInputRef.current?.blur()
+                    }
+                    if (e.key === "Enter" && accountDropdownOpen && filteredUsers.length > 0 && !selectedEmail) {
+                      e.preventDefault()
+                      setSelectedEmail(filteredUsers[0].email)
+                      setAccountDropdownOpen(false)
+                      setError("")
+                    }
+                  }}
+                  autoComplete="off"
+                />
+                {selectedEmail && (
+                  <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                )}
+                {accountDropdownOpen && filteredUsers.length > 0 && (
+                  <div
+                    ref={accountDropdownRef}
+                    className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-[200px] overflow-y-auto"
+                  >
+                    {filteredUsers.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className={cn(
+                          "flex items-center w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors",
+                          selectedEmail === u.email && "bg-accent",
+                        )}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setSelectedEmail(u.email)
+                          setAccountInput(u.ldapUsername ? `${u.name} (${u.ldapUsername})` : u.name)
+                          setAccountDropdownOpen(false)
+                          setError("")
+                        }}
+                      >
+                        <span className="font-medium truncate">{u.name}</span>
+                        {u.ldapUsername && (
+                          <span className="ml-2 text-muted-foreground text-xs shrink-0">{u.ldapUsername}</span>
+                        )}
+                        <span className="ml-auto text-muted-foreground text-xs truncate pl-2">{u.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {accountDropdownOpen && accountInput.trim() && filteredUsers.length === 0 && (
+                  <div
+                    ref={accountDropdownRef}
+                    className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg"
+                  >
+                    <p className="px-3 py-2 text-sm text-muted-foreground">找不到帳號</p>
                   </div>
                 )}
               </div>

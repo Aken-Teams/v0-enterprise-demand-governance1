@@ -123,9 +123,15 @@ export default function HomePage() {
     .filter(Boolean)
     .sort((a, b) => (a === "admin" ? -1 : b === "admin" ? 1 : 0))
 
-  // Filtered company accounts based on input
+  // Sort by ldapUsername (工號), then filter by input
+  const sortedOrgUsers = [...orgUsers].sort((a, b) => {
+    if (a.ldapUsername && b.ldapUsername) return a.ldapUsername.localeCompare(b.ldapUsername)
+    if (a.ldapUsername) return -1
+    if (b.ldapUsername) return 1
+    return a.name.localeCompare(b.name)
+  })
   const filteredOrgUsers = companyAccountInput.trim()
-    ? orgUsers.filter((u) => {
+    ? sortedOrgUsers.filter((u) => {
         const q = companyAccountInput.trim().toLowerCase()
         return (
           u.name.toLowerCase().includes(q) ||
@@ -133,7 +139,7 @@ export default function HomePage() {
           (u.ldapUsername && u.ldapUsername.toLowerCase().includes(q))
         )
       })
-    : orgUsers
+    : sortedOrgUsers
 
   // Close dropdown on outside click
   useEffect(() => {
