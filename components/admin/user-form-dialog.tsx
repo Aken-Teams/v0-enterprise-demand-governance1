@@ -483,14 +483,14 @@ export function UserFormDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>{dialogTitle}</DialogTitle>
-            <DialogDescription>{dialogDescription}</DialogDescription>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] !flex !flex-col gap-2 sm:gap-4 p-4 sm:p-6 overflow-hidden">
+          <DialogHeader className="space-y-1 shrink-0">
+            <DialogTitle className="text-base sm:text-lg">{dialogTitle}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{dialogDescription}</DialogDescription>
           </DialogHeader>
 
           {/* Step indicator with connecting line */}
-          <div className="flex items-center px-1">
+          <div className="flex items-center justify-center sm:justify-start px-1 shrink-0">
             {visibleSteps.map((label, i) => {
               // Map display index to internal step number
               const internalStep = needsStep2
@@ -507,7 +507,7 @@ export function UserFormDialog({
                   {i > 0 && (
                     <div
                       className={cn(
-                        "h-px w-8 mx-2 transition-colors",
+                        "h-px w-6 sm:w-8 mx-1.5 sm:mx-2 transition-colors",
                         isCompleted || isCurrent ? "bg-primary" : "bg-border",
                       )}
                     />
@@ -527,7 +527,7 @@ export function UserFormDialog({
                     }}
                     disabled={isDisabled}
                     className={cn(
-                      "flex items-center gap-1.5 text-sm transition-colors",
+                      "flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm transition-colors",
                       isCurrent ? "text-foreground font-medium" : "text-muted-foreground",
                       isDisabled
                         ? "opacity-40 cursor-not-allowed"
@@ -536,7 +536,7 @@ export function UserFormDialog({
                   >
                     <span
                       className={cn(
-                        "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium border transition-colors",
+                        "flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[10px] sm:text-xs font-medium border transition-colors shrink-0",
                         isCurrent
                           ? "bg-primary text-primary-foreground border-primary"
                           : isCompleted
@@ -544,9 +544,9 @@ export function UserFormDialog({
                             : "bg-muted text-muted-foreground border-muted-foreground/30",
                       )}
                     >
-                      {isCompleted ? <Check className="h-3 w-3" /> : displayNum}
+                      {isCompleted ? <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> : displayNum}
                     </span>
-                    {label}
+                    <span className="hidden sm:inline">{label}</span>
                   </button>
                 </div>
               )
@@ -556,19 +556,19 @@ export function UserFormDialog({
           {/* Step content */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             {step === 1 && (
-              <div className="space-y-4 py-2">
+              <div className="space-y-2.5 sm:space-y-4 py-1 sm:py-2">
                 {/* AD selection (create only) */}
                 {mode === "create" && (
-                  <div className="rounded-lg border border-dashed bg-muted/30 p-3 space-y-2">
+                  <div className="rounded-lg border border-dashed bg-muted/30 p-2 sm:p-3 space-y-1.5 sm:space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs text-muted-foreground">
+                      <Label className="text-[11px] sm:text-xs text-muted-foreground">
                         從 AD 組織架構選擇（建議）
                       </Label>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs"
+                        className="h-6 sm:h-7 text-[10px] sm:text-xs px-2"
                         onClick={() => setLdapPickerOpen(true)}
                       >
                         <Network className="h-3 w-3 mr-1" />
@@ -576,15 +576,15 @@ export function UserFormDialog({
                       </Button>
                     </div>
                     {form.ldapUsername ? (
-                      <div className="flex items-center justify-between gap-2 rounded-md bg-background border px-2.5 py-1.5">
+                      <div className="flex items-center justify-between gap-2 rounded-md bg-background border px-2 py-1 sm:px-2.5 sm:py-1.5">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">
+                          <p className="text-xs sm:text-sm font-medium truncate">
                             {form.name}
-                            <span className="ml-1.5 text-xs text-muted-foreground font-mono">
+                            <span className="ml-1.5 text-[10px] sm:text-xs text-muted-foreground font-mono">
                               {form.ldapUsername}
                             </span>
                           </p>
-                          <p className="text-[11px] text-muted-foreground truncate">
+                          <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate">
                             {form.ldapDomain} · {form.ldapDepartment}
                           </p>
                         </div>
@@ -600,38 +600,40 @@ export function UserFormDialog({
                         </Button>
                       </div>
                     ) : (
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[10px] sm:text-[11px] text-muted-foreground">
                         從 AD 選擇後會自動帶入姓名與電子郵件
                       </p>
                     )}
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label>
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">
                     姓名 <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     placeholder="使用者姓名"
+                    className="h-8 sm:h-10 text-sm"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">
                     電子郵件 <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     type="email"
                     placeholder="user@example.com"
+                    className="h-8 sm:h-10 text-sm"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                   />
                 </div>
 
                 {mode === "create" ? (
-                  <div className="space-y-2">
-                    <Label>
+                  <div className="space-y-1 sm:space-y-2">
+                    <Label className="text-xs sm:text-sm">
                       密碼 {!hasLdap && <span className="text-destructive">*</span>}
                     </Label>
                     <div className="relative">
@@ -640,7 +642,7 @@ export function UserFormDialog({
                         placeholder={hasLdap ? "留空則使用 AD 密碼登入" : "至少 6 個字元"}
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        className="pr-10"
+                        className="pr-10 h-8 sm:h-10 text-sm"
                       />
                       <button
                         type="button"
@@ -648,19 +650,19 @@ export function UserFormDialog({
                         onClick={() => setShowPassword(!showPassword)}
                         tabIndex={-1}
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                       </button>
                     </div>
                     {hasLdap && (
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[10px] sm:text-[11px] text-muted-foreground">
                         已綁定 AD，可留空（使用 AD 密碼登入）或設定本地備用密碼
                       </p>
                     )}
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-2">
-                      <Label>新密碼</Label>
+                    <div className="space-y-1 sm:space-y-2">
+                      <Label className="text-xs sm:text-sm">新密碼</Label>
                       <div className="relative">
                         <Input
                           type={showPassword ? "text" : "password"}
@@ -669,7 +671,7 @@ export function UserFormDialog({
                           onChange={(e) =>
                             setForm({ ...form, password: e.target.value, adminPassword: "" })
                           }
-                          className="pr-10"
+                          className="pr-10 h-8 sm:h-10 text-sm"
                         />
                         <button
                           type="button"
@@ -677,13 +679,13 @@ export function UserFormDialog({
                           onClick={() => setShowPassword(!showPassword)}
                           tabIndex={-1}
                         >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          {showPassword ? <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                         </button>
                       </div>
                     </div>
                     {form.password && (
-                      <div className="space-y-2">
-                        <Label>
+                      <div className="space-y-1 sm:space-y-2">
+                        <Label className="text-xs sm:text-sm">
                           管理員密碼確認 <span className="text-destructive">*</span>
                         </Label>
                         <div className="relative">
@@ -694,7 +696,7 @@ export function UserFormDialog({
                             onChange={(e) =>
                               setForm({ ...form, adminPassword: e.target.value })
                             }
-                            className="pr-10"
+                            className="pr-10 h-8 sm:h-10 text-sm"
                           />
                           <button
                             type="button"
@@ -702,24 +704,24 @@ export function UserFormDialog({
                             onClick={() => setShowAdminPassword(!showAdminPassword)}
                             tabIndex={-1}
                           >
-                            {showAdminPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            {showAdminPassword ? <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                           </button>
                         </div>
-                        <p className="text-xs text-muted-foreground">修改密碼需要驗證管理員身份</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">修改密碼需要驗證管理員身份</p>
                       </div>
                     )}
                   </>
                 )}
 
-                <div className="space-y-2">
-                  <Label>
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">
                     角色 <span className="text-destructive">*</span>
                   </Label>
                   <Select
                     value={form.role}
                     onValueChange={(v) => setForm({ ...form, role: v })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-8 sm:h-10 text-sm">
                       <SelectValue placeholder="選擇角色" />
                     </SelectTrigger>
                     <SelectContent>
@@ -730,15 +732,15 @@ export function UserFormDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>組織</Label>
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">組織</Label>
                   <Select
                     value={form.organizationId || "none"}
                     onValueChange={(v) =>
                       setForm({ ...form, organizationId: v === "none" ? "" : v })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-8 sm:h-10 text-sm">
                       <SelectValue placeholder="選擇組織（選填）" />
                     </SelectTrigger>
                     <SelectContent>
@@ -753,15 +755,15 @@ export function UserFormDialog({
                 </div>
 
                 {mode === "edit" && (
-                  <div className="space-y-2">
-                    <Label>狀態</Label>
+                  <div className="space-y-1 sm:space-y-2">
+                    <Label className="text-xs sm:text-sm">狀態</Label>
                     <Select
                       value={form.isActive ? "active" : "inactive"}
                       onValueChange={(v) =>
                         setForm({ ...form, isActive: v === "active" })
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="h-8 sm:h-10 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -786,20 +788,20 @@ export function UserFormDialog({
             )}
 
             {step === 2 && form.role === "viewer" && (
-              <div className="py-2 space-y-5">
-                <p className="text-sm text-muted-foreground">
+              <div className="py-1 sm:py-2 space-y-3 sm:space-y-5">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   設定此董事會成員可觀看與審核的組織範圍。兩者為獨立設定。
                 </p>
 
-                <div className="space-y-2">
-                  <Label>觀看範圍</Label>
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">觀看範圍</Label>
                   <Select
                     value={form.restrictBoardViewToOrg ? "own" : "all"}
                     onValueChange={(v) =>
                       setForm({ ...form, restrictBoardViewToOrg: v === "own" })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-8 sm:h-10 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -814,8 +816,8 @@ export function UserFormDialog({
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>審核範圍</Label>
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">審核範圍</Label>
                   <Select
                     value={form.boardExemptFromSignoff ? "none" : form.restrictBoardToOrg ? "own" : "all"}
                     onValueChange={(v) =>
@@ -826,7 +828,7 @@ export function UserFormDialog({
                       })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-8 sm:h-10 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -844,32 +846,32 @@ export function UserFormDialog({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3 rounded-lg border p-3">
+                <div className="flex items-center gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3">
                   <input
                     type="checkbox"
                     id="canViewFinancial"
                     checked={form.canViewFinancial}
                     onChange={(e) => setForm({ ...form, canViewFinancial: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded border-gray-300"
                   />
                   <div>
-                    <Label htmlFor="canViewFinancial" className="cursor-pointer">可查看金額報表</Label>
-                    <p className="text-xs text-muted-foreground">勾選後可在報表分析中查看 SP 對應金額資訊</p>
+                    <Label htmlFor="canViewFinancial" className="cursor-pointer text-xs sm:text-sm">可查看金額報表</Label>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">勾選後可在報表分析中查看 SP 對應金額資訊</p>
                   </div>
                 </div>
               </div>
             )}
 
             {step === 2 && form.role === "admin" && (
-              <div className="py-2 space-y-5">
-                <p className="text-sm text-muted-foreground">
+              <div className="py-1 sm:py-2 space-y-3 sm:space-y-5">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   設定此管理員的管理範圍與權限等級。
                 </p>
 
-                <div className="space-y-2">
-                  <Label>管理範圍類型</Label>
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">管理範圍類型</Label>
                   <Select value={adminScopeType} onValueChange={(v) => { setAdminScopeType(v); setAdminEntries([]) }}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-8 sm:h-10 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -881,17 +883,17 @@ export function UserFormDialog({
                 </div>
 
                 {adminScopeType === "all" && (
-                  <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/20 p-4 text-sm text-emerald-700 dark:text-emerald-400">
+                  <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/20 p-2.5 sm:p-4 text-xs sm:text-sm text-emerald-700 dark:text-emerald-400">
                     <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4" />
+                      <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                       此管理員擁有完整權限，可管理所有組織與專案。
                     </div>
                   </div>
                 )}
 
                 {adminScopeType === "organization" && (
-                  <div className="space-y-2">
-                    <Label>選擇可管理的組織</Label>
+                  <div className="space-y-1 sm:space-y-2">
+                    <Label className="text-xs sm:text-sm">選擇可管理的組織</Label>
                     {adminEntriesLoading ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -902,7 +904,7 @@ export function UserFormDialog({
                           const entry = adminEntries.find(e => e.organizationId === org.id)
                           const isChecked = !!entry
                           return (
-                            <div key={org.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                            <div key={org.id} className="flex items-center gap-2 sm:gap-3 rounded-lg border px-2 sm:px-3 py-1.5 sm:py-2">
                               <Checkbox
                                 checked={isChecked}
                                 onCheckedChange={(checked) => {
@@ -913,7 +915,7 @@ export function UserFormDialog({
                                   }
                                 }}
                               />
-                              <span className="flex-1 text-sm">{org.name}</span>
+                              <span className="flex-1 text-xs sm:text-sm">{org.name}</span>
                               {isChecked && (
                                 <Select
                                   value={entry!.permission}
@@ -944,8 +946,8 @@ export function UserFormDialog({
                 )}
 
                 {adminScopeType === "project" && (
-                  <div className="space-y-2">
-                    <Label>選擇可管理的專案</Label>
+                  <div className="space-y-1 sm:space-y-2">
+                    <Label className="text-xs sm:text-sm">選擇可管理的專案</Label>
                     {adminEntriesLoading ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -956,7 +958,7 @@ export function UserFormDialog({
                           const entry = adminEntries.find(e => e.demandId === demand.id)
                           const isChecked = !!entry
                           return (
-                            <div key={demand.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                            <div key={demand.id} className="flex items-center gap-2 sm:gap-3 rounded-lg border px-2 sm:px-3 py-1.5 sm:py-2">
                               <Checkbox
                                 checked={isChecked}
                                 onCheckedChange={(checked) => {
@@ -968,8 +970,8 @@ export function UserFormDialog({
                                 }}
                               />
                               <div className="flex-1 min-w-0">
-                                <span className="font-mono text-xs text-muted-foreground mr-1.5">{demand.demandNumber}</span>
-                                <span className="text-sm truncate">{demand.title}</span>
+                                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground mr-1 sm:mr-1.5">{demand.demandNumber}</span>
+                                <span className="text-xs sm:text-sm truncate">{demand.title}</span>
                                 {demand.organization && (
                                   <span className="ml-1.5 text-xs text-muted-foreground">({demand.organization})</span>
                                 )}
@@ -1003,31 +1005,31 @@ export function UserFormDialog({
                   </div>
                 )}
 
-                <div className="flex items-center gap-3 rounded-lg border p-3">
+                <div className="flex items-center gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3">
                   <input
                     type="checkbox"
                     id="adminCanViewFinancial"
                     checked={form.canViewFinancial}
                     onChange={(e) => setForm({ ...form, canViewFinancial: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded border-gray-300"
                   />
                   <div>
-                    <Label htmlFor="adminCanViewFinancial" className="cursor-pointer">可查看金額報表</Label>
-                    <p className="text-xs text-muted-foreground">勾選後可在報表分析中查看 SP 對應金額資訊</p>
+                    <Label htmlFor="adminCanViewFinancial" className="cursor-pointer text-xs sm:text-sm">可查看金額報表</Label>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">勾選後可在報表分析中查看 SP 對應金額資訊</p>
                   </div>
                 </div>
               </div>
             )}
 
             {step === 3 && (
-              <div className="py-2 space-y-4">
+              <div className="py-2 space-y-3 sm:space-y-4">
                 {/* Basic info summary */}
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                    <User className="h-4 w-4 text-muted-foreground" />
+                <div className="rounded-lg border bg-muted/30 p-3 sm:p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-medium mb-2 sm:mb-3">
+                    <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                     基本資訊
                   </div>
-                  <div className="grid grid-cols-[80px_1fr] gap-y-1.5 gap-x-3 text-sm">
+                  <div className="grid grid-cols-[70px_1fr] sm:grid-cols-[80px_1fr] gap-y-1 sm:gap-y-1.5 gap-x-2 sm:gap-x-3 text-xs sm:text-sm">
                     <span className="text-muted-foreground">姓名</span>
                     <span className="font-medium">{form.name}</span>
                     <span className="text-muted-foreground">電子郵件</span>
@@ -1055,12 +1057,12 @@ export function UserFormDialog({
 
                 {/* Viewer scope summary */}
                 {form.role === "viewer" && (
-                  <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                  <div className="rounded-lg border bg-muted/30 p-3 sm:p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-medium mb-2 sm:mb-3">
+                      <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                       審核權限
                     </div>
-                    <div className="grid grid-cols-[80px_1fr] gap-y-1.5 gap-x-3 text-sm">
+                    <div className="grid grid-cols-[70px_1fr] sm:grid-cols-[80px_1fr] gap-y-1 sm:gap-y-1.5 gap-x-2 sm:gap-x-3 text-xs sm:text-sm">
                       <span className="text-muted-foreground">觀看範圍</span>
                       <span>{form.restrictBoardViewToOrg ? "僅自己組織" : "全部組織"}</span>
                       <span className="text-muted-foreground">審核範圍</span>
@@ -1073,12 +1075,12 @@ export function UserFormDialog({
 
                 {/* Admin scope summary */}
                 {form.role === "admin" && (
-                  <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                      <Settings className="h-4 w-4 text-muted-foreground" />
+                  <div className="rounded-lg border bg-muted/30 p-3 sm:p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-medium mb-2 sm:mb-3">
+                      <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                       管理權限
                     </div>
-                    <div className="grid grid-cols-[80px_1fr] gap-y-1.5 gap-x-3 text-sm">
+                    <div className="grid grid-cols-[70px_1fr] sm:grid-cols-[80px_1fr] gap-y-1 sm:gap-y-1.5 gap-x-2 sm:gap-x-3 text-xs sm:text-sm">
                       <span className="text-muted-foreground">範圍類型</span>
                       <span>
                         {{ all: "全部（完整權限）", organization: "依組織", project: "依專案" }[adminScopeType] || adminScopeType}
@@ -1116,9 +1118,9 @@ export function UserFormDialog({
 
                 {/* Project assignments summary (not for admin role) */}
                 {form.role !== "admin" && (
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                <div className="rounded-lg border bg-muted/30 p-3 sm:p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-medium mb-2 sm:mb-3">
+                    <FolderOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                     專案與審核角色
                     <Badge variant="secondary" className="text-xs ml-auto">
                       {assignments.length} 個專案
@@ -1156,34 +1158,37 @@ export function UserFormDialog({
           </div>
 
           {/* Footer: left button | center step | right button */}
-          <div className="grid grid-cols-3 items-center border-t pt-3">
+          <div className="grid grid-cols-3 items-center border-t pt-2 sm:pt-3 shrink-0">
             {/* Left */}
             <div className="flex justify-start">
               {step === 1 ? (
-                <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3" onClick={() => onOpenChange(false)}>
                   取消
                 </Button>
               ) : step === 2 ? (
-                <Button variant="outline" size="sm" onClick={() => setStep(1)}>
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  上一步
+                <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3" onClick={() => setStep(1)}>
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                  <span className="hidden sm:inline">上一步</span>
+                  <span className="sm:hidden">上一步</span>
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => setStep(needsStep2 ? 2 : 1)}>
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  上一步
+                <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3" onClick={() => setStep(needsStep2 ? 2 : 1)}>
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                  <span className="hidden sm:inline">上一步</span>
+                  <span className="sm:hidden">上一步</span>
                 </Button>
               )}
             </div>
             {/* Center */}
-            <div className="flex justify-center text-xs text-muted-foreground">
-              步驟 {displayStep} / {totalSteps}
+            <div className="flex justify-center text-[10px] sm:text-xs text-muted-foreground">
+              {displayStep} / {totalSteps}
             </div>
             {/* Right */}
             <div className="flex justify-end">
               {step === 1 && (
                 <Button
                   size="sm"
+                  className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
                   onClick={() => {
                     if (needsStep2) {
                       goToStep2()
@@ -1210,19 +1215,19 @@ export function UserFormDialog({
                   disabled={!isStep1Valid}
                 >
                   下一步
-                  <ChevronRight className="h-4 w-4 ml-1" />
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-0.5 sm:ml-1" />
                 </Button>
               )}
               {step === 2 && (
-                <Button size="sm" onClick={() => setStep(3)}>
+                <Button size="sm" className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3" onClick={() => setStep(3)}>
                   下一步
-                  <ChevronRight className="h-4 w-4 ml-1" />
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-0.5 sm:ml-1" />
                 </Button>
               )}
               {step === 3 && (
-                <Button size="sm" onClick={handleSave} disabled={saving}>
-                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  <ShieldCheck className="h-4 w-4 mr-1" />
+                <Button size="sm" className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3" onClick={handleSave} disabled={saving}>
+                  {saving && <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin mr-1 sm:mr-2" />}
+                  <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
                   {mode === "create" ? "確認建立" : "確認儲存"}
                 </Button>
               )}
@@ -1233,13 +1238,13 @@ export function UserFormDialog({
 
       {/* LDAP Picker Dialog (nested) */}
       <Dialog open={ldapPickerOpen} onOpenChange={setLdapPickerOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Network className="h-4 w-4" />
               從 AD 組織架構選擇
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               選擇 domain 後瀏覽組織樹，點擊成員即可帶入表單。
             </DialogDescription>
           </DialogHeader>

@@ -89,8 +89,9 @@ function TreeNode({
   if (!isVisible(ou)) return null
   const isOpen = expanded.has(ou.dn)
   const hasChildren = ou.children.length > 0 || ou.members.length > 0
-  const padding = compact ? "py-1" : "py-1.5"
-  const fontSize = compact ? "text-xs" : "text-sm"
+  const padding = compact ? "py-0.5 sm:py-1" : "py-1 sm:py-1.5"
+  const fontSize = compact ? "text-[11px] sm:text-xs" : "text-xs sm:text-sm"
+  const indent = typeof window !== "undefined" && window.innerWidth < 640 ? 12 : 16
 
   return (
     <div>
@@ -98,27 +99,27 @@ function TreeNode({
         type="button"
         onClick={() => toggleExpand(ou.dn)}
         className={cn(
-          "w-full flex items-center gap-1.5 px-2 hover:bg-muted/60 rounded transition-colors text-left",
+          "w-full flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 hover:bg-muted/60 rounded transition-colors text-left",
           padding,
           fontSize,
         )}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        style={{ paddingLeft: `${depth * indent + 6}px` }}
       >
         {hasChildren ? (
           isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <ChevronDown className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground shrink-0" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground shrink-0" />
           )
         ) : (
-          <span className="w-3.5 shrink-0" />
+          <span className="w-3 sm:w-3.5 shrink-0" />
         )}
-        <Building2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+        <Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-500 shrink-0" />
         <span className="truncate font-medium">{ou.name}</span>
-        <span className="ml-auto text-xs text-muted-foreground shrink-0">
+        <span className="ml-auto text-[10px] sm:text-xs text-muted-foreground shrink-0">
           {ou.memberCount > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <Users className="h-3 w-3" />
+            <span className="inline-flex items-center gap-0.5 sm:gap-1">
+              <Users className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               {ou.memberCount}
             </span>
           )}
@@ -149,18 +150,18 @@ function TreeNode({
                 }
                 disabled={!onSelectMember}
                 className={cn(
-                  "w-full flex items-center gap-1.5 px-2 text-left rounded transition-colors",
+                  "w-full flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 text-left rounded transition-colors",
                   padding,
                   fontSize,
                   onSelectMember
                     ? "hover:bg-blue-50 cursor-pointer"
                     : "cursor-default",
                 )}
-                style={{ paddingLeft: `${depth * 16 + 28}px` }}
+                style={{ paddingLeft: `${depth * indent + 22}px` }}
               >
-                <UserIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <UserIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground shrink-0" />
                 <span className="truncate">{m.displayName}</span>
-                <span className="ml-auto text-xs text-muted-foreground font-mono shrink-0">
+                <span className="ml-auto text-[10px] sm:text-xs text-muted-foreground font-mono shrink-0">
                   {m.username}
                 </span>
               </button>
@@ -319,11 +320,11 @@ export function LdapTreePicker({
 
   return (
     <div className="flex flex-col gap-3 min-h-0">
-      {/* Domain selector + search + refresh */}
-      <div className="flex items-center gap-2">
+      {/* Domain selector + refresh */}
+      <div className="flex items-center gap-1.5 sm:gap-2">
         {showDomainSelector && (
           <Select value={domain} onValueChange={(v) => setDomain(v as LdapDomain)}>
-            <SelectTrigger className="w-[220px] h-9">
+            <SelectTrigger className="w-[140px] sm:w-[220px] h-8 sm:h-9 text-xs sm:text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -335,39 +336,41 @@ export function LdapTreePicker({
             </SelectContent>
           </Select>
         )}
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="搜尋部門或成員..."
-            className="pl-9 h-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
         <Button
           variant="outline"
           size="sm"
           onClick={fetchTree}
           disabled={loading}
-          className="h-9 shrink-0"
+          className="h-8 sm:h-9 shrink-0 text-xs sm:text-sm px-2 sm:px-3"
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "重新載入"}
+          {loading ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : "重新載入"}
         </Button>
+      </div>
+
+      {/* Search */}
+      <div className="relative w-full">
+        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="搜尋部門或成員..."
+          className="pl-9 h-8 sm:h-9 text-xs sm:text-sm"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {/* Stats */}
       {tree && !loading && (
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1">
-            <Building2 className="h-3.5 w-3.5" />
+            <Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             {tree.totalDepartments ?? 0} 部門
           </span>
           <span className="inline-flex items-center gap-1">
-            <Users className="h-3.5 w-3.5" />
+            <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             {tree.totalMembers ?? 0} 成員
           </span>
           {search && matchedMemberIds && (
-            <span className="text-blue-600">已找到 {matchedMemberIds.size} 位符合成員</span>
+            <span className="text-blue-600 text-[10px] sm:text-sm">找到 {matchedMemberIds.size} 位</span>
           )}
         </div>
       )}

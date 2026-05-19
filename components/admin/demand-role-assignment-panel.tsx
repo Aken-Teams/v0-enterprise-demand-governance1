@@ -125,7 +125,7 @@ export function DemandRoleAssignmentPanel({
   return (
     <div className="flex flex-col gap-3 min-h-0">
       {/* Summary */}
-      <div className="flex items-center gap-2 flex-wrap text-sm">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs sm:text-sm">
         <span className="text-muted-foreground">已選 {value.length} 個專案</span>
         {value.length > 0 && (
           <>
@@ -155,11 +155,11 @@ export function DemandRoleAssignmentPanel({
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         {orgOptions.length > 1 && (
           <Select value={orgFilter} onValueChange={setOrgFilter}>
-            <SelectTrigger className="w-[160px] h-9 text-xs shrink-0">
-              <Building2 className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
+            <SelectTrigger className="w-[120px] sm:w-[160px] h-8 sm:h-9 text-xs shrink-0">
+              <Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-muted-foreground" />
               <SelectValue placeholder="全部組織" />
             </SelectTrigger>
             <SelectContent>
@@ -174,7 +174,7 @@ export function DemandRoleAssignmentPanel({
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="搜尋專案編號或標題..."
-            className="pl-9 h-9"
+            className="pl-9 h-8 sm:h-9 text-xs sm:text-sm"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -197,7 +197,7 @@ export function DemandRoleAssignmentPanel({
                 <div
                   key={d.id}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 transition-colors",
+                    "flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 transition-colors",
                     isChecked ? "bg-blue-50/50" : "hover:bg-muted/40",
                   )}
                 >
@@ -207,27 +207,27 @@ export function DemandRoleAssignmentPanel({
                     className="shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-muted-foreground shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                      <span className="text-[10px] sm:text-xs font-mono text-muted-foreground shrink-0">
                         {d.demandNumber}
                       </span>
-                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded", STATUS_BADGE[d.status] || "bg-gray-100 text-gray-600")}>
+                      <span className={cn("text-[10px] px-1 sm:px-1.5 py-0.5 rounded", STATUS_BADGE[d.status] || "bg-gray-100 text-gray-600")}>
                         {STATUS_LABEL[d.status] || d.status}
                       </span>
                       {d.organization && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="hidden sm:inline text-[10px] text-muted-foreground">
                           {d.organization}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm truncate mt-0.5">{d.title}</p>
+                    <p className="text-xs sm:text-sm truncate mt-0.5">{d.title}</p>
                   </div>
                   {isChecked && (
                     <Select
                       value={role}
                       onValueChange={(v) => changeRole(d.id, v as SignoffRole)}
                     >
-                      <SelectTrigger className="w-[100px] h-8 text-xs shrink-0 bg-blue-50 border-blue-200 text-blue-700 font-medium">
+                      <SelectTrigger className="w-[80px] sm:w-[100px] h-7 sm:h-8 text-[10px] sm:text-xs shrink-0 bg-blue-50 border-blue-200 text-blue-700 font-medium">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

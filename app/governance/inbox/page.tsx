@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -28,6 +28,7 @@ import {
   Paperclip, User, MoreHorizontal, Eye, Trash2,
   ClipboardList, Code2, CircleCheckBig, ChevronLeft, ChevronRight,
   ChevronsUpDown, Check, PauseCircle, PlayCircle, AlertTriangle,
+  SlidersHorizontal, X,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -116,6 +117,7 @@ export default function InboxPage() {
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
   const [submitterOpen, setSubmitterOpen] = useState(false)
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Demand | null>(null)
   const [holdTarget, setHoldTarget] = useState<Demand | null>(null)
   const [holdReason, setHoldReason] = useState("")
@@ -285,13 +287,13 @@ export default function InboxPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+      <div className="space-y-3 sm:space-y-6">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">
               {canSeeAll ? "需求管理" : "需求列表"}
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
+            <p className="hidden sm:block text-sm sm:text-base text-muted-foreground">
               {isViewer ? "查看所有需求與開發進度" : isAdmin ? "建立與追蹤所有需求的開案流程" : "查看指派給您的需求與開發進度"}
             </p>
           </div>
@@ -314,22 +316,22 @@ export default function InboxPage() {
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
             { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
           ].map((item) => (
-            <div key={item.label} className={`flex items-center gap-3 sm:gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-3 sm:p-4`}>
-              <span className="text-2xl sm:text-3xl font-bold">{item.value}</span>
+            <div key={item.label} className={`flex items-center gap-2 sm:gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-2 sm:p-4`}>
+              <span className="text-xl sm:text-3xl font-bold">{item.value}</span>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <p className="font-medium text-xs sm:text-sm">{item.label}</p>
+                <div className="flex items-center gap-1">
+                  <item.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                  <p className="font-medium text-[11px] sm:text-sm">{item.label}</p>
                 </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">{item.sub}</p>
+                <p className="text-[9px] sm:text-xs text-muted-foreground hidden sm:block">{item.sub}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Filter Bar: search left, filters right */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg bg-muted/50 p-3">
-          <div className="relative w-full sm:w-80">
+        {/* Filter Bar — Desktop */}
+        <div className="hidden sm:flex flex-row items-center justify-between rounded-lg bg-muted/50 p-3 gap-3">
+          <div className="relative w-80">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="搜尋需求標題、編號或子公司..."
@@ -342,10 +344,9 @@ export default function InboxPage() {
             {canSeeAll && orgOptions.length > 0 && (
               <Select value={filterOrg} onValueChange={(v) => {
                 setFilterOrg(v)
-                // Reset submitter when org changes (selected submitter may not belong to new org)
                 setFilterSubmitter("all")
               }}>
-                <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
+                <SelectTrigger className="w-auto min-w-[140px]">
                   <SelectValue placeholder="組織" />
                 </SelectTrigger>
                 <SelectContent>
@@ -359,7 +360,7 @@ export default function InboxPage() {
             {canSeeAll && (
               <Popover open={submitterOpen} onOpenChange={setSubmitterOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={submitterOpen} className="w-auto min-w-[100px] sm:w-[160px] justify-between font-normal">
+                  <Button variant="outline" role="combobox" aria-expanded={submitterOpen} className="w-auto min-w-[160px] justify-between font-normal">
                     <span className="truncate">
                       {filterSubmitter === "all"
                         ? "全部需求者"
@@ -403,7 +404,7 @@ export default function InboxPage() {
             )}
             {canSeeAll && (
               <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
-                <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
+                <SelectTrigger className="w-auto min-w-[140px]">
                   <SelectValue placeholder="開發者" />
                 </SelectTrigger>
                 <SelectContent>
@@ -416,7 +417,7 @@ export default function InboxPage() {
               </Select>
             )}
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
+              <SelectTrigger className="w-auto min-w-[140px]">
                 <SelectValue placeholder="狀態" />
               </SelectTrigger>
               <SelectContent>
@@ -430,7 +431,7 @@ export default function InboxPage() {
             </Select>
             {(isAdmin || user?.role === "delivery") && (
               <Select value={filterSignoff} onValueChange={setFilterSignoff}>
-                <SelectTrigger className="w-auto min-w-[100px] sm:w-[140px]">
+                <SelectTrigger className="w-auto min-w-[140px]">
                   <SelectValue placeholder="審核狀態" />
                 </SelectTrigger>
                 <SelectContent>
@@ -457,6 +458,135 @@ export default function InboxPage() {
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Filter Bar — Mobile */}
+        <div className="sm:hidden space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="搜尋標題、編號..."
+                className="pl-9 h-8 text-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button
+              variant={hasActiveFilters ? "default" : "outline"}
+              size="sm"
+              className="h-8 px-2.5 shrink-0"
+              onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              {hasActiveFilters && (
+                <span className="ml-1 text-xs">{[filterOrg, filterSubmitter, filterDeveloper, filterStatus, filterSignoff].filter(v => v !== "all").length}</span>
+              )}
+            </Button>
+          </div>
+          {mobileFilterOpen && (
+            <div className="rounded-lg border bg-card p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">篩選條件</span>
+                <div className="flex items-center gap-1">
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-muted-foreground"
+                      onClick={() => {
+                        setFilterStatus("all")
+                        setFilterOrg("all")
+                        setFilterSubmitter("all")
+                        setFilterDeveloper("all")
+                        setFilterSignoff("all")
+                      }}
+                    >
+                      清除
+                    </Button>
+                  )}
+                  <button onClick={() => setMobileFilterOpen(false)} className="text-muted-foreground hover:text-foreground p-0.5">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {canSeeAll && orgOptions.length > 0 && (
+                  <Select value={filterOrg} onValueChange={(v) => { setFilterOrg(v); setFilterSubmitter("all") }}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="組織" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部組織</SelectItem>
+                      {orgOptions.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {canSeeAll && (
+                  <Select
+                    value={filterSubmitter}
+                    onValueChange={setFilterSubmitter}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="需求者" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部需求者</SelectItem>
+                      {submitterGroups.map(([orgName, users]) => (
+                        <SelectGroup key={orgName}>
+                          <SelectLabel className="text-[10px] text-muted-foreground px-2">{orgName}</SelectLabel>
+                          {users.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {canSeeAll && (
+                  <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="開發者" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部開發者</SelectItem>
+                      <SelectItem value="unassigned">尚未指派</SelectItem>
+                      {developerOptions.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="狀態" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部狀態</SelectItem>
+                    {Object.entries(STATUS_MAP).map(([key, info]) => (
+                      <SelectItem key={key} value={key}>
+                        {info.label} ({getCount(key)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(isAdmin || user?.role === "delivery") && (
+                  <Select value={filterSignoff} onValueChange={setFilterSignoff}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="審核" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部審核</SelectItem>
+                      <SelectItem value="approved">已通過</SelectItem>
+                      <SelectItem value="rejected">已駁回</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Demand List */}
@@ -486,12 +616,12 @@ export default function InboxPage() {
           </Card>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3">
               {paginatedDemands.map((demand) => {
                 const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
                 return (
                   <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
-                    <CardContent className="px-4 py-3 space-y-2">
+                    <CardContent className="px-3 py-2 sm:px-4 sm:py-3 space-y-1.5 sm:space-y-2">
                       {/* Row 1: number + status */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
