@@ -1238,17 +1238,17 @@ export default function DemandDetailPage() {
           </div>
 
           {/* 概覽 Tab */}
-          <TabsContent value="overview" className="mt-4">
-            <div className="grid gap-6 lg:grid-cols-3">
+          <TabsContent value="overview" className="mt-3 sm:mt-4">
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
               {/* Left column */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 {/* Phase-specific action cards */}
                 {isAdminWithWrite && demand.status === "SP_REVIEW" && (
                   <Collapsible open={spPlanOpen ?? false} onOpenChange={setSpPlanOpen}>
                     <Card className="border-orange-200">
-                      <CardHeader className="pb-3">
+                      <CardHeader className="px-4 sm:px-6 pb-3">
                         <div className="flex items-center justify-between">
-                          <CardTitle className="text-base flex items-center gap-2">
+                          <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                             <BarChart3 className="h-4 w-4 text-orange-600" />
                             SP 與時程規劃
                           </CardTitle>
@@ -1284,23 +1284,23 @@ export default function DemandDetailPage() {
 
                 {isAdminWithWrite && demand.status === "PRD_REVIEW" && (!demand.manager || !demand.developer) && (
                   <Card className="border-amber-200">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
+                    <CardHeader className="px-4 sm:px-6 pb-3">
+                      <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                         <UserPlus className="h-4 w-4 text-amber-600" />
                         指派團隊成員
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground">請在右側基本資訊區塊指派 PM 與工程師</p>
+                      <p className="text-xs text-muted-foreground">請在下方基本資訊區塊指派 PM 與工程師</p>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-4 sm:px-6">
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm">
                           <div className={cn("h-2 w-2 rounded-full", demand.manager ? "bg-emerald-500" : "bg-amber-400")} />
                           <span>PM：</span>
                           <span className={demand.manager ? "font-medium" : "text-muted-foreground"}>
                             {demand.manager?.name || "尚未指派"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm">
                           <div className={cn("h-2 w-2 rounded-full", demand.developer ? "bg-emerald-500" : "bg-amber-400")} />
                           <span>工程師：</span>
                           <span className={demand.developer ? "font-medium" : "text-muted-foreground"}>
@@ -1317,9 +1317,9 @@ export default function DemandDetailPage() {
                   return (
                     <Collapsible open={subTasksOpen ?? false} onOpenChange={setSubTasksOpen}>
                       <Card className="border-violet-200">
-                        <CardHeader className="pb-3">
+                        <CardHeader className="px-4 sm:px-6 pb-3">
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-base flex items-center gap-2">
+                            <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                               <GanttChart className="h-4 w-4 text-violet-600" />
                               開發任務管理
                             </CardTitle>
@@ -1354,13 +1354,13 @@ export default function DemandDetailPage() {
 
                 {/* 需求說明 (always shown) */}
                 <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
+                  <CardHeader className="px-4 sm:px-6 pb-3">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                       <FileText className="h-4 w-4" />
                       需求說明
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-0">
+                  <CardContent className="px-4 sm:px-6 space-y-0">
                     <div className="pb-4 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -1421,21 +1421,21 @@ export default function DemandDetailPage() {
               </div>
 
               {/* Right column */}
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* 基本資訊 */}
                 <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">基本資訊</CardTitle>
+                  <CardHeader className="px-4 sm:px-6 pb-3">
+                    <CardTitle className="text-sm sm:text-base">基本資訊</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground w-16 shrink-0">子公司</span>
+                  <CardContent className="px-4 sm:px-6 space-y-2.5 sm:space-y-3">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-14 sm:w-16 shrink-0">子公司</span>
                       <span className="font-medium">{demand.organization.name}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground w-16 shrink-0">PM</span>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-14 sm:w-16 shrink-0">PM</span>
                       {isAdminWithWrite && !isClosed && staffUsers.length > 0 ? (
                         <Select
                           value={demand.manager?.id || "none"}
@@ -1462,9 +1462,9 @@ export default function DemandDetailPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground w-16 shrink-0">工程師</span>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-14 sm:w-16 shrink-0">工程師</span>
                       {isAdminWithWrite && !isClosed && staffUsers.length > 0 ? (
                         <Select
                           value={demand.developer?.id || "none"}
@@ -1491,9 +1491,9 @@ export default function DemandDetailPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground w-16 shrink-0">需求窗口</span>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-14 sm:w-16 shrink-0">需求窗口</span>
                       {isAdminWithWrite && !isClosed ? (
                         <Select
                           value={demand.contactPerson?.id || "none"}
@@ -1515,9 +1515,9 @@ export default function DemandDetailPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground w-16 shrink-0">需求主管</span>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-14 sm:w-16 shrink-0">需求主管</span>
                       {isAdminWithWrite && !isClosed ? (
                         <Select
                           value={demand.demandManager?.id || "none"}
@@ -1540,9 +1540,9 @@ export default function DemandDetailPage() {
                       )}
                     </div>
                     <hr className="border-border/60" />
-                    <div className="flex items-center gap-2 text-sm">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground w-16 shrink-0">估計 SP</span>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-14 sm:w-16 shrink-0">估計 SP</span>
                       {demand.confirmedSp !== null && demand.confirmedSp !== demand.estimatedSp ? (
                         <span className="font-medium">
                           {demand.estimatedSp}
@@ -1568,15 +1568,15 @@ export default function DemandDetailPage() {
                       } catch { return null }
                     })()}
                     <hr className="border-border/60" />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center gap-1.5 text-sm">
-                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="flex items-center gap-1.5 text-xs sm:text-sm">
+                        <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
                         <span className="text-muted-foreground shrink-0">開案時間</span>
                         <span className="font-medium">{formatDate(demand.phasePlans.find(p => p.phase === "SUBMITTED")?.plannedStart ?? demand.createdAt)}</span>
                       </div>
                       {demand.desiredDate && (
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm">
+                          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
                           <span className="text-muted-foreground shrink-0">希望完成</span>
                           <span className="font-medium">{formatDate(demand.desiredDate)}</span>
                         </div>
@@ -1584,8 +1584,8 @@ export default function DemandDetailPage() {
                     </div>
                     {demand.status === "CLOSED" && isAdminWithWrite && (
                       <div className="space-y-1.5">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="flex items-center gap-2 text-xs sm:text-sm">
+                          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
                           <span className="text-muted-foreground shrink-0">實際結案日期</span>
                         </div>
                         <input
@@ -1609,8 +1609,8 @@ export default function DemandDetailPage() {
                       </div>
                     )}
                     {demand.status === "CLOSED" && user?.role !== "admin" && demand.completedDate && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex items-center gap-2 text-xs sm:text-sm">
+                        <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
                         <span className="text-muted-foreground shrink-0">實際結案</span>
                         <span className="font-medium">{formatDate(demand.completedDate)}</span>
                       </div>
@@ -1620,10 +1620,10 @@ export default function DemandDetailPage() {
 
                 {/* SP 分配 */}
                 <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">SP 分配</CardTitle>
+                  <CardHeader className="px-4 sm:px-6 pb-3">
+                    <CardTitle className="text-sm sm:text-base">SP 分配</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-4 sm:px-6">
                     <SpAllocationChart
                       phasePlans={demand.phasePlans}
                       totalSp={demand.confirmedSp ?? demand.estimatedSp}
@@ -1636,23 +1636,23 @@ export default function DemandDetailPage() {
           </TabsContent>
 
           {/* 甘特圖 Tab */}
-          <TabsContent value="gantt" className="mt-4">
+          <TabsContent value="gantt" className="mt-3 sm:mt-4">
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className="px-4 sm:px-6 pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                     <GanttChart className="h-4 w-4" />
                     甘特圖
                   </CardTitle>
                   {isAdminWithWrite && !isClosed && (
-                    <Button variant="outline" size="sm" onClick={() => setSpPlanDialogOpen(true)}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                    <Button variant="outline" size="sm" className="h-7 sm:h-8 text-xs" onClick={() => setSpPlanDialogOpen(true)}>
+                      <Pencil className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                       編輯時程
                     </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-6 overflow-x-auto">
                 <ProjectGantt
                   phasePlans={demand.phasePlans}
                   currentStatus={demand.status}
@@ -1667,7 +1667,7 @@ export default function DemandDetailPage() {
 
             {/* SP 時程編輯 Dialog */}
             <Dialog open={spPlanDialogOpen} onOpenChange={setSpPlanDialogOpen}>
-              <DialogContent className="sm:max-w-4xl w-[95vw]">
+              <DialogContent className="sm:max-w-4xl w-[calc(100%-1rem)] sm:w-[95vw] p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-orange-600" />
@@ -1693,7 +1693,7 @@ export default function DemandDetailPage() {
           </TabsContent>
 
           {/* 交付成果 Tab */}
-          <TabsContent value="deliverables" className="mt-4">
+          <TabsContent value="deliverables" className="mt-3 sm:mt-4">
             {(() => {
               const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
               const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
@@ -1702,10 +1702,10 @@ export default function DemandDetailPage() {
               if (deliverables.length === 0) {
                 return (
                   <Card>
-                    <CardContent className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground">
-                      <Package className="h-12 w-12 mb-3 opacity-20" />
-                      <p className="text-sm">尚無交付成果</p>
-                      <p className="text-xs mt-1">在「開發中」或「MVP 架構確認」階段上傳 APP 成果連結後會自動顯示</p>
+                    <CardContent className="flex flex-col items-center justify-center min-h-[150px] sm:min-h-[200px] text-muted-foreground">
+                      <Package className="h-10 w-10 sm:h-12 sm:w-12 mb-3 opacity-20" />
+                      <p className="text-xs sm:text-sm">尚無交付成果</p>
+                      <p className="text-[10px] sm:text-xs mt-1 text-center px-4">在「開發中」或「MVP 架構確認」階段上傳 APP 成果連結後會自動顯示</p>
                     </CardContent>
                   </Card>
                 )
@@ -1714,17 +1714,17 @@ export default function DemandDetailPage() {
               return (
                 <Card>
                   <CardContent className="p-0">
-                    <div className="relative min-h-[520px]">
-                      <div className="w-full min-h-[520px] flex flex-col">
-                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
-                          <p className="text-xs text-muted-foreground truncate flex-1">{deliverables[0].fileUrl}</p>
+                    <div className="relative min-h-[300px] sm:min-h-[520px]">
+                      <div className="w-full min-h-[300px] sm:min-h-[520px] flex flex-col">
+                        <div className="flex items-center justify-between px-2 sm:px-3 py-2 border-b bg-muted/30">
+                          <p className="text-[10px] sm:text-xs text-muted-foreground truncate flex-1">{deliverables[0].fileUrl}</p>
                           <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" asChild>
                             <a href={deliverables[0].fileUrl!} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="h-3 w-3 mr-1" />新分頁
                             </a>
                           </Button>
                         </div>
-                        <iframe src={deliverables[0].fileUrl!} className="flex-1 w-full min-h-[490px] border-0" title="APP 預覽" />
+                        <iframe src={deliverables[0].fileUrl!} className="flex-1 w-full min-h-[260px] sm:min-h-[490px] border-0" title="APP 預覽" />
                       </div>
                       <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />
                     </div>
@@ -1735,17 +1735,22 @@ export default function DemandDetailPage() {
           </TabsContent>
 
           {/* 文件 Tab */}
-          <TabsContent value="documents" className="mt-4">
-            <div className="grid gap-6 lg:grid-cols-5">
-              {/* Preview pane */}
-              <div className="lg:col-span-3">
+          <TabsContent value="documents" className="mt-3 sm:mt-4">
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
+              {/* Preview pane (hidden on mobile until doc selected) */}
+              <div className={cn("lg:col-span-3 order-2 lg:order-1", !selectedDoc && "hidden lg:block")}>
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
-                      <div className="relative min-h-[520px] h-full">
+                      <div className="relative min-h-[300px] sm:min-h-[520px] h-full">
                         {/* Preview toolbar */}
-                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/20">
-                          <span className="text-xs text-muted-foreground truncate">{selectedDoc.fileName}</span>
+                        <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 lg:hidden" onClick={() => setSelectedDoc(null)}>
+                              <ArrowLeft className="h-3.5 w-3.5" />
+                            </Button>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground truncate">{selectedDoc.fileName}</span>
+                          </div>
                           <div className="flex items-center gap-1">
                             <TooltipProvider>
                               <Tooltip>
@@ -1786,7 +1791,7 @@ export default function DemandDetailPage() {
                             </TooltipProvider>
                           </div>
                         </div>
-                        <div className="h-full min-h-[520px] flex items-center justify-center p-4 overflow-hidden">
+                        <div className="h-full min-h-[300px] sm:min-h-[520px] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
                           {(() => {
                             const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
                             const url = selectedDoc.fileUrl
@@ -1820,9 +1825,9 @@ export default function DemandDetailPage() {
 
                             if (isExternalLink) {
                               return (
-                                <div className="w-full h-full min-h-[520px] flex flex-col">
-                                  <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
-                                    <p className="text-xs text-muted-foreground truncate flex-1">{url}</p>
+                                <div className="w-full h-full min-h-[300px] sm:min-h-[520px] flex flex-col">
+                                  <div className="flex items-center justify-between px-2 sm:px-3 py-2 border-b bg-muted/30">
+                                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate flex-1">{url}</p>
                                     <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" asChild>
                                       <a href={url!} target="_blank" rel="noopener noreferrer">
                                         <ExternalLink className="h-3 w-3 mr-1" />新分頁
@@ -1850,7 +1855,7 @@ export default function DemandDetailPage() {
                             }
 
                             if (ext === "pdf") {
-                              return <iframe src={`${url}#toolbar=0&navpanes=0`} className="w-full h-full min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
+                              return <iframe src={`${url}#toolbar=0&navpanes=0`} className="w-full h-full min-h-[300px] sm:min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
                             }
 
                             if (["mp4", "webm"].includes(ext)) {
@@ -1882,7 +1887,7 @@ export default function DemandDetailPage() {
                               }
                               if (ext === "md") {
                                 return (
-                                  <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                                  <div className="w-full max-h-[300px] sm:max-h-[520px] overflow-auto p-3 sm:p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                                     <ReactMarkdown
                                       remarkPlugins={[remarkGfm, remarkBreaks]}
                                       rehypePlugins={[rehypeRaw]}
@@ -1939,7 +1944,7 @@ export default function DemandDetailPage() {
                                 )
                               }
                               if (officePreviewUrl) {
-                                return <iframe src={`${officePreviewUrl}#toolbar=0&navpanes=0`} className="w-full h-full min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
+                                return <iframe src={`${officePreviewUrl}#toolbar=0&navpanes=0`} className="w-full h-full min-h-[300px] sm:min-h-[520px] rounded border-0" title={selectedDoc.fileName} />
                               }
                               return (
                                 <div className="text-center space-y-3">
@@ -1977,9 +1982,9 @@ export default function DemandDetailPage() {
                         />
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center min-h-[520px] text-muted-foreground">
-                        <Eye className="h-12 w-12 mb-3 opacity-20" />
-                        <p className="text-sm">請選擇文件以預覽</p>
+                      <div className="flex flex-col items-center justify-center min-h-[200px] sm:min-h-[520px] text-muted-foreground">
+                        <Eye className="h-10 w-10 sm:h-12 sm:w-12 mb-3 opacity-20" />
+                        <p className="text-xs sm:text-sm">請選擇文件以預覽</p>
                       </div>
                     )}
                   </CardContent>
@@ -1987,11 +1992,11 @@ export default function DemandDetailPage() {
               </div>
 
               {/* Document list */}
-              <div className="lg:col-span-2">
+              <div className={cn("lg:col-span-2 order-1 lg:order-2", selectedDoc && "hidden lg:block")}>
                 <Card>
-                  <CardHeader className="pb-3">
+                  <CardHeader className="px-4 sm:px-6 pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">階段文件</CardTitle>
+                      <CardTitle className="text-sm sm:text-base">階段文件</CardTitle>
                       {effectiveCanManage && (
                         <Button variant="outline" size="sm" id="doc-upload-trigger">
                           <Upload className="h-4 w-4 mr-1.5" />
@@ -2000,7 +2005,7 @@ export default function DemandDetailPage() {
                       )}
                     </div>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-4 sm:px-6">
                     <PhaseDocuments
                       key={`${demand.status}-${docPhaseKey}`}
                       documents={demand.documents}
@@ -2023,15 +2028,15 @@ export default function DemandDetailPage() {
           </TabsContent>
 
           {/* 簽核紀錄 Tab */}
-          <TabsContent value="signoffs" className="mt-4">
+          <TabsContent value="signoffs" className="mt-3 sm:mt-4">
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
+              <CardHeader className="px-4 sm:px-6 pb-3">
+                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                   <ClipboardCheck className="h-4 w-4" />
                   簽核紀錄
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 sm:px-6">
                 <SignoffHistory
                   signoffs={demand.phaseSignoffs || []}
                   demandId={demand.id}
@@ -2129,10 +2134,10 @@ export default function DemandDetailPage() {
 
       {/* Board override dialog */}
       <AlertDialog open={boardOverrideOpen} onOpenChange={(open) => { setBoardOverrideOpen(open); if (!open) setBoardOverrideComment("") }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle>專案 Master 代簽</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-base sm:text-lg">專案 Master 代簽</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm">
               將通知專案 Master（董事會成員）代為確認{boardOverrideKind === "DESIGN_CHANGE" ? "設計變更" : "階段"}簽核。Master 確認後，其餘待確認簽核將自動略過。請填寫代簽原因。
             </AlertDialogDescription>
           </AlertDialogHeader>

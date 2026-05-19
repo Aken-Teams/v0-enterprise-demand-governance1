@@ -274,14 +274,14 @@ export function StepNavigation({
       {isSignoffPhase && !hideSignoffIndicator && (
         <div className="space-y-2">
           {hasPendingSignoff && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm text-amber-700">
-              <ClipboardCheck className="h-4 w-4 shrink-0" />
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-amber-700">
+              <ClipboardCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
               <span>等待需求者簽核確認中</span>
             </div>
           )}
           {isApproved && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-700">
-              <Check className="h-4 w-4 shrink-0" />
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-emerald-700">
+              <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
               <span>需求者已簽核確認</span>
             </div>
           )}
@@ -289,15 +289,15 @@ export function StepNavigation({
       )}
       {/* Re-request button (always show when rejected, even if indicator is hidden) */}
       {isSignoffPhase && canReRequest && (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/50 px-3 py-2 text-sm text-red-700">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-red-700">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
             <span>需求者已退回簽核</span>
           </div>
           <Button
             variant="outline"
             size="sm"
-            className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
+            className="h-6 sm:h-7 text-[10px] sm:text-xs border-red-300 text-red-600 hover:bg-red-50"
             onClick={() => setShowReRequestDialog(true)}
           >
             <RefreshCw className="h-3 w-3 mr-1" />
@@ -307,36 +307,38 @@ export function StepNavigation({
       )}
 
       {currentStatus === "CLOSED" && !existingCompletedDate && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm text-amber-700">
-          <Info className="h-4 w-4 shrink-0" />
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-amber-700">
+          <Info className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
           <span>請記得至下方基本資訊填寫<strong>實際結案日期</strong>，以確保交付率計算正確</span>
         </div>
       )}
       {currentStatus !== "CLOSED" && (
-        <div className="flex items-center justify-between pt-3 border-t border-border/40">
+        <div className="flex items-center justify-between pt-2.5 sm:pt-3 border-t border-border/40">
           <Button
             variant="outline"
             size="sm"
+            className="h-7 sm:h-8 text-xs sm:text-sm px-2.5 sm:px-3"
             disabled={!canGoPrev}
             onClick={() => handleClick("prev")}
           >
-            <ChevronLeft className="h-4 w-4 mr-1" />
+            <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
             上一步
           </Button>
           <Button
             size="sm"
+            className="h-7 sm:h-8 text-xs sm:text-sm px-2.5 sm:px-3"
             disabled={!canGoNext}
             onClick={() => handleClick("next")}
           >
             下一步
-            <ChevronRight className="h-4 w-4 ml-1" />
+            <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-0.5 sm:ml-1" />
           </Button>
         </div>
       )}
 
       {/* Normal advance dialog */}
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <AlertDialogContent className="max-h-[85vh] flex flex-col">
+        <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle>
               {direction === "next" ? "確認進入下一階段" : "確認回到上一階段"}
@@ -405,10 +407,10 @@ export function StepNavigation({
           setInputCompletedDate("")
         }
       }}>
-        <AlertDialogContent className="max-h-[85vh] flex flex-col p-0 gap-0 sm:max-w-xl">
+        <AlertDialogContent className="max-w-[calc(100%-1rem)] sm:max-w-xl max-h-[90vh] sm:max-h-[85vh] flex flex-col p-0 gap-0">
           <AlertDialogTitle className="sr-only">結案確認</AlertDialogTitle>
           {/* Header with step indicator */}
-          <div className="border-b px-6 pt-5 pb-4 shrink-0 relative">
+          <div className="border-b px-3 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 shrink-0 relative">
             <button
               type="button"
               onClick={() => setShowClosingWizard(false)}
@@ -416,7 +418,7 @@ export function StepNavigation({
             >
               <X className="h-4 w-4" />
             </button>
-            <p className="text-sm text-muted-foreground mb-3 pr-6">
+            <p className="text-xs sm:text-sm text-muted-foreground mb-2.5 sm:mb-3 pr-6">
               將狀態從「{STATUS_MAP[currentStatus]?.label}」變更為「{STATUS_MAP["CLOSED"]?.label}」
             </p>
             {/* Step indicator */}
@@ -430,7 +432,7 @@ export function StepNavigation({
                       type="button"
                       onClick={() => i <= closingStep && setClosingStep(i)}
                       disabled={i > closingStep}
-                      className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors w-full
+                      className={`flex items-center justify-center gap-1 sm:gap-1.5 rounded-md px-1.5 sm:px-2 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium transition-colors w-full
                         ${isActive ? "bg-primary text-primary-foreground" : isDone ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer" : "bg-muted text-muted-foreground/50"}
                       `}
                     >
@@ -439,7 +441,7 @@ export function StepNavigation({
                       `}>
                         {isDone ? <Check className="h-2.5 w-2.5" /> : i + 1}
                       </span>
-                      <span className="whitespace-nowrap">{title}</span>
+                      <span className="whitespace-nowrap hidden sm:inline">{title}</span>
                     </button>
                     {i < CLOSING_STEP_TITLES.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />}
                   </div>
@@ -449,7 +451,7 @@ export function StepNavigation({
           </div>
 
           {/* Step content — scrollable */}
-          <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">
+          <div className="px-3 sm:px-6 py-3 sm:py-4 overflow-y-auto flex-1 min-h-0">
             {/* Step 1: 簽核與注意事項 */}
             {closingStep === 0 && (
               <div className="space-y-3">
@@ -702,7 +704,7 @@ export function StepNavigation({
           </div>
 
           {/* Footer with navigation */}
-          <div className="border-t px-6 py-3 flex items-center justify-between shrink-0">
+          <div className="border-t px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -750,7 +752,7 @@ export function StepNavigation({
 
       {/* Re-request signoff dialog */}
       <AlertDialog open={showReRequestDialog} onOpenChange={(open) => { setShowReRequestDialog(open); if (!open) setReRequestFiles([]) }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle>重新發起簽核</AlertDialogTitle>
             <AlertDialogDescription asChild>
@@ -816,7 +818,7 @@ export function StepNavigation({
 
       {/* Force advance dialog (when signoff is pending) */}
       <AlertDialog open={showForceDialog} onOpenChange={setShowForceDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle>需求者尚未簽核</AlertDialogTitle>
             <AlertDialogDescription asChild>
