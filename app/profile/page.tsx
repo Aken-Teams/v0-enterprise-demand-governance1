@@ -93,82 +93,84 @@ export default function ProfilePage() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6 px-1 sm:px-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">個人設定</h1>
-          <p className="text-muted-foreground">管理您的帳戶資訊</p>
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">個人設定</h1>
+          <p className="text-xs sm:text-base text-muted-foreground">管理您的帳戶資訊</p>
         </div>
 
         {/* Profile Info */}
         <Card>
-          <CardHeader>
-            <CardTitle>基本資料</CardTitle>
-            <CardDescription>您的個人資訊與聯絡方式</CardDescription>
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-sm sm:text-base">基本資料</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">您的個人資訊與聯絡方式</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4 rounded-lg border bg-muted/30 p-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <User className="h-7 w-7" />
+          <CardContent className="px-4 sm:px-6 space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-3 sm:gap-4 rounded-lg border bg-muted/30 p-3 sm:p-4">
+              <div className="flex h-10 w-10 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shrink-0">
+                <User className="h-5 w-5 sm:h-7 sm:w-7" />
               </div>
-              <div>
-                <p className="font-semibold">{profile?.name}</p>
-                <p className="text-sm text-muted-foreground">{profile?.email}</p>
+              <div className="min-w-0">
+                <p className="text-sm sm:text-base font-semibold truncate">{profile?.name}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{profile?.email}</p>
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">姓名</Label>
+            <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="name" className="text-xs sm:text-sm">姓名</Label>
                 <Input
                   id="name"
+                  className="h-8 sm:h-10 text-xs sm:text-sm"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">電子郵件</Label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="email" className="text-xs sm:text-sm">電子郵件</Label>
                 <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
+                    className="h-8 sm:h-10 text-xs sm:text-sm"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>所屬組織</Label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label className="text-xs sm:text-sm">所屬組織</Label>
                 <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <Input value={profile?.organizationName || "無"} disabled />
+                  <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-muted-foreground" />
+                  <Input className="h-8 sm:h-10 text-xs sm:text-sm" value={profile?.organizationName || "無"} disabled />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>角色</Label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label className="text-xs sm:text-sm">角色</Label>
                 <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <Input value={profile?.roleLabel || ""} disabled />
+                  <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-muted-foreground" />
+                  <Input className="h-8 sm:h-10 text-xs sm:text-sm" value={profile?.roleLabel || ""} disabled />
                 </div>
               </div>
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-xs sm:text-sm text-destructive">{error}</p>}
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-1 sm:pt-2">
               {hasChanges && (
-                <Button variant="outline" onClick={() => setForm({ name: profile!.name, email: profile!.email })}>
+                <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm" onClick={() => setForm({ name: profile!.name, email: profile!.email })}>
                   取消
                 </Button>
               )}
-              <Button onClick={handleSave} disabled={saving || !hasChanges}>
+              <Button size="sm" className="h-8 text-xs sm:text-sm" onClick={handleSave} disabled={saving || !hasChanges}>
                 {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin mr-1.5" />
                 ) : saved ? (
-                  <Check className="h-4 w-4 mr-2" />
+                  <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
                 ) : null}
                 {saved ? "已儲存" : "儲存變更"}
               </Button>
@@ -178,18 +180,18 @@ export default function ProfilePage() {
 
         {/* Account Info */}
         <Card>
-          <CardHeader>
-            <CardTitle>帳戶資訊</CardTitle>
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-sm sm:text-base">帳戶資訊</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 text-sm">
+          <CardContent className="px-4 sm:px-6">
+            <div className="grid gap-2.5 sm:gap-3 text-xs sm:text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">帳戶建立時間</span>
                 <span>{profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString("zh-TW") : "-"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">帳戶 ID</span>
-                <span className="font-mono text-xs">{profile?.id}</span>
+                <span className="font-mono text-[10px] sm:text-xs truncate ml-2 max-w-[50%]">{profile?.id}</span>
               </div>
             </div>
           </CardContent>

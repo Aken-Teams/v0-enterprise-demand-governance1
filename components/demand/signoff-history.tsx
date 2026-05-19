@@ -529,42 +529,42 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
     return (
       <div key={s.id} className={cn(
-        "space-y-2",
-        isMulti && "rounded-lg border border-border/30 bg-background/50 p-3",
+        "space-y-1.5 sm:space-y-2",
+        isMulti && "rounded-lg border border-border/30 bg-background/50 p-2 sm:p-3",
       )}>
         {/* Signer header (only for multi-signer) */}
         {isMulti && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <div className={cn(
-              "h-5 w-5 rounded-full flex items-center justify-center shrink-0",
+              "h-4 w-4 sm:h-5 sm:w-5 rounded-full flex items-center justify-center shrink-0",
               STATUS_CIRCLE_BG[s.status] || "bg-gray-100",
             )}>
-              <Icon className={cn("h-3 w-3", iconColor)} />
+              <Icon className={cn("h-2.5 w-2.5 sm:h-3 sm:w-3", iconColor)} />
             </div>
             {roleLabel && (
-              <Badge variant="outline" className="text-[10px] border-violet-200 text-violet-600 bg-violet-50">
+              <Badge variant="outline" className="text-[9px] sm:text-[10px] border-violet-200 text-violet-600 bg-violet-50">
                 {roleLabel}
               </Badge>
             )}
             {name && (
-              <span className="text-sm font-medium">{name}</span>
+              <span className="text-xs sm:text-sm font-medium">{name}</span>
             )}
             {statusInfo && (
-              <Badge className={cn("text-[10px]", statusInfo.color)}>
+              <Badge className={cn("text-[9px] sm:text-[10px]", statusInfo.color)}>
                 {statusInfo.label}
               </Badge>
             )}
             {s.respondedAt && (
-              <span className="text-[11px] text-muted-foreground/60">{fmtDate(s.respondedAt)}</span>
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground/60">{fmtDate(s.respondedAt)}</span>
             )}
           </div>
         )}
 
         {/* 審核回應 */}
         {canEditComment && editingResponseId === s.id ? (
-          <div className="space-y-2 rounded-lg border border-gray-200 bg-muted/20 p-2.5">
+          <div className="space-y-1.5 sm:space-y-2 rounded-lg border border-gray-200 bg-muted/20 p-2 sm:p-2.5">
             <textarea
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
               rows={3}
               placeholder="填寫審核回應..."
               value={editResponseText}
@@ -582,9 +582,9 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
           </div>
         ) : s.comment ? (
           <div className="group/resp">
-            <span className="text-[11px] font-medium text-muted-foreground/70">審核回應</span>
+            <span className="text-[10px] sm:text-[11px] font-medium text-muted-foreground/70">審核回應</span>
             <div className="flex items-start gap-1.5 mt-0.5">
-              <p className="text-sm text-muted-foreground/80 whitespace-pre-line bg-muted/30 rounded px-2.5 py-2 flex-1">
+              <p className="text-xs sm:text-sm text-muted-foreground/80 whitespace-pre-line bg-muted/30 rounded px-2 py-1.5 sm:px-2.5 sm:py-2 flex-1">
                 {s.comment}
               </p>
               {canEditComment && (
@@ -607,7 +607,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
           </div>
         ) : canEditComment ? (
           <button
-            className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
             onClick={() => startEditResponse(s.id, null)}
           >
             <MessageSquare className="h-3 w-3" />
@@ -619,19 +619,19 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
         {docs.length > 0 && (
           <div className="space-y-1">
             {docs.map((doc) => (
-              <div key={doc.id} className="flex items-center gap-2 rounded-md bg-white/80 border border-border/40 px-3 py-2 text-sm group/doc">
+              <div key={doc.id} className="flex items-center gap-1.5 sm:gap-2 rounded-md bg-white/80 border border-border/40 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm group/doc">
                 <a
                   href={doc.fileUrl!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 flex-1 min-w-0 hover:text-foreground transition-colors"
+                  className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 hover:text-foreground transition-colors"
                 >
                   <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
                   <span className="truncate flex-1 text-muted-foreground group-hover/doc:text-foreground">
                     {doc.fileName}
                   </span>
                   {doc.fileSize != null && (
-                    <span className="text-muted-foreground/60 shrink-0">
+                    <span className="text-muted-foreground/60 shrink-0 text-[10px] sm:text-xs">
                       {formatFileSize(doc.fileSize)}
                     </span>
                   )}
@@ -655,7 +655,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
         {canAddDocs && !isUploading && (
           <button
-            className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
             onClick={() => startUpload(s.id)}
           >
             <Paperclip className="h-3 w-3" />
@@ -664,11 +664,11 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
         )}
 
         {isUploading && (
-          <div className="space-y-2 rounded-lg border border-border/60 bg-white/50 p-2.5">
+          <div className="space-y-1.5 sm:space-y-2 rounded-lg border border-border/60 bg-white/50 p-2 sm:p-2.5">
             {pendingFiles.length > 0 && (
               <div className="space-y-1">
                 {pendingFiles.map((f, i) => (
-                  <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded bg-white border border-border/60 px-2 py-1 text-xs">
+                  <div key={`${f.name}-${i}`} className="flex items-center gap-1.5 sm:gap-2 rounded bg-white border border-border/60 px-1.5 sm:px-2 py-1 text-[10px] sm:text-xs">
                     <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
                     <span className="truncate flex-1">{f.name}</span>
                     <span className="text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
@@ -730,9 +730,9 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
     if (canEditRequestComment && editingCommentId === commentSignoff.id) {
       return (
-        <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2.5">
+        <div className="space-y-1.5 sm:space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-2 sm:p-2.5">
           <textarea
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+            className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
             rows={3}
             placeholder="說明已調整的內容..."
             value={editCommentText}
@@ -754,10 +754,10 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
     if (group.requestComment) {
       return (
         <div className="group/rc">
-          <span className="text-[11px] font-medium text-blue-500/70">提出說明</span>
+          <span className="text-[10px] sm:text-[11px] font-medium text-blue-500/70">提出說明</span>
           <div className="flex items-start gap-1.5 mt-0.5">
-            <MessageSquare className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-blue-600/80 whitespace-pre-line flex-1">{group.requestComment}</p>
+            <MessageSquare className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-400 mt-0.5 shrink-0" />
+            <p className="text-xs sm:text-sm text-blue-600/80 whitespace-pre-line flex-1">{group.requestComment}</p>
             {canEditRequestComment && (
               <div className="flex items-center gap-1 opacity-0 group-hover/rc:opacity-100 transition-opacity">
                 <button
@@ -782,7 +782,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
     if (canEditRequestComment) {
       return (
         <button
-          className="flex items-center gap-1 text-xs text-blue-400/60 hover:text-blue-500 transition-colors"
+          className="flex items-center gap-1 text-[10px] sm:text-xs text-blue-400/60 hover:text-blue-500 transition-colors"
           onClick={() => startEditComment(commentSignoff.id, null)}
         >
           <MessageSquare className="h-3 w-3" />
@@ -911,12 +911,12 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
                 return (
                   <React.Fragment key={group.key}>
                     {renderSpAdj && (
-                      <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50/50 px-3 py-2">
-                        <Coins className="h-4 w-4 text-orange-500 shrink-0" />
-                        <Badge variant="outline" className="text-[11px] border-orange-300 text-orange-700 bg-white">SP 調整</Badge>
-                        <span className="text-sm font-medium">{spAdjustment!.oldSp} → {spAdjustment!.newSp} SP</span>
+                      <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-orange-200 bg-orange-50/50 px-2 sm:px-3 py-1.5 sm:py-2 flex-wrap">
+                        <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500 shrink-0" />
+                        <Badge variant="outline" className="text-[10px] sm:text-[11px] border-orange-300 text-orange-700 bg-white">SP 調整</Badge>
+                        <span className="text-xs sm:text-sm font-medium">{spAdjustment!.oldSp} → {spAdjustment!.newSp} SP</span>
                         {spAdjustment!.reason && (
-                          <span className="text-xs text-muted-foreground ml-2">{spAdjustment!.reason}</span>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground">{spAdjustment!.reason}</span>
                         )}
                       </div>
                     )}
@@ -1011,9 +1011,9 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
                       {/* Expanded detail */}
                       {isExpanded && (
-                        <div className="px-3 pb-3 pt-0 space-y-2.5 border-t border-border/40 mx-3">
+                        <div className="px-2 sm:px-3 pb-2.5 sm:pb-3 pt-0 space-y-2 sm:space-y-2.5 border-t border-border/40 mx-2 sm:mx-3">
                           {/* Meta info */}
-                          <div className="pt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          <div className="pt-2 sm:pt-2.5 flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-[10px] sm:text-xs text-muted-foreground">
                             <span>
                               發起：<span className="font-medium text-foreground">{group.requestedBy.name}</span>
                               <span className="ml-1 text-muted-foreground/60">{fmtDate(group.requestedAt)}</span>
@@ -1060,13 +1060,13 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-8 text-xs text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+                                  className="h-7 sm:h-8 text-[10px] sm:text-xs text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-700"
                                   onClick={() => {
                                     const pending = group.signoffs.find((s) => s.status === "PENDING")
                                     if (pending) openCancelDialog(pending.id)
                                   }}
                                 >
-                                  <Undo2 className="h-3.5 w-3.5 mr-1.5" />
+                                  <Undo2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5" />
                                   撤回設計變更
                                 </Button>
                               </div>
@@ -1082,20 +1082,20 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-3 border-t border-border/40">
-              <span className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between pt-2 sm:pt-3 border-t border-border/40">
+              <span className="text-[10px] sm:text-xs text-muted-foreground">
                 共 {groups.length} 筆，第 {page}/{totalPages} 頁
               </span>
               <div className="flex items-center gap-1">
                 <button
-                  className="text-xs px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => p - 1)}
                 >
                   上一頁
                 </button>
                 <button
-                  className="text-xs px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
                 >
@@ -1112,16 +1112,16 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
         open={!!cancelSignoffId}
         onOpenChange={(open) => { if (!open) closeCancelDialog() }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle>撤回設計變更</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-base sm:text-lg">撤回設計變更</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm">
               撤回後，審核人將不再需要確認此變更，此設計變更會標記為「已撤回」並保留紀錄。請填寫撤回原因（至少 5 字），審核人會收到通知。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
             <textarea
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
               rows={3}
               placeholder="例如：需求方希望另開新案處理，不走設計變更流程"
               value={cancelReason}
@@ -1148,10 +1148,10 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
       {/* Confirm delete document dialog */}
       <AlertDialog open={!!confirmDeleteDocId} onOpenChange={(open) => { if (!open) setConfirmDeleteDocId(null) }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除文件</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-base sm:text-lg">確認刪除文件</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm">
               確定要刪除「{confirmDeleteDocName}」嗎？此操作無法復原。
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1169,10 +1169,10 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
       {/* Confirm delete 提出說明 dialog */}
       <AlertDialog open={!!confirmDeleteCommentId} onOpenChange={(open) => { if (!open) setConfirmDeleteCommentId(null) }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除提出說明</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-base sm:text-lg">確認刪除提出說明</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm">
               確定要刪除此提出說明嗎？此操作無法復原。
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1190,10 +1190,10 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
       {/* Confirm delete 審核回應 dialog */}
       <AlertDialog open={!!confirmDeleteResponseId} onOpenChange={(open) => { if (!open) setConfirmDeleteResponseId(null) }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除審核回應</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-base sm:text-lg">確認刪除審核回應</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm">
               確定要刪除此審核回應嗎？此操作無法復原。
             </AlertDialogDescription>
           </AlertDialogHeader>

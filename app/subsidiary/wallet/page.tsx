@@ -79,109 +79,139 @@ export default function WalletPage() {
 
   return (
     <AppLayout userRole="subsidiary">
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">SP 錢包</h1>
-          <p className="text-muted-foreground">管理您的 Story Points 配額與使用記錄</p>
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">SP 錢包</h1>
+          <p className="text-xs sm:text-base text-muted-foreground">管理您的 Story Points 配額與使用記錄</p>
         </div>
 
         {/* Compact summary */}
         <Card>
-          <CardContent className="pt-4 space-y-3">
+          <CardContent className="pt-3 sm:pt-4 space-y-3 px-4 sm:px-6">
             {/* Numbers row */}
-            <div className="flex items-baseline gap-6 flex-wrap">
+            <div className="flex items-baseline gap-3 sm:gap-6 flex-wrap">
               <div>
-                <span className="text-3xl font-bold text-primary tabular-nums">{availableSp}</span>
-                <span className="text-sm text-muted-foreground ml-1.5">可用</span>
+                <span className="text-2xl sm:text-3xl font-bold text-primary tabular-nums">{availableSp}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground ml-1 sm:ml-1.5">可用</span>
               </div>
               <span className="text-muted-foreground/30">/</span>
               <div>
-                <span className="text-xl font-semibold tabular-nums">{totalQuota}</span>
-                <span className="text-sm text-muted-foreground ml-1.5">配額</span>
+                <span className="text-lg sm:text-xl font-semibold tabular-nums">{totalQuota}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground ml-1 sm:ml-1.5">配額</span>
               </div>
               <span className="text-muted-foreground/30">/</span>
               <div>
-                <span className="text-xl font-semibold tabular-nums">{usedSp}</span>
-                <span className="text-sm text-muted-foreground ml-1.5">已使用</span>
+                <span className="text-lg sm:text-xl font-semibold tabular-nums">{usedSp}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground ml-1 sm:ml-1.5">已使用</span>
               </div>
             </div>
 
             {/* Stacked bar */}
             {totalQuota > 0 ? (
               <div>
-                <div className="h-3 w-full overflow-hidden rounded-full bg-secondary flex">
+                <div className="h-2.5 sm:h-3 w-full overflow-hidden rounded-full bg-secondary flex">
                   {pctUsed > 0 && (
                     <div className="h-full bg-chart-1 transition-all" style={{ width: `${pctUsed}%` }} />
                   )}
                 </div>
-                <div className="flex items-center gap-5 mt-2 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-chart-1" />已使用 {pctUsed.toFixed(0)}%
+                <div className="flex items-center gap-4 sm:gap-5 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1 sm:gap-1.5">
+                    <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-chart-1" />已使用 {pctUsed.toFixed(0)}%
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
+                  <span className="flex items-center gap-1 sm:gap-1.5">
+                    <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
                   </span>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">尚未分配年度配額</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">尚未分配年度配額</p>
             )}
           </CardContent>
         </Card>
 
         {/* Demand SP Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle>需求 SP 明細</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-sm sm:text-base">需求 SP 明細</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-0 sm:px-6">
             {demands.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-                <Inbox className="h-10 w-10" />
-                <p className="text-sm">尚無需求資料</p>
+              <div className="flex flex-col items-center gap-2 py-6 sm:py-8 text-muted-foreground px-4">
+                <Inbox className="h-8 w-8 sm:h-10 sm:w-10" />
+                <p className="text-xs sm:text-sm">尚無需求資料</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-center w-32">編號</TableHead>
-                      <TableHead className="text-center">需求名稱</TableHead>
-                      <TableHead className="text-center">狀態</TableHead>
-                      <TableHead className="text-center">SP</TableHead>
-                      <TableHead className="text-center">已消耗</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {demands.map((d) => {
-                      const si = STATUS_LABEL[d.status]
-                      return (
-                        <TableRow key={d.id}>
-                          <TableCell className="text-center">
-                            <Link
-                              href={`/subsidiary/demands/${d.id}`}
-                              className="text-sm font-mono text-primary hover:underline"
-                            >
-                              {d.demandNumber}
-                            </Link>
-                          </TableCell>
-                          <TableCell className="text-center text-sm max-w-[200px] truncate">{d.title}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary" className={cn("text-[11px]", si?.color)}>
+              <>
+                {/* Mobile: card layout */}
+                <div className="sm:hidden divide-y">
+                  {demands.map((d) => {
+                    const si = STATUS_LABEL[d.status]
+                    return (
+                      <Link
+                        key={d.id}
+                        href={`/subsidiary/demands/${d.id}`}
+                        className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-medium truncate">{d.title}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] font-mono text-muted-foreground">{d.demandNumber}</span>
+                            <Badge variant="secondary" className={cn("text-[9px] px-1 py-0 h-4", si?.color)}>
                               {si?.label ?? d.status}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="text-center font-semibold tabular-nums">{d.sp}</TableCell>
-                          <TableCell className="text-center">
-                            <span className="text-sm font-medium tabular-nums">{d.spUsed}</span>
-                            <span className="text-xs text-muted-foreground ml-1">({si?.rate})</span>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <div className="text-xs font-semibold tabular-nums">{d.sp} SP</div>
+                          <div className="text-[10px] text-muted-foreground">消耗 {d.spUsed} ({si?.rate})</div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+                {/* Desktop: table layout */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-center w-32">編號</TableHead>
+                        <TableHead className="text-center">需求名稱</TableHead>
+                        <TableHead className="text-center">狀態</TableHead>
+                        <TableHead className="text-center">SP</TableHead>
+                        <TableHead className="text-center">已消耗</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {demands.map((d) => {
+                        const si = STATUS_LABEL[d.status]
+                        return (
+                          <TableRow key={d.id}>
+                            <TableCell className="text-center">
+                              <Link
+                                href={`/subsidiary/demands/${d.id}`}
+                                className="text-sm font-mono text-primary hover:underline"
+                              >
+                                {d.demandNumber}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="text-center text-sm max-w-[200px] truncate">{d.title}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary" className={cn("text-[11px]", si?.color)}>
+                                {si?.label ?? d.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center font-semibold tabular-nums">{d.sp}</TableCell>
+                            <TableCell className="text-center">
+                              <span className="text-sm font-medium tabular-nums">{d.spUsed}</span>
+                              <span className="text-xs text-muted-foreground ml-1">({si?.rate})</span>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

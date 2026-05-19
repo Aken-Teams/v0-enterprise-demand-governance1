@@ -844,9 +844,70 @@ export default function DemandDetailPage() {
 
         {/* Status Pipeline */}
         <Card>
-          <CardContent className="py-3 sm:py-4 px-2 sm:px-6">
+          <CardContent className="py-3 sm:py-4 px-3 sm:px-6">
+            {/* ── Mobile compact pipeline ── */}
+            <div className="sm:hidden">
+              {(() => {
+                const currentInfo = STATUS_MAP[demand.status] || { label: demand.status }
+                const total = PIPELINE_STEPS.length
+                const progress = isRejected ? 0 : Math.max(0, currentStepIndex)
+                return (
+                  <div className="space-y-2.5">
+                    {/* Progress bar with dots */}
+                    <div className="flex items-center gap-1">
+                      {PIPELINE_STEPS.map((step, i) => {
+                        const isPast = !isRejected && currentStepIndex >= 0 && i < currentStepIndex
+                        const isCurrent = !isRejected && i === currentStepIndex
+                        return (
+                          <React.Fragment key={step}>
+                            <div className={cn(
+                              "rounded-full shrink-0 transition-colors",
+                              isCurrent ? "h-3 w-3 border-2 border-primary bg-primary" : isPast ? "h-2.5 w-2.5 bg-primary/60" : "h-2.5 w-2.5 bg-muted-foreground/20",
+                            )} />
+                            {i < PIPELINE_STEPS.length - 1 && (
+                              <div className={cn("flex-1 h-px", isPast ? "bg-primary/40" : "bg-muted-foreground/15")} />
+                            )}
+                          </React.Fragment>
+                        )
+                      })}
+                    </div>
+                    {/* Current step info */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                          {progress + 1}/{total}
+                        </span>
+                        <span className="text-xs font-semibold text-foreground truncate">
+                          {currentInfo.label}
+                          {dcHasPending && " - 設計變更"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {curHasPending && !dcHasPending && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 rounded-full px-1.5">
+                            <Clock className="h-2.5 w-2.5" />待確認
+                          </span>
+                        )}
+                        {curAllApproved && !dcHasPending && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-600 bg-emerald-50 rounded-full px-1.5">
+                            <Check className="h-2.5 w-2.5" />已確認
+                          </span>
+                        )}
+                        {dcHasPending && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 rounded-full px-1.5">
+                            <FileEdit className="h-2.5 w-2.5" />設計變更
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* ── Desktop full pipeline ── */}
             <TooltipProvider delayDuration={200}>
-              <div className="flex items-center overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+              <div className="hidden sm:flex items-center">
                 {PIPELINE_STEPS.map((step, i) => {
                   const info = STATUS_MAP[step]
                   const isPast = !isRejected && currentStepIndex >= 0 && i < currentStepIndex
@@ -862,21 +923,18 @@ export default function DemandDetailPage() {
                   const hasAssignment = step === "PRD_REVIEW" || step === "SP_REVIEW" || step === "DEVELOPING" || step === "ACCEPTANCE"
                   const needsAssignment = hasAssignment && !demand.manager && !demand.developer
                   const showWarning = (isPast || isCurrent) && (missingDocs.length > 0 || (isCurrent && needsAssignment))
-                  const isComplete = (isPast || isCurrent) && missingDocs.length === 0 && requiredDocs.length > 0
 
-                  // Signoff status for this phase — only show latest round result
+                  // Signoff status for this phase
                   const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
                   const isSignoffPhase = signoffPhases.includes(step)
                   const allStepSignoffs = isSignoffPhase
                     ? demand.phaseSignoffs?.filter((s) => s.phase === step && ["PENDING", "APPROVED", "REJECTED", "SKIPPED"].includes(s.status)
                         && s.targetUserId) || []
                     : []
-                  // Latest round = signoffs with the newest requestedAt (same batch)
                   const latestTime = allStepSignoffs.length > 0
                     ? Math.max(...allStepSignoffs.map(s => new Date(s.requestedAt).getTime()))
                     : 0
                   const stepSignoffs = allStepSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestTime)
-                  // Aggregate status of latest round
                   const stepHasPending = stepSignoffs.some(s => s.status === "PENDING")
                   const stepNonOverride = stepSignoffs.filter(s => s.targetRole !== "BOARD_OVERRIDE")
                   const stepAllApproved = stepSignoffs.length > 0 && (stepSignoffs.every(s => s.status === "APPROVED")
@@ -887,13 +945,13 @@ export default function DemandDetailPage() {
                   const phaseSignoff = stepSignoffs.length > 0 ? stepSignoffs[0] : null
 
                   return (
-                    <div key={step} className="flex items-center flex-1 last:flex-none min-w-fit sm:min-w-0">
+                    <div key={step} className="flex items-center flex-1 last:flex-none">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex flex-col items-center gap-1.5 sm:gap-2 cursor-default shrink-0">
+                          <div className="flex flex-col items-center gap-2 cursor-default shrink-0">
                             <div className="relative">
                               <div className={cn(
-                                "h-7 w-7 sm:h-9 sm:w-9 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium border-2 transition-colors",
+                                "h-9 w-9 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors",
                                 isCurrent && "border-primary bg-primary text-primary-foreground",
                                 isPast && "border-primary bg-primary/10 text-primary",
                                 isFuture && "border-muted-foreground/30 bg-background text-muted-foreground/50",
@@ -908,7 +966,7 @@ export default function DemandDetailPage() {
                             </div>
                             <div className="flex flex-col items-center gap-0.5">
                               <span className={cn(
-                                "text-[10px] sm:text-sm whitespace-nowrap",
+                                "text-sm whitespace-nowrap",
                                 isCurrent && "font-semibold text-foreground",
                                 isPast && "text-primary",
                                 isFuture && "text-muted-foreground/50",
@@ -973,7 +1031,7 @@ export default function DemandDetailPage() {
                       </Tooltip>
                       {i < PIPELINE_STEPS.length - 1 && (
                         <div className={cn(
-                          "flex-1 h-px mx-1 sm:mx-2 mt-[-1.5rem] min-w-2",
+                          "flex-1 h-px mx-2 mt-[-1.5rem] min-w-2",
                           isPast ? "bg-primary" : "bg-muted-foreground/20",
                         )} />
                       )}
@@ -1062,43 +1120,60 @@ export default function DemandDetailPage() {
                     </div>
                     </div>
                     {(canProposeDesignChange || (canManage && curHasPending) || (canManage && (curHasPending || dcHasPending) && !curHasPendingOverride)) && (
-                      <div className="flex flex-wrap items-center gap-1.5 ml-6 sm:ml-0 sm:shrink-0">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 ml-6 sm:ml-0 sm:shrink-0">
+                        <TooltipProvider>
                         {canProposeDesignChange && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 shrink-0 h-7 text-[10px] sm:text-xs"
-                            onClick={() => setDesignChangeOpen(true)}
-                          >
-                            <FileEdit className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
-                            提出設計變更
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 shrink-0 h-6 w-6 p-0 sm:h-7 sm:w-auto sm:px-2"
+                                onClick={() => setDesignChangeOpen(true)}
+                              >
+                                <FileEdit className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" />
+                                <span className="hidden sm:inline text-xs">提出設計變更</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="sm:hidden">提出設計變更</TooltipContent>
+                          </Tooltip>
                         )}
                         {canManage && curHasPending && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-blue-300 text-blue-700 hover:bg-blue-50 shrink-0 h-7 text-[10px] sm:text-xs"
-                            onClick={() => setNotifySignersOpen(true)}
-                          >
-                            <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
-                            通知簽核人
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-blue-300 text-blue-700 hover:bg-blue-50 shrink-0 h-6 w-6 p-0 sm:h-7 sm:w-auto sm:px-2"
+                                onClick={() => setNotifySignersOpen(true)}
+                              >
+                                <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" />
+                                <span className="hidden sm:inline text-xs">通知簽核人</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="sm:hidden">通知簽核人</TooltipContent>
+                          </Tooltip>
                         )}
                         {canManage && (curHasPending || dcHasPending) && !curHasPendingOverride && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-orange-300 text-orange-700 hover:bg-orange-50 shrink-0 h-7 text-[10px] sm:text-xs"
-                            onClick={() => {
-                              setBoardOverrideKind(dcHasPending ? "DESIGN_CHANGE" : "PHASE")
-                              setBoardOverrideOpen(true)
-                            }}
-                          >
-                            <ShieldCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
-                            專案 Master 代簽
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-orange-300 text-orange-700 hover:bg-orange-50 shrink-0 h-6 w-6 p-0 sm:h-7 sm:w-auto sm:px-2"
+                                onClick={() => {
+                                  setBoardOverrideKind(dcHasPending ? "DESIGN_CHANGE" : "PHASE")
+                                  setBoardOverrideOpen(true)
+                                }}
+                              >
+                                <ShieldCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" />
+                                <span className="hidden sm:inline text-xs">專案 Master 代簽</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="sm:hidden">專案 Master 代簽</TooltipContent>
+                          </Tooltip>
                         )}
+                        </TooltipProvider>
                       </div>
                     )}
                   </div>
@@ -1738,7 +1813,7 @@ export default function DemandDetailPage() {
           <TabsContent value="documents" className="mt-3 sm:mt-4">
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
               {/* Preview pane (hidden on mobile until doc selected) */}
-              <div className={cn("lg:col-span-3 order-2 lg:order-1", !selectedDoc && "hidden lg:block")}>
+              <div className={cn("lg:col-span-3 order-2 lg:order-1 min-w-0", !selectedDoc && "hidden lg:block")}>
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
@@ -1992,7 +2067,7 @@ export default function DemandDetailPage() {
               </div>
 
               {/* Document list */}
-              <div className={cn("lg:col-span-2 order-1 lg:order-2", selectedDoc && "hidden lg:block")}>
+              <div className={cn("lg:col-span-2 order-1 lg:order-2 min-w-0", selectedDoc && "hidden lg:block")}>
                 <Card>
                   <CardHeader className="px-4 sm:px-6 pb-3">
                     <div className="flex items-center justify-between">

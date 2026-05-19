@@ -132,31 +132,31 @@ export function DesignChangeDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-xl max-h-[90vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileEdit className="h-5 w-5 text-indigo-600" />
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <FileEdit className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
             提出設計變更
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm">
             於「{phaseLabel}」階段針對需求 {demandNumber}「{demandTitle}」提出設計變更。
             送出後由指定審核人確認；僅留下紀錄，不會改變需求狀態或 SP。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto px-1 py-1">
+        <div className="space-y-3 sm:space-y-4 overflow-y-auto px-1 py-1">
           {/* Target signers */}
-          <div className="rounded-md bg-indigo-50/60 border border-indigo-200 p-3">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 mb-2">
-              <Users className="h-3.5 w-3.5" />
+          <div className="rounded-md bg-indigo-50/60 border border-indigo-200 p-2.5 sm:p-3">
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-medium text-indigo-700 mb-1.5 sm:mb-2">
+              <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               審核人員
             </div>
             <div className="flex flex-wrap gap-1.5">
               {targets.length === 0 ? (
-                <span className="text-xs text-muted-foreground">尚無指定審核人</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">尚無指定審核人</span>
               ) : (
                 targets.map((t) => (
-                  <Badge key={t.userId} variant="outline" className="bg-white text-xs">
+                  <Badge key={t.userId} variant="outline" className="bg-white text-[10px] sm:text-xs">
                     {t.name}
                     <span className="ml-1 text-muted-foreground">
                       · {ROLE_LABELS[t.role] || t.role}
@@ -174,7 +174,7 @@ export function DesignChangeDialog({
 
           {/* Reason */}
           <div className="space-y-1.5">
-            <Label htmlFor="design-change-reason" className="text-sm">
+            <Label htmlFor="design-change-reason" className="text-xs sm:text-sm">
               變更原因 <span className="text-red-500">*</span>
             </Label>
             <Textarea
@@ -185,7 +185,8 @@ export function DesignChangeDialog({
                 setReason(e.target.value)
                 setError("")
               }}
-              rows={5}
+              rows={4}
+              className="text-xs sm:text-sm"
               disabled={loading}
             />
           </div>
@@ -228,29 +229,31 @@ export function DesignChangeDialog({
             type="button"
             size="sm"
             variant="outline"
+            className="h-7 sm:h-8 text-xs"
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
           >
-            <Paperclip className="h-3.5 w-3.5 mr-1" />
+            <Paperclip className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
             附加檔案
           </Button>
 
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm" onClick={handleClose} disabled={loading}>
             取消
           </Button>
           <Button
+            size="sm"
+            className="h-8 text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white"
             onClick={handleSubmit}
             disabled={loading || targets.length === 0}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             {loading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin mr-1" />
             ) : (
-              <FileEdit className="h-3.5 w-3.5 mr-1" />
+              <FileEdit className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
             )}
             提交設計變更
           </Button>

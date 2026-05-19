@@ -253,14 +253,14 @@ export function PhaseDocuments({
       <div
         key={doc.id}
         className={cn(
-          "flex items-center justify-between rounded-md border px-2 sm:px-3 py-2 sm:py-2.5 transition-colors overflow-hidden",
+          "flex items-center justify-between rounded-md border px-2 sm:px-3 py-1.5 sm:py-2.5 transition-colors overflow-hidden",
           onDocumentSelect && "cursor-pointer hover:bg-muted/50",
           selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
         )}
         onClick={() => onDocumentSelect?.(doc)}
       >
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-          <Icon className={cn("h-4 w-4 shrink-0", iconColor)} />
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1">
+          <Icon className={cn("h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0", iconColor)} />
           <div className="min-w-0 flex-1">
             {isExternalLink ? (
               <a
@@ -281,25 +281,25 @@ export function PhaseDocuments({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-0.5 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0 sm:gap-0.5 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
           {docCanDownload && doc.fileUrl && !isExternalLink && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-6 w-6 sm:h-8 sm:w-8"
               onClick={() => handleDownload(doc)}
               disabled={downloadingId === doc.id}
               title="下載 PDF"
             >
               {downloadingId === doc.id
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <Download className="h-4 w-4" />}
+                ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                : <Download className="h-3 w-3 sm:h-4 sm:w-4" />}
             </Button>
           )}
           {docCanDownload && isExternalLink && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+            <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-8 sm:w-8" asChild>
               <a href={doc.fileUrl!} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4" />
+                <ExternalLink className="h-3 w-3 sm:h-4 sm:w-4" />
               </a>
             </Button>
           )}
@@ -307,11 +307,11 @@ export function PhaseDocuments({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground/40 hover:text-destructive"
+              className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/40 hover:text-destructive"
               onClick={() => handleDelete(doc.id)}
               disabled={deletingId === doc.id}
             >
-              {deletingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              {deletingId === doc.id ? <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" /> : <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
             </Button>
           )}
         </div>
@@ -346,14 +346,14 @@ export function PhaseDocuments({
             <div key={phase.key}>
               {idx > 0 && <Separator />}
               <button
-                className="flex items-center w-full gap-2.5 px-3 py-3 text-left transition-colors hover:bg-muted/40"
+                className="flex items-center w-full gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-2.5 sm:py-3 text-left transition-colors hover:bg-muted/40"
                 onClick={() => setActivePhase(phase.key)}
               >
                 <div
                   className="h-2 w-2 rounded-full shrink-0"
                   style={{ backgroundColor: phase.color }}
                 />
-                <span className="text-sm font-medium text-muted-foreground truncate">
+                <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                   {phase.label}
                 </span>
                 {count > 0 && (
@@ -380,19 +380,19 @@ export function PhaseDocuments({
         <div>
           {/* Back + phase title */}
           <button
-            className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-left"
             onClick={() => setActivePhase(null)}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span>返回</span>
           </button>
           <Separator />
-          <div className="flex items-center gap-2.5 px-3 py-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-2.5 sm:py-3">
             <div
               className="h-2 w-2 rounded-full shrink-0"
               style={{ backgroundColor: activeData.color }}
             />
-            <span className="text-sm font-semibold">{activeData.label}</span>
+            <span className="text-xs sm:text-sm font-semibold">{activeData.label}</span>
             {activeData.docs.length > 0 && (
               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full font-medium">
                 {activeData.docs.length}
@@ -400,19 +400,19 @@ export function PhaseDocuments({
             )}
           </div>
 
-          <div className="px-3 pb-3 space-y-2 min-w-0 overflow-hidden">
+          <div className="px-2.5 sm:px-3 pb-3 space-y-2 min-w-0 overflow-hidden">
             {/* Required checklist */}
             {activeData.required.length > 0 && (
-              <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">必要文件</p>
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 sm:px-4 sm:py-3 space-y-1.5 sm:space-y-2">
+                <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground">必要文件</p>
                 {activeData.required.map((item) => (
-                  <div key={item.type} className="flex items-center gap-2.5">
+                  <div key={item.type} className="flex items-center gap-2 sm:gap-2.5">
                     {item.uploaded ? (
-                      <Check className="h-4 w-4 text-emerald-500" />
+                      <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500 shrink-0" />
                     ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground/30" />
+                      <Circle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground/30 shrink-0" />
                     )}
-                    <span className={cn("text-sm", item.uploaded ? "text-foreground" : "text-muted-foreground/50")}>
+                    <span className={cn("text-xs sm:text-sm", item.uploaded ? "text-foreground" : "text-muted-foreground/50")}>
                       {item.label}
                     </span>
                   </div>
@@ -433,7 +433,7 @@ export function PhaseDocuments({
 
       {/* Upload Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{isLinkType ? `新增${DOCUMENT_TYPE_LABELS[uploadType] || "連結"}` : "上傳文件"}</DialogTitle>
           </DialogHeader>

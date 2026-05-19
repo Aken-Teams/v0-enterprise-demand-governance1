@@ -196,38 +196,39 @@ export function NotifySignersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-4xl max-h-[90vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle>通知簽核人</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-base sm:text-lg">通知簽核人</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
             發送郵件通知尚未簽核的人員，提醒他們進行簽核確認
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+        <div className="space-y-3 sm:space-y-4 overflow-y-auto flex-1 pr-1">
           {/* To */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">收件者</Label>
+            <Label className="text-[10px] sm:text-xs text-muted-foreground">收件者</Label>
             <div className="flex flex-wrap gap-1.5">
               {toEmails.length > 0 ? (
                 toEmails.map((email) => {
                   const name = pendingSignoffs.find((s) => s.targetUser?.email === email)?.targetUser?.name
                   return (
-                    <Badge key={email} variant="secondary" className="text-xs">
-                      {name ? `${name} <${email}>` : email}
+                    <Badge key={email} variant="secondary" className="text-[10px] sm:text-xs">
+                      <span className="hidden sm:inline">{name ? `${name} <${email}>` : email}</span>
+                      <span className="sm:hidden">{name || email}</span>
                     </Badge>
                   )
                 })
               ) : (
-                <p className="text-sm text-muted-foreground">簽核人尚無 Email 資料</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">簽核人尚無 Email 資料</p>
               )}
             </div>
           </div>
 
           {/* CC */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">副本 (CC)</Label>
-            <div className="rounded-md border p-3 space-y-2">
+            <Label className="text-[10px] sm:text-xs text-muted-foreground">副本 (CC)</Label>
+            <div className="rounded-md border p-2 sm:p-3 space-y-2">
               {ccList.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {ccList.map((email) => (
@@ -240,19 +241,19 @@ export function NotifySignersDialog({
                   ))}
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 sm:gap-2">
                 <Input
-                  placeholder="輸入 Email 並按 Enter 新增"
+                  placeholder="輸入 Email 按 Enter 新增"
                   value={ccInput}
                   onChange={(e) => setCcInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCc() } }}
-                  className="flex-1 h-8 text-sm"
+                  className="flex-1 h-7 sm:h-8 text-xs sm:text-sm"
                 />
-                <Button type="button" size="sm" variant="outline" onClick={addCc} disabled={!ccInput.trim() || !ccInput.includes("@")} className="h-8">
-                  <Plus className="h-3.5 w-3.5" />
+                <Button type="button" size="sm" variant="outline" onClick={addCc} disabled={!ccInput.trim() || !ccInput.includes("@")} className="h-7 w-7 p-0 sm:h-8 sm:w-8">
+                  <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setLdapPickerOpen(true)} className="h-8 text-xs">
-                  <Network className="h-3.5 w-3.5 mr-1" />瀏覽 AD
+                <Button type="button" size="sm" variant="outline" onClick={() => setLdapPickerOpen(true)} className="h-7 sm:h-8 text-[10px] sm:text-xs px-2">
+                  <Network className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" /><span className="hidden sm:inline">瀏覽 AD</span>
                 </Button>
               </div>
             </div>
@@ -260,14 +261,14 @@ export function NotifySignersDialog({
 
           {/* Subject */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">主旨</Label>
-            <Input value={subject} onChange={(e) => setSubject(e.target.value)} className="h-8 text-sm" />
+            <Label className="text-[10px] sm:text-xs text-muted-foreground">主旨</Label>
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} className="h-7 sm:h-8 text-xs sm:text-sm" />
           </div>
 
           {/* Body — Preview / Edit */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">信件內容</Label>
+              <Label className="text-[10px] sm:text-xs text-muted-foreground">信件內容</Label>
               <Button
                 type="button"
                 size="sm"
@@ -287,8 +288,8 @@ export function NotifySignersDialog({
               <Textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                rows={12}
-                className="font-mono text-xs leading-relaxed"
+                rows={8}
+                className="font-mono text-[10px] sm:text-xs leading-relaxed"
               />
             ) : (
               <div className="rounded-lg border bg-white overflow-hidden">
@@ -296,7 +297,7 @@ export function NotifySignersDialog({
                   ref={iframeRef}
                   srcDoc={body}
                   className="w-full border-0"
-                  style={{ minHeight: 280, height: 320 }}
+                  style={{ minHeight: 200, height: 280 }}
                   sandbox="allow-same-origin"
                   title="Email preview"
                   onLoad={resizeIframe}
@@ -306,15 +307,15 @@ export function NotifySignersDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={sending}>
+        <DialogFooter className="gap-2 sm:gap-0 pt-3 sm:pt-4 border-t">
+          <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm" onClick={() => onOpenChange(false)} disabled={sending}>
             取消
           </Button>
-          <Button size="sm" onClick={handleSend} disabled={sending || toEmails.length === 0}>
+          <Button size="sm" className="h-8 text-xs sm:text-sm" onClick={handleSend} disabled={sending || toEmails.length === 0}>
             {sending ? (
-              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />寄送中...</>
+              <><Loader2 className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-3.5 sm:w-3.5 animate-spin" />寄送中...</>
             ) : (
-              <><Send className="mr-1.5 h-3.5 w-3.5" />確認寄出</>
+              <><Send className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-3.5 sm:w-3.5" />確認寄出</>
             )}
           </Button>
         </DialogFooter>
@@ -322,9 +323,9 @@ export function NotifySignersDialog({
 
       {/* LDAP Picker for CC */}
       <Dialog open={ldapPickerOpen} onOpenChange={setLdapPickerOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>從 AD 新增 CC 人員</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">從 AD 新增 CC 人員</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0">
             <LdapTreePicker onSelectMember={handleLdapSelectCc} compact />

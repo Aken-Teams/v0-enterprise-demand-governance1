@@ -57,33 +57,33 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
   return (
     <Link
       href={`/subsidiary/demands/${demand.id}`}
-      className="group block rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:border-primary/30"
+      className="group block rounded-xl border bg-card p-3 sm:p-4 transition-all hover:shadow-md hover:border-primary/30"
     >
       {/* Row 1: status + signoff + demand number */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <span className={cn("inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold ring-1 ring-inset", statusInfo.badge)}>
+      <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+          <span className={cn("inline-block px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold ring-1 ring-inset shrink-0", statusInfo.badge)}>
             {statusInfo.label}
             {demand.hasPendingDesignChange && <span className="ml-1">- 設計變更</span>}
           </span>
           {hasPendingSignoff && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 text-[10px] font-semibold">
-              <ClipboardCheck className="h-3 w-3" />
+            <span className="inline-flex items-center gap-0.5 px-1 sm:px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 text-[9px] sm:text-[10px] font-semibold shrink-0">
+              <ClipboardCheck className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               待簽核
             </span>
           )}
         </div>
-        <span className="text-[11px] font-mono text-muted-foreground">{demand.demandNumber}</span>
+        <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground shrink-0 ml-2">{demand.demandNumber}</span>
       </div>
 
       {/* Title */}
-      <h3 className="font-semibold text-foreground text-sm leading-snug mb-2 group-hover:text-primary transition-colors">
+      <h3 className="font-semibold text-foreground text-xs sm:text-sm leading-snug mb-1.5 sm:mb-2 group-hover:text-primary transition-colors line-clamp-2">
         {demand.title}
       </h3>
 
       {/* Bottom: owner + date + SP */}
-      <div className="flex items-center justify-between pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-border/60 text-[10px] sm:text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           {ownerInfo && <span className="truncate">{ownerInfo}</span>}
           {ownerInfo && <span>·</span>}
           <span className="shrink-0">
@@ -92,8 +92,8 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
               : `${formatDateReadable(demand.createdAt)} 提交`}
           </span>
         </div>
-        <span className="text-base font-bold text-foreground ml-3 shrink-0">
-          {sp} <span className="text-xs font-normal text-muted-foreground">SP</span>
+        <span className="text-sm sm:text-base font-bold text-foreground ml-2 sm:ml-3 shrink-0">
+          {sp} <span className="text-[10px] sm:text-xs font-normal text-muted-foreground">SP</span>
         </span>
       </div>
     </Link>
@@ -197,34 +197,45 @@ export default function MyDemandsPage() {
 
   return (
     <AppLayout userRole="subsidiary">
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">我的需求</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">追蹤您提交的所有需求狀態</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">我的需求</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">追蹤您提交的所有需求狀態</p>
           </div>
           {!user?.restrictedView && (
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="text-center">
-                <div className="text-xl sm:text-2xl font-bold text-emerald-600">{remainingSp}</div>
+                <div className="text-lg sm:text-2xl font-bold text-emerald-600">{remainingSp}</div>
                 <div className="text-[10px] sm:text-xs text-muted-foreground">可用 SP</div>
               </div>
               <div className="text-center">
-                <div className="text-xl sm:text-2xl font-bold text-primary">{spSummary.usedSp}</div>
+                <div className="text-lg sm:text-2xl font-bold text-primary">{spSummary.usedSp}</div>
                 <div className="text-[10px] sm:text-xs text-muted-foreground">已使用 SP</div>
               </div>
               <div className="text-center">
-                <div className="text-xl sm:text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
+                <div className="text-lg sm:text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
                 <div className="text-[10px] sm:text-xs text-muted-foreground">年度配額</div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Tabs + Search (same row) */}
-        <div className="flex items-center gap-3 border-b border-border pb-3 overflow-x-auto">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        {/* Search (mobile: full width above tabs) */}
+        <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3 border-b border-border pb-3">
+          <div className="relative w-full sm:w-64 sm:order-2 shrink-0">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="搜尋需求..."
+              className="pl-8 sm:pl-9 h-8 sm:h-9 text-xs sm:text-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {/* Tabs */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 overflow-x-auto sm:order-1 no-scrollbar">
             {[
               { key: "all", label: "全部" },
               ...(activeSignoffCount > 0 ? [{ key: "signoff", label: "待簽核" }] : []),
@@ -239,7 +250,7 @@ export default function MyDemandsPage() {
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={cn(
-                    "relative px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap shrink-0",
+                    "relative px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-all whitespace-nowrap shrink-0",
                     isActive && isSignoff
                       ? "bg-amber-500 text-white shadow-sm"
                       : isActive
@@ -250,30 +261,20 @@ export default function MyDemandsPage() {
                   )}
                 >
                   {tab.label}
-                  <span className={cn("ml-1.5", isActive ? "text-white/80" : isSignoff ? "text-amber-600/80" : "text-muted-foreground")}>
+                  <span className={cn("ml-1 sm:ml-1.5", isActive ? "text-white/80" : isSignoff ? "text-amber-600/80" : "text-muted-foreground")}>
                     {count}
                   </span>
                 </button>
               )
             })}
           </div>
-
-          <div className="relative w-64 shrink-0">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="搜尋需求..."
-              className="pl-9 h-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
         </div>
 
         {/* Demand Grid */}
         {filteredDemands.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Inbox className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <p>沒有符合條件的需求</p>
+          <div className="flex flex-col items-center justify-center py-12 sm:py-16 text-muted-foreground">
+            <Inbox className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground/30 mb-3 sm:mb-4" />
+            <p className="text-xs sm:text-sm">沒有符合條件的需求</p>
           </div>
         ) : (
           <>
@@ -320,7 +321,7 @@ export default function MyDemandsPage() {
               </div>
             )}
 
-            <div className="text-center text-sm text-muted-foreground">
+            <div className="text-center text-xs sm:text-sm text-muted-foreground">
               顯示 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredDemands.length)} 筆，共 {filteredDemands.length} 筆需求
             </div>
           </>

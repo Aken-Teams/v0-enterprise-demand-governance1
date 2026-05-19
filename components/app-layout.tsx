@@ -422,32 +422,32 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-0">
-                <div className="flex items-center justify-between border-b px-4 py-3">
-                  <span className="text-sm font-semibold">通知</span>
+              <PopoverContent align="end" className="w-72 sm:w-80 p-0">
+                <div className="flex items-center justify-between border-b px-3 sm:px-4 py-2.5 sm:py-3">
+                  <span className="text-xs sm:text-sm font-semibold">通知</span>
                   {unreadCount > 0 && (
-                    <Button variant="ghost" size="sm" className="h-auto px-2 py-1 text-xs text-muted-foreground" onClick={markAllRead}>
+                    <Button variant="ghost" size="sm" className="h-auto px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs text-muted-foreground" onClick={markAllRead}>
                       全部已讀
                     </Button>
                   )}
                 </div>
-                <div className="max-h-72 overflow-y-auto">
+                <div className="max-h-64 sm:max-h-72 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">沒有通知</p>
+                    <p className="py-8 text-center text-xs sm:text-sm text-muted-foreground">沒有通知</p>
                   ) : (
                     notifications.map((n) => (
                       <div
                         key={n.id}
                         className={cn(
-                          "flex gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-muted/30 transition-colors",
+                          "flex gap-2.5 sm:gap-3 border-b px-3 sm:px-4 py-2.5 sm:py-3 last:border-b-0 hover:bg-muted/30 transition-colors",
                           !n.isRead && "bg-muted/50",
                         )}
                       >
                         <div className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.isRead ? "bg-transparent" : "bg-primary")} />
                         <div className="min-w-0 flex-1">
-                          <p className={cn("text-sm", !n.isRead && "font-medium")}>{n.title}</p>
-                          <p className="text-xs text-muted-foreground line-clamp-1">{n.message}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground/70">
+                          <p className={cn("text-xs sm:text-sm", !n.isRead && "font-medium")}>{n.title}</p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">{n.message}</p>
+                          <p className="mt-0.5 text-[10px] sm:text-xs text-muted-foreground/70">
                             {new Date(n.createdAt).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
@@ -455,9 +455,9 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                     ))
                   )}
                 </div>
-                <div className="border-t px-4 py-2">
+                <div className="border-t px-3 sm:px-4 py-1.5 sm:py-2">
                   <button
-                    className="block w-full text-center text-xs text-muted-foreground hover:text-foreground"
+                    className="block w-full text-center text-[10px] sm:text-xs text-muted-foreground hover:text-foreground"
                     onClick={() => setShowNotifCenter(true)}
                   >
                     查看全部通知
