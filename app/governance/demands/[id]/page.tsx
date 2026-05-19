@@ -702,7 +702,7 @@ export default function DemandDetailPage() {
     && !dcHasPending
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="space-y-1 min-w-0">
@@ -723,15 +723,15 @@ export default function DemandDetailPage() {
             {canManage && (
               <Dialog open={shareDialogOpen} onOpenChange={(open) => { setShareDialogOpen(open); if (open) fetchShareLinks() }}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Share2 className="mr-2 h-3.5 w-3.5" />
-                    分享
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3">
+                    <Share2 className="h-3.5 w-3.5 sm:mr-2" />
+                    <span className="hidden sm:inline">分享</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md p-4 sm:p-6">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Link2 className="h-5 w-5" />
+                    <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                      <Link2 className="h-4 w-4 sm:h-5 sm:w-5" />
                       分享連結管理
                     </DialogTitle>
                   </DialogHeader>
@@ -806,28 +806,26 @@ export default function DemandDetailPage() {
             )}
             {/* Edit / Delete (admin with write, not closed) */}
             {isAdminWithWrite && !isClosed && (
-              <>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/governance/demands/${demand.id}/edit`}>
-                    <Pencil className="mr-2 h-3.5 w-3.5" />
-                    編輯
-                  </Link>
-                </Button>
-              </>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3" asChild>
+                <Link href={`/governance/demands/${demand.id}/edit`}>
+                  <Pencil className="h-3.5 w-3.5 sm:mr-2" />
+                  <span className="hidden sm:inline">編輯</span>
+                </Link>
+              </Button>
             )}
             {isFullAdmin && !isClosed && (
               <>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
-                      <Trash2 className="mr-2 h-3.5 w-3.5" />
-                      刪除
+                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3">
+                      <Trash2 className="h-3.5 w-3.5 sm:mr-2" />
+                      <span className="hidden sm:inline">刪除</span>
                     </Button>
                   </AlertDialogTrigger>
-                  <AlertDialogContent>
+                  <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6">
                     <AlertDialogHeader>
-                      <AlertDialogTitle>確定要刪除此需求？</AlertDialogTitle>
-                      <AlertDialogDescription>
+                      <AlertDialogTitle className="text-base sm:text-lg">確定要刪除此需求？</AlertDialogTitle>
+                      <AlertDialogDescription className="text-xs sm:text-sm">
                         將永久刪除需求「{demand.title}」（{demand.demandNumber}）及其所有相關資料，包含文件、子任務、狀態紀錄等。此操作無法復原。
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -1001,14 +999,15 @@ export default function DemandDetailPage() {
               if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange && !canProposeDesignChange) return null
 
               return (
-                <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
-                  <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-                    <div className="space-y-1.5 flex-1 min-w-0">
-                      <p className="text-xs font-medium text-blue-700">
-                        {PHASE_DESCRIPTIONS[currentPhase]}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
+                <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 sm:p-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+                    <div className="flex items-start gap-2 flex-1 min-w-0">
+                      <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <p className="text-xs font-medium text-blue-700">
+                          {PHASE_DESCRIPTIONS[currentPhase]}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2">
                         {/* Phase signoff badges — hidden while a design change is pending,
                             to avoid confusing signers with duplicate approvals */}
                         {hasSignoff && curHasPending && !dcHasPending && (
@@ -1061,41 +1060,46 @@ export default function DemandDetailPage() {
                         ))}
                       </div>
                     </div>
-                    {canProposeDesignChange && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 shrink-0 h-7 text-xs"
-                        onClick={() => setDesignChangeOpen(true)}
-                      >
-                        <FileEdit className="h-3.5 w-3.5 mr-1" />
-                        提出設計變更
-                      </Button>
-                    )}
-                    {canManage && curHasPending && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-blue-300 text-blue-700 hover:bg-blue-50 shrink-0 h-7 text-xs"
-                        onClick={() => setNotifySignersOpen(true)}
-                      >
-                        <Mail className="h-3.5 w-3.5 mr-1" />
-                        通知簽核人
-                      </Button>
-                    )}
-                    {canManage && (curHasPending || dcHasPending) && !curHasPendingOverride && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-orange-300 text-orange-700 hover:bg-orange-50 shrink-0 h-7 text-xs"
-                        onClick={() => {
-                          setBoardOverrideKind(dcHasPending ? "DESIGN_CHANGE" : "PHASE")
-                          setBoardOverrideOpen(true)
-                        }}
-                      >
-                        <ShieldCheck className="h-3.5 w-3.5 mr-1" />
-                        專案 Master 代簽
-                      </Button>
+                    </div>
+                    {(canProposeDesignChange || (canManage && curHasPending) || (canManage && (curHasPending || dcHasPending) && !curHasPendingOverride)) && (
+                      <div className="flex flex-wrap items-center gap-1.5 ml-6 sm:ml-0 sm:shrink-0">
+                        {canProposeDesignChange && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 shrink-0 h-7 text-[10px] sm:text-xs"
+                            onClick={() => setDesignChangeOpen(true)}
+                          >
+                            <FileEdit className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
+                            提出設計變更
+                          </Button>
+                        )}
+                        {canManage && curHasPending && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50 shrink-0 h-7 text-[10px] sm:text-xs"
+                            onClick={() => setNotifySignersOpen(true)}
+                          >
+                            <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
+                            通知簽核人
+                          </Button>
+                        )}
+                        {canManage && (curHasPending || dcHasPending) && !curHasPendingOverride && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-orange-300 text-orange-700 hover:bg-orange-50 shrink-0 h-7 text-[10px] sm:text-xs"
+                            onClick={() => {
+                              setBoardOverrideKind(dcHasPending ? "DESIGN_CHANGE" : "PHASE")
+                              setBoardOverrideOpen(true)
+                            }}
+                          >
+                            <ShieldCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
+                            專案 Master 代簽
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

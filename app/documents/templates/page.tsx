@@ -643,72 +643,74 @@ export default function DocumentTemplatesPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">
             文件範本
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-xs sm:text-base text-muted-foreground">
             依階段查看需要產出的文件與標準格式，可預覽或下載 Markdown 範本
           </p>
         </div>
 
         <Tabs defaultValue="SUBMITTED">
-          <TabsList className="flex-wrap h-auto gap-1">
-            {PHASES.map((phase) => {
-              const info = STATUS_MAP[phase.key]
-              return (
-                <TabsTrigger key={phase.key} value={phase.key} className="gap-1.5">
-                  <span
-                    className="h-2 w-2 rounded-full shrink-0"
-                    style={{ backgroundColor: getPhaseColor(phase.key) }}
-                  />
-                  {info?.label ?? phase.key}
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <TabsList className="h-auto gap-0.5 sm:gap-1 w-max sm:w-auto inline-flex">
+              {PHASES.map((phase) => {
+                const info = STATUS_MAP[phase.key]
+                return (
+                  <TabsTrigger key={phase.key} value={phase.key} className="gap-1 sm:gap-1.5 text-[10px] sm:text-sm px-2.5 sm:px-3 py-1 sm:py-1.5 whitespace-nowrap">
+                    <span
+                      className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full shrink-0"
+                      style={{ backgroundColor: getPhaseColor(phase.key) }}
+                    />
+                    {info?.label ?? phase.key}
+                  </TabsTrigger>
+                )
+              })}
+            </TabsList>
+          </div>
 
           {PHASES.map((phase) => {
             const info = STATUS_MAP[phase.key]
             return (
               <TabsContent key={phase.key} value={phase.key}>
-                <div className="space-y-4 mt-2">
+                <div className="space-y-3 sm:space-y-4 mt-2">
                   {/* 階段重點 */}
-                  <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
-                    <Badge className={`${info?.color ?? ""} shrink-0`}>{info?.label}</Badge>
-                    <p className="text-sm text-muted-foreground">{phase.summary}</p>
+                  <div className="flex items-start gap-2 sm:gap-3 rounded-lg border bg-muted/30 p-3 sm:p-4">
+                    <Badge className={`${info?.color ?? ""} shrink-0 text-[10px] sm:text-xs`}>{info?.label}</Badge>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{phase.summary}</p>
                   </div>
 
                   {/* 文件列表 */}
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {phase.docs.map((docKey) => {
                       const doc = DOC_INFO[docKey]
                       if (!doc) return null
                       return (
                         <Card key={docKey}>
-                          <CardContent className="pt-5 space-y-3">
+                          <CardContent className="pt-4 sm:pt-5 space-y-2.5 sm:space-y-3 px-4 sm:px-6">
                             <div>
-                              <p className="font-medium text-foreground text-sm">{doc.label}</p>
-                              <p className="text-xs text-muted-foreground mt-1">{doc.desc}</p>
+                              <p className="font-medium text-foreground text-xs sm:text-sm">{doc.label}</p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">{doc.desc}</p>
                             </div>
                             <div className="flex gap-2">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="flex-1 text-xs"
+                                className="flex-1 text-[10px] sm:text-xs h-7 sm:h-8"
                                 onClick={() => setPreviewDoc(docKey)}
                               >
-                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                                 預覽範本
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="flex-1 text-xs"
+                                className="flex-1 text-[10px] sm:text-xs h-7 sm:h-8"
                                 onClick={() => downloadMd(docKey)}
                               >
-                                <Download className="h-3.5 w-3.5 mr-1" />
+                                <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                                 下載 .md
                               </Button>
                             </div>
@@ -726,24 +728,24 @@ export default function DocumentTemplatesPage() {
 
       {/* 預覽 Dialog */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
-        <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-3xl max-h-[85vh] flex flex-col p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
+            <DialogTitle className="flex items-center gap-2 sm:gap-3 text-base sm:text-lg">
               {previewDoc && DOC_INFO[previewDoc]?.label}
               {previewDoc && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs ml-auto"
+                  className="text-[10px] sm:text-xs h-7 sm:h-8 ml-auto"
                   onClick={() => downloadMd(previewDoc)}
                 >
-                  <Download className="h-3.5 w-3.5 mr-1" />
+                  <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                   下載 .md
                 </Button>
               )}
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-auto flex-1 rounded-lg border bg-muted/20 p-6 prose prose-sm prose-slate dark:prose-invert max-w-none
+          <div className="overflow-auto flex-1 rounded-lg border bg-muted/20 p-3 sm:p-6 prose prose-sm prose-slate dark:prose-invert max-w-none
             prose-headings:text-foreground prose-h1:text-lg prose-h1:border-b prose-h1:pb-2 prose-h2:text-base prose-h3:text-sm
             prose-table:text-xs prose-th:px-3 prose-th:py-1.5 prose-td:px-3 prose-td:py-1.5
             prose-th:bg-muted/50 prose-th:font-medium

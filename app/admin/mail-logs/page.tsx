@@ -80,23 +80,23 @@ export default function MailLogsPage() {
 
   return (
     <AppLayout userRole="admin">
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">郵件管理</h1>
-          <p className="text-muted-foreground mt-1">查看郵件發送紀錄及管理通知設定</p>
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">郵件管理</h1>
+          <p className="text-xs sm:text-base text-muted-foreground mt-1">查看郵件發送紀錄及管理通知設定</p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="logs" className="gap-1.5"><Calendar className="h-3.5 w-3.5" />發送紀錄</TabsTrigger>
-            <TabsTrigger value="settings" className="gap-1.5"><Settings className="h-3.5 w-3.5" />郵件設定</TabsTrigger>
+            <TabsTrigger value="logs" className="gap-1 sm:gap-1.5 text-xs sm:text-sm"><Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" />發送紀錄</TabsTrigger>
+            <TabsTrigger value="settings" className="gap-1 sm:gap-1.5 text-xs sm:text-sm"><Settings className="h-3 w-3 sm:h-3.5 sm:w-3.5" />郵件設定</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="logs" className="space-y-4 mt-4">
+          <TabsContent value="logs" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
             <MailLogsTab token={token} />
           </TabsContent>
 
-          <TabsContent value="settings" className="space-y-4 mt-4">
+          <TabsContent value="settings" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
             <MailSettingsTab token={token} />
           </TabsContent>
         </Tabs>
@@ -193,18 +193,18 @@ function MailLogsTab({ token }: { token: string | null }) {
   return (
     <>
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
           {/* Calendar Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => goMonth(-1)}>
-                <ChevronLeft className="h-4 w-4" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => goMonth(-1)}>
+                <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
-              <h3 className="text-lg font-semibold min-w-[120px] text-center">
+              <h3 className="text-sm sm:text-lg font-semibold min-w-[100px] sm:min-w-[120px] text-center">
                 {year} 年 {month + 1} 月
               </h3>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => goMonth(1)}>
-                <ChevronRight className="h-4 w-4" />
+              <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => goMonth(1)}>
+                <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
               {!isCurrentMonth && (
                 <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); setSelectedDay(null) }}>
@@ -212,10 +212,10 @@ function MailLogsTab({ token }: { token: string | null }) {
                 </Button>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {/* Filter */}
               <Select value={filterType || "_all"} onValueChange={(v) => { setFilterType(v === "_all" ? "" : v); setSelectedDay(null) }}>
-                <SelectTrigger className="h-8 w-[120px] text-xs">
+                <SelectTrigger className="h-7 sm:h-8 w-[100px] sm:w-[120px] text-[10px] sm:text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -225,9 +225,9 @@ function MailLogsTab({ token }: { token: string | null }) {
                 </SelectContent>
               </Select>
               {/* Summary */}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />{totalSuccess} 成功</span>
-                {totalFailed > 0 && <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500" />{totalFailed} 失敗</span>}
+              <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500" />{totalSuccess} 成功</span>
+                {totalFailed > 0 && <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500" />{totalFailed} 失敗</span>}
               </div>
             </div>
           </div>
@@ -257,14 +257,14 @@ function MailLogsTab({ token }: { token: string | null }) {
                   const isSelected = day === selectedDay
 
                   if (!day) {
-                    return <div key={idx} className="min-h-[80px]" />
+                    return <div key={idx} className="min-h-[52px] sm:min-h-[80px]" />
                   }
 
                   return (
                     <div
                       key={idx}
                       className={[
-                        "border border-border/40 rounded-md min-h-[80px] p-1.5 transition-colors relative",
+                        "border border-border/40 rounded-md min-h-[52px] sm:min-h-[80px] p-1 sm:p-1.5 transition-colors relative",
                         "cursor-pointer hover:bg-muted/40",
                         isSelected ? "bg-blue-50 ring-2 ring-blue-400 ring-inset border-blue-300" : "",
                       ].join(" ")}
@@ -272,8 +272,8 @@ function MailLogsTab({ token }: { token: string | null }) {
                     >
                       {/* Day Number */}
                       <div className={[
-                        "text-sm font-medium mb-1",
-                        isToday ? "bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center" : "",
+                        "text-[11px] sm:text-sm font-medium mb-0.5 sm:mb-1",
+                        isToday ? "bg-blue-600 text-white rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-sm" : "",
                         !isToday && idx % 7 === 0 ? "text-red-400" : "",
                         !isToday && idx % 7 === 6 ? "text-blue-400" : "",
                       ].join(" ")}>
@@ -283,33 +283,33 @@ function MailLogsTab({ token }: { token: string | null }) {
                       {dayLogs.length > 0 && (
                         <div className="space-y-0.5">
                           {hasSignoff && (
-                            <div className="flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                              <span className="text-[10px] text-blue-600 truncate">
-                                簽核 {dayLogs.filter((l) => l.type === "SIGNOFF_NOTIFY").length}
+                            <div className="flex items-center gap-0.5 sm:gap-1">
+                              <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-blue-500 shrink-0" />
+                              <span className="text-[8px] sm:text-[10px] text-blue-600 truncate">
+                                <span className="hidden sm:inline">簽核 </span>{dayLogs.filter((l) => l.type === "SIGNOFF_NOTIFY").length}
                               </span>
                             </div>
                           )}
                           {hasReport && (
-                            <div className="flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-                              <span className="text-[10px] text-violet-600 truncate">
-                                月報 {dayLogs.filter((l) => l.type === "MONTHLY_REPORT").length}
+                            <div className="flex items-center gap-0.5 sm:gap-1">
+                              <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-violet-500 shrink-0" />
+                              <span className="text-[8px] sm:text-[10px] text-violet-600 truncate">
+                                <span className="hidden sm:inline">月報 </span>{dayLogs.filter((l) => l.type === "MONTHLY_REPORT").length}
                               </span>
                             </div>
                           )}
                           {hasFailure && (
-                            <div className="flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                              <span className="text-[10px] text-red-600">失敗 {dayLogs.filter((l) => l.status === "FAILED").length}</span>
+                            <div className="flex items-center gap-0.5 sm:gap-1">
+                              <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-red-500 shrink-0" />
+                              <span className="text-[8px] sm:text-[10px] text-red-600"><span className="hidden sm:inline">失敗 </span>{dayLogs.filter((l) => l.status === "FAILED").length}</span>
                             </div>
                           )}
                         </div>
                       )}
                       {/* Success checkmark for all-success days */}
                       {allSuccess && !hasFailure && (
-                        <div className="absolute top-1.5 right-1.5">
-                          <CheckCircle className="h-3 w-3 text-emerald-400" />
+                        <div className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5">
+                          <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-400" />
                         </div>
                       )}
                     </div>
@@ -318,11 +318,11 @@ function MailLogsTab({ token }: { token: string | null }) {
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />簽核通知</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" />月度報表</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />失敗</span>
-                <span className="flex items-center gap-1"><CheckCircle className="h-3 w-3 text-emerald-400" />全部成功</span>
+              <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-3 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500" />簽核通知</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-violet-500" />月度報表</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500" />失敗</span>
+                <span className="flex items-center gap-1"><CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-400" />全部成功</span>
               </div>
             </>
           )}
@@ -332,51 +332,51 @@ function MailLogsTab({ token }: { token: string | null }) {
       {/* Selected Day Detail */}
       {selectedDay && (
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-sm flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+          <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h4 className="font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
+                <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 {year}/{month + 1}/{selectedDay} 發送紀錄
-                <Badge variant="secondary" className="text-xs">{selectedDayLogs.length} 封</Badge>
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">{selectedDayLogs.length} 封</Badge>
               </h4>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedDay(null)}>
                 <X className="h-3 w-3 mr-1" />關閉
               </Button>
             </div>
             {selectedDayLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">當日無發送紀錄</p>
+              <p className="text-xs sm:text-sm text-muted-foreground py-4 text-center">當日無發送紀錄</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 {selectedDayLogs.map((log) => {
                   const toList = parseJsonArray(log.toAddresses)
                   return (
                     <div
                       key={log.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 cursor-pointer transition-colors"
+                      className="flex items-center gap-1.5 sm:gap-3 p-2 sm:p-3 rounded-lg border hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => setSelectedLog(log)}
                     >
                       {/* Type Badge */}
-                      <span className={`shrink-0 inline-block rounded px-2 py-0.5 text-xs font-medium ${TYPE_COLORS[log.type] || "bg-gray-100 text-gray-600"}`}>
+                      <span className={`shrink-0 inline-block rounded px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium ${TYPE_COLORS[log.type] || "bg-gray-100 text-gray-600"}`}>
                         {TYPE_LABELS[log.type] || log.type}
                       </span>
                       {/* Time */}
-                      <span className="text-xs text-muted-foreground shrink-0">
+                      <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0">
                         {new Date(log.createdAt).toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit" })}
                       </span>
                       {/* Subject */}
-                      <span className="text-sm truncate flex-1">{log.subject}</span>
-                      {/* To */}
-                      <span className="text-xs text-muted-foreground shrink-0 max-w-[160px] truncate">
+                      <span className="text-xs sm:text-sm truncate flex-1 min-w-0">{log.subject}</span>
+                      {/* To - hidden on mobile */}
+                      <span className="hidden sm:inline text-xs text-muted-foreground shrink-0 max-w-[160px] truncate">
                         {toList[0] || "—"}{toList.length > 1 && ` +${toList.length - 1}`}
                       </span>
                       {/* Status */}
                       {log.status === "SUCCESS" ? (
-                        <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500 shrink-0" />
                       ) : (
-                        <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                        <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500 shrink-0" />
                       )}
-                      {/* Sender */}
-                      <span className="text-xs text-muted-foreground shrink-0">{log.sentBy?.name || "系統"}</span>
+                      {/* Sender - hidden on mobile */}
+                      <span className="hidden sm:inline text-xs text-muted-foreground shrink-0">{log.sentBy?.name || "系統"}</span>
                     </div>
                   )
                 })}
@@ -388,28 +388,28 @@ function MailLogsTab({ token }: { token: string | null }) {
 
       {/* Detail Dialog */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => { if (!open) setSelectedLog(null) }}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>郵件詳情</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg max-h-[80vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader><DialogTitle className="text-base sm:text-lg">郵件詳情</DialogTitle></DialogHeader>
           {selectedLog && (() => {
             const toList = parseJsonArray(selectedLog.toAddresses)
             const ccList = parseJsonArray(selectedLog.ccAddresses)
             return (
-              <div className="space-y-4 mt-2">
-                <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="space-y-3 sm:space-y-4 mt-2">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
                   <div>
                     <span className="text-muted-foreground">時間</span>
                     <p className="font-medium">{new Date(selectedLog.createdAt).toLocaleString("zh-TW")}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">類型</span>
-                    <p><span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TYPE_COLORS[selectedLog.type] || "bg-gray-100 text-gray-600"}`}>{TYPE_LABELS[selectedLog.type] || selectedLog.type}</span></p>
+                    <p><span className={`inline-block rounded px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium ${TYPE_COLORS[selectedLog.type] || "bg-gray-100 text-gray-600"}`}>{TYPE_LABELS[selectedLog.type] || selectedLog.type}</span></p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">狀態</span>
                     <p>
                       {selectedLog.status === "SUCCESS"
-                        ? <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50"><CheckCircle className="h-3 w-3 mr-1" />成功</Badge>
-                        : <Badge variant="outline" className="text-xs border-red-300 text-red-700 bg-red-50"><XCircle className="h-3 w-3 mr-1" />失敗</Badge>}
+                        ? <Badge variant="outline" className="text-[10px] sm:text-xs border-emerald-300 text-emerald-700 bg-emerald-50"><CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />成功</Badge>
+                        : <Badge variant="outline" className="text-[10px] sm:text-xs border-red-300 text-red-700 bg-red-50"><XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />失敗</Badge>}
                     </p>
                   </div>
                   <div>
@@ -417,7 +417,7 @@ function MailLogsTab({ token }: { token: string | null }) {
                     <p className="font-medium">{selectedLog.sentBy?.name || "系統排程"}</p>
                   </div>
                 </div>
-                <div className="border-t pt-4 space-y-3 text-sm">
+                <div className="border-t pt-3 sm:pt-4 space-y-2 sm:space-y-3 text-xs sm:text-sm">
                   <div>
                     <span className="text-muted-foreground">主旨</span>
                     <p className="font-medium">{selectedLog.subject}</p>
@@ -595,26 +595,33 @@ function MailSettingsTab({ token }: { token: string | null }) {
   return (
     <>
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs sm:text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-3 pr-4 font-medium text-muted-foreground">組織</th>
-                  <th className="pb-3 pr-4 font-medium text-muted-foreground">簽核通知 CC</th>
-                  <th className="pb-3 pr-4 font-medium text-muted-foreground">會計 Email</th>
-                  <th className="pb-3 pr-4 font-medium text-muted-foreground">月報寄送日</th>
-                  <th className="pb-3 font-medium text-muted-foreground">操作</th>
+                  <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground">組織</th>
+                  <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground hidden sm:table-cell">簽核通知 CC</th>
+                  <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground hidden sm:table-cell">會計 Email</th>
+                  <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground">寄送日</th>
+                  <th className="pb-2 sm:pb-3 font-medium text-muted-foreground">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {settings.map((s) => (
                   <tr key={s.organizationId} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 pr-4">
-                      <span className="font-medium">{s.orgName}</span>
-                      <Badge variant="outline" className="ml-2 text-xs">{s.orgCode}</Badge>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4">
+                      <div>
+                        <span className="font-medium text-xs sm:text-sm">{s.orgName}</span>
+                        <Badge variant="outline" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">{s.orgCode}</Badge>
+                      </div>
+                      {/* Mobile: show CC & email inline */}
+                      <div className="sm:hidden mt-1 space-y-0.5 text-[10px] text-muted-foreground">
+                        <div>CC: {s.signoffCcList.filter(Boolean).length > 0 ? s.signoffCcList.filter(Boolean).join(", ") : "未設定"}</div>
+                        <div>會計: {s.accountingEmail || "未設定"}</div>
+                      </div>
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 hidden sm:table-cell">
                       {s.signoffCcList.filter(Boolean).length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {s.signoffCcList.filter(Boolean).map((email) => (
@@ -625,13 +632,13 @@ function MailSettingsTab({ token }: { token: string | null }) {
                         <span className="text-xs text-muted-foreground">未設定</span>
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-xs">
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-xs hidden sm:table-cell">
                       {s.accountingEmail || <span className="text-muted-foreground">未設定</span>}
                     </td>
-                    <td className="py-3 pr-4 text-xs">每月 {s.reportSendDay} 號</td>
-                    <td className="py-3">
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openEdit(s)}>
-                        <Pencil className="h-3 w-3 mr-1" />編輯
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-[10px] sm:text-xs whitespace-nowrap">每月 {s.reportSendDay} 號</td>
+                    <td className="py-2 sm:py-3">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 sm:h-7 sm:w-auto p-0 sm:px-2 text-xs" onClick={() => openEdit(s)}>
+                        <Pencil className="h-3 w-3 sm:mr-1" /><span className="hidden sm:inline">編輯</span>
                       </Button>
                     </td>
                   </tr>
@@ -644,35 +651,35 @@ function MailSettingsTab({ token }: { token: string | null }) {
 
       {/* Edit Dialog */}
       <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null) }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">
               編輯郵件設定 — {editTarget?.orgName}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-5 mt-2">
+          <div className="space-y-4 sm:space-y-5 mt-2">
             {/* CC List */}
-            <div className="space-y-2">
-              <Label>簽核通知 CC 名單</Label>
-              <div className="rounded-md border p-3 space-y-2">
+            <div className="space-y-1 sm:space-y-2">
+              <Label className="text-xs sm:text-sm">簽核通知 CC 名單</Label>
+              <div className="rounded-md border p-2 sm:p-3 space-y-2">
                 {editCcList.filter(Boolean).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1 sm:gap-1.5">
                     {editCcList.filter(Boolean).map((email) => (
-                      <Badge key={email} variant="secondary" className="text-xs gap-1">
+                      <Badge key={email} variant="secondary" className="text-[10px] sm:text-xs gap-0.5 sm:gap-1">
                         {email}
                         <button type="button" onClick={() => setEditCcList((prev) => prev.filter((e) => e !== email))} className="hover:text-destructive">
-                          <X className="h-3 w-3" />
+                          <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                         </button>
                       </Badge>
                     ))}
                   </div>
                 )}
-                <div className="flex gap-2">
+                <div className="flex gap-1.5 sm:gap-2">
                   <Input
                     id="cc-manual-input"
-                    placeholder="輸入 Email 並按 Enter 新增"
-                    className="flex-1 h-8 text-sm"
+                    placeholder="輸入 Email 並按 Enter"
+                    className="flex-1 h-8 text-xs sm:text-sm"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault()
@@ -686,7 +693,7 @@ function MailSettingsTab({ token }: { token: string | null }) {
                     }}
                   />
                   <Button
-                    type="button" size="sm" variant="outline" className="h-8"
+                    type="button" size="sm" variant="outline" className="h-8 w-8 p-0 shrink-0"
                     onClick={() => {
                       const input = document.getElementById("cc-manual-input") as HTMLInputElement
                       if (!input) return
@@ -699,37 +706,37 @@ function MailSettingsTab({ token }: { token: string | null }) {
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
-                  <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => openLdapPicker("cc")}>
-                    <Network className="h-3.5 w-3.5 mr-1" />瀏覽 AD
+                  <Button type="button" size="sm" variant="outline" className="h-8 text-[10px] sm:text-xs shrink-0 px-2 sm:px-3" onClick={() => openLdapPicker("cc")}>
+                    <Network className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" /><span className="hidden sm:inline">瀏覽 AD</span>
                   </Button>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">寄送簽核通知時會自動 CC 這些人</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">寄送簽核通知時會自動 CC 這些人</p>
             </div>
 
             {/* Accounting Email */}
-            <div className="space-y-2">
-              <Label>會計 Email</Label>
-              <div className="flex gap-2">
+            <div className="space-y-1 sm:space-y-2">
+              <Label className="text-xs sm:text-sm">會計 Email</Label>
+              <div className="flex gap-1.5 sm:gap-2">
                 <Input
                   type="email"
                   placeholder="accounting@example.com"
                   value={editAccEmail}
                   onChange={(e) => setEditAccEmail(e.target.value)}
-                  className="flex-1 h-9"
+                  className="flex-1 h-8 sm:h-9 text-xs sm:text-sm"
                 />
-                <Button type="button" size="sm" variant="outline" className="h-9 text-xs" onClick={() => openLdapPicker("accounting")}>
-                  <Network className="h-3.5 w-3.5 mr-1" />瀏覽 AD
+                <Button type="button" size="sm" variant="outline" className="h-8 sm:h-9 text-[10px] sm:text-xs shrink-0 px-2 sm:px-3" onClick={() => openLdapPicker("accounting")}>
+                  <Network className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" /><span className="hidden sm:inline">瀏覽 AD</span>
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">每月 SP 報表寄送至此信箱</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">每月 SP 報表寄送至此信箱</p>
             </div>
 
             {/* Report Send Day */}
-            <div className="space-y-2">
-              <Label>月報寄送日</Label>
+            <div className="space-y-1 sm:space-y-2">
+              <Label className="text-xs sm:text-sm">月報寄送日</Label>
               <Select value={String(editSendDay)} onValueChange={(v) => setEditSendDay(Number(v))}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -738,16 +745,16 @@ function MailSettingsTab({ token }: { token: string | null }) {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">每月此日自動寄送 SP 月報給會計</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">每月此日自動寄送 SP 月報給會計</p>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 mt-4">
-            <Button variant="outline" onClick={() => setEditTarget(null)}>取消</Button>
-            <Button onClick={handleSave} disabled={saving === editTarget?.organizationId}>
+          <DialogFooter className="gap-2 sm:gap-0 mt-3 sm:mt-4">
+            <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={() => setEditTarget(null)}>取消</Button>
+            <Button size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={handleSave} disabled={saving === editTarget?.organizationId}>
               {saving === editTarget?.organizationId
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />儲存中...</>
-                : <><Save className="mr-2 h-4 w-4" />儲存</>}
+                ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4 animate-spin" />儲存中...</>
+                : <><Save className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />儲存</>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -755,9 +762,9 @@ function MailSettingsTab({ token }: { token: string | null }) {
 
       {/* LDAP Tree Picker */}
       <Dialog open={ldapPickerOpen} onOpenChange={setLdapPickerOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">
               {ldapPickerField === "cc" ? "新增 CC — 從 AD 選擇人員" : "選擇會計 — 從 AD 選擇人員"}
             </DialogTitle>
           </DialogHeader>

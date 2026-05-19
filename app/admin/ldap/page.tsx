@@ -19,23 +19,23 @@ export default function LdapOrgTreePage() {
 
   return (
     <AppLayout userRole="admin">
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">
             AD 組織架構
           </h1>
-          <p className="text-muted-foreground">瀏覽各子公司 LDAP / Active Directory 的部門與成員資料</p>
+          <p className="text-xs sm:text-base text-muted-foreground">瀏覽各子公司 LDAP / Active Directory 的部門與成員資料</p>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">組織樹</CardTitle>
-            <CardDescription>
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+            <CardTitle className="text-sm sm:text-base">組織樹</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               選擇 domain 後系統會從 LDAP 伺服器讀取該子公司完整組織架構。資料會快取 10 分鐘。
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[70vh] flex flex-col">
+          <CardContent className="px-4 sm:px-6">
+            <div className="h-[60vh] sm:h-[70vh] flex flex-col">
               <LdapTreePicker />
             </div>
           </CardContent>

@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Loader2, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 interface AuditLog {
@@ -249,91 +250,95 @@ export default function AuditLogPage() {
 
   return (
     <AppLayout userRole="admin">
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">操作紀錄</h1>
-          <p className="text-muted-foreground mt-1">查看系統所有操作的完整紀錄</p>
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">操作紀錄</h1>
+          <p className="text-xs sm:text-base text-muted-foreground mt-1">查看系統所有操作的完整紀錄</p>
         </div>
 
         {/* Filters */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">種類</Label>
-                <select
-                  className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={filterEntity}
-                  onChange={(e) => setFilterEntity(e.target.value)}
-                >
-                  <option value="">全部</option>
-                  {Object.entries(ENTITY_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
+          <CardContent className="pt-3 sm:pt-6 px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-x-2 gap-y-2 sm:gap-4">
+              <div className="space-y-0.5 sm:space-y-1.5">
+                <Label className="text-[10px] sm:text-xs text-muted-foreground">種類</Label>
+                <Select value={filterEntity || "__all__"} onValueChange={(v) => setFilterEntity(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className="h-8 sm:h-9 w-full text-xs sm:text-sm px-2 sm:px-3">
+                    <SelectValue placeholder="全部" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">全部</SelectItem>
+                    {Object.entries(ENTITY_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">操作類型</Label>
-                <select
-                  className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={filterAction}
-                  onChange={(e) => setFilterAction(e.target.value)}
-                >
-                  <option value="">全部</option>
-                  {Object.entries(ACTION_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
+              <div className="space-y-0.5 sm:space-y-1.5">
+                <Label className="text-[10px] sm:text-xs text-muted-foreground">操作類型</Label>
+                <Select value={filterAction || "__all__"} onValueChange={(v) => setFilterAction(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className="h-8 sm:h-9 w-full text-xs sm:text-sm px-2 sm:px-3">
+                    <SelectValue placeholder="全部" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">全部</SelectItem>
+                    {Object.entries(ACTION_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">起始日期</Label>
+              <div className="space-y-0.5 sm:space-y-1.5">
+                <Label className="text-[10px] sm:text-xs text-muted-foreground">起始日期</Label>
                 <Input
                   type="date"
-                  className="h-9 w-40"
+                  className="h-8 sm:h-9 w-full sm:w-40 text-xs sm:text-sm px-2 sm:px-3"
                   value={filterDateFrom}
                   onChange={(e) => setFilterDateFrom(e.target.value)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">結束日期</Label>
+              <div className="space-y-0.5 sm:space-y-1.5">
+                <Label className="text-[10px] sm:text-xs text-muted-foreground">結束日期</Label>
                 <Input
                   type="date"
-                  className="h-9 w-40"
+                  className="h-8 sm:h-9 w-full sm:w-40 text-xs sm:text-sm px-2 sm:px-3"
                   value={filterDateTo}
                   onChange={(e) => setFilterDateTo(e.target.value)}
                 />
               </div>
-              <Button size="sm" onClick={handleSearch}>
-                <Search className="h-3.5 w-3.5 mr-1.5" />
-                搜尋
-              </Button>
-              <Button size="sm" variant="ghost" onClick={clearFilters}>
-                清除
-              </Button>
+              <div className="flex items-center gap-1.5 sm:gap-2 col-span-2 sm:col-span-1">
+                <Button size="sm" className="h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none" onClick={handleSearch}>
+                  <Search className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5" />
+                  搜尋
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={clearFilters}>
+                  清除
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Results */}
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
             {loading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : logs.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">沒有符合條件的操作紀錄</p>
+              <p className="py-8 sm:py-12 text-center text-xs sm:text-sm text-muted-foreground">沒有符合條件的操作紀錄</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="border-b text-left">
-                      <th className="pb-3 pr-4 font-medium text-muted-foreground">時間</th>
-                      <th className="pb-3 pr-4 font-medium text-muted-foreground">操作者</th>
-                      <th className="pb-3 pr-4 font-medium text-muted-foreground">操作</th>
-                      <th className="pb-3 pr-4 font-medium text-muted-foreground">種類</th>
-                      <th className="pb-3 pr-4 font-medium text-muted-foreground">關聯需求</th>
-                      <th className="pb-3 font-medium text-muted-foreground">詳情</th>
+                      <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground">時間</th>
+                      <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground">操作者</th>
+                      <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground">操作</th>
+                      <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground hidden sm:table-cell">種類</th>
+                      <th className="pb-2 sm:pb-3 pr-2 sm:pr-4 font-medium text-muted-foreground hidden md:table-cell">關聯需求</th>
+                      <th className="pb-2 sm:pb-3 font-medium text-muted-foreground">詳情</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -341,42 +346,47 @@ export default function AuditLogPage() {
                       const details = formatDetails(log.details)
                       return (
                         <tr key={log.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-                          <td className="py-3 pr-4 whitespace-nowrap text-xs text-muted-foreground">
+                          <td className="py-2 sm:py-3 pr-2 sm:pr-4 whitespace-nowrap text-[10px] sm:text-xs text-muted-foreground">
                             {new Date(log.createdAt).toLocaleString("zh-TW", {
                               month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
                             })}
                           </td>
-                          <td className="py-3 pr-4 whitespace-nowrap">
+                          <td className="py-2 sm:py-3 pr-2 sm:pr-4 whitespace-nowrap text-xs sm:text-sm">
                             {log.user?.name || "—"}
+                            {/* Mobile: show entity type inline */}
+                            <div className="sm:hidden text-[10px] text-muted-foreground">
+                              {ENTITY_LABELS[log.entity] || log.entity}
+                              {log.demand && <span className="ml-1 text-primary">{log.demand.demandNumber}</span>}
+                            </div>
                           </td>
-                          <td className="py-3 pr-4">
-                            <span className={cn("inline-block rounded px-2 py-0.5 text-xs font-medium", ACTION_COLORS[log.action] || "bg-gray-100 text-gray-600")}>
+                          <td className="py-2 sm:py-3 pr-2 sm:pr-4">
+                            <span className={cn("inline-block rounded px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium", ACTION_COLORS[log.action] || "bg-gray-100 text-gray-600")}>
                               {ACTION_LABELS[log.action] || log.action}
                             </span>
                           </td>
-                          <td className="py-3 pr-4 whitespace-nowrap text-xs">
+                          <td className="py-2 sm:py-3 pr-2 sm:pr-4 whitespace-nowrap text-xs hidden sm:table-cell">
                             {ENTITY_LABELS[log.entity] || log.entity}
                           </td>
-                          <td className="py-3 pr-4 whitespace-nowrap text-xs">
+                          <td className="py-2 sm:py-3 pr-2 sm:pr-4 whitespace-nowrap text-xs hidden md:table-cell">
                             {log.demand ? (
                               <span className="text-primary">{log.demand.demandNumber}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
-                          <td className="py-3">
+                          <td className="py-2 sm:py-3">
                             {details ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 px-2 text-xs"
+                                className="h-6 w-6 sm:h-6 sm:w-auto p-0 sm:px-2 text-xs"
                                 onClick={() => setSelectedLog(log)}
                               >
-                                <FileText className="h-3 w-3 mr-1" />
-                                查看
+                                <FileText className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline">查看</span>
                               </Button>
                             ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
+                              <span className="text-[10px] sm:text-xs text-muted-foreground">—</span>
                             )}
                           </td>
                         </tr>
@@ -389,16 +399,16 @@ export default function AuditLogPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 border-t mt-4">
-                <span className="text-xs text-muted-foreground">
+              <div className="flex items-center justify-between pt-3 sm:pt-4 border-t mt-3 sm:mt-4">
+                <span className="text-[10px] sm:text-xs text-muted-foreground">
                   共 {total} 筆，第 {page}/{totalPages} 頁
                 </span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Button variant="outline" size="sm" className="h-7 w-7 sm:h-8 sm:w-8 p-0" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                    <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </Button>
-                  <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                    <ChevronRight className="h-4 w-4" />
+                  <Button variant="outline" size="sm" className="h-7 w-7 sm:h-8 sm:w-8 p-0" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                    <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </Button>
                 </div>
               </div>
@@ -408,15 +418,15 @@ export default function AuditLogPage() {
 
         {/* Detail Dialog */}
         <Dialog open={!!selectedLog} onOpenChange={(open) => { if (!open) setSelectedLog(null) }}>
-          <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg max-h-[80vh] overflow-y-auto p-4 sm:p-6">
             <DialogHeader>
-              <DialogTitle>操作詳情</DialogTitle>
+              <DialogTitle className="text-base sm:text-lg">操作詳情</DialogTitle>
             </DialogHeader>
             {selectedLog && (() => {
               const details = formatDetails(selectedLog.details)
               return (
-                <div className="space-y-4 mt-2">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="space-y-3 sm:space-y-4 mt-2">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
                     <div>
                       <span className="text-muted-foreground">時間</span>
                       <p className="font-medium">{new Date(selectedLog.createdAt).toLocaleString("zh-TW")}</p>
@@ -428,7 +438,7 @@ export default function AuditLogPage() {
                     <div>
                       <span className="text-muted-foreground">操作</span>
                       <p>
-                        <span className={cn("inline-block rounded px-2 py-0.5 text-xs font-medium", ACTION_COLORS[selectedLog.action] || "bg-gray-100 text-gray-600")}>
+                        <span className={cn("inline-block rounded px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium", ACTION_COLORS[selectedLog.action] || "bg-gray-100 text-gray-600")}>
                           {ACTION_LABELS[selectedLog.action] || selectedLog.action}
                         </span>
                       </p>
@@ -440,16 +450,16 @@ export default function AuditLogPage() {
                     {selectedLog.demand && (
                       <div className="col-span-2">
                         <span className="text-muted-foreground">關聯需求</span>
-                        <p className="font-medium">{selectedLog.demand.demandNumber} — {selectedLog.demand.title}</p>
+                        <p className="font-medium text-xs sm:text-sm">{selectedLog.demand.demandNumber} — {selectedLog.demand.title}</p>
                       </div>
                     )}
                   </div>
                   {details && (
                     <>
-                      <div className="border-t pt-4">
-                        <span className="text-sm font-medium text-foreground">詳細資料</span>
+                      <div className="border-t pt-3 sm:pt-4">
+                        <span className="text-xs sm:text-sm font-medium text-foreground">詳細資料</span>
                       </div>
-                      <div className="space-y-2.5">
+                      <div className="space-y-2 sm:space-y-2.5">
                         {Object.entries(details)
                           .filter(([key]) => {
                             // Hide count when demands are present
@@ -464,12 +474,12 @@ export default function AuditLogPage() {
                               : String(value).split("、").filter(Boolean)
                             if (items.length > 0) {
                               return (
-                                <div key={key} className="text-sm">
+                                <div key={key} className="text-xs sm:text-sm">
                                   <span className="text-muted-foreground">{DETAIL_KEY_LABELS[key] || key}</span>
-                                  <div className="mt-1.5 space-y-1">
+                                  <div className="mt-1 sm:mt-1.5 space-y-1">
                                     {items.map((item, i) => (
-                                      <div key={i} className="flex items-center gap-2 rounded bg-muted/50 px-2.5 py-1.5 text-xs font-medium">
-                                        <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                      <div key={i} className="flex items-center gap-1.5 sm:gap-2 rounded bg-muted/50 px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium">
+                                        <FileText className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0 text-muted-foreground" />
                                         {item}
                                       </div>
                                     ))}
@@ -479,7 +489,7 @@ export default function AuditLogPage() {
                             }
                           }
                           return (
-                            <div key={key} className="flex items-baseline justify-between gap-4 text-sm">
+                            <div key={key} className="flex items-baseline justify-between gap-2 sm:gap-4 text-xs sm:text-sm">
                               <span className="text-muted-foreground shrink-0">{DETAIL_KEY_LABELS[key] || key}</span>
                               <span className="text-right font-medium break-all">{formatDetailValue(key, value)}</span>
                             </div>

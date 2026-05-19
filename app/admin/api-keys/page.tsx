@@ -97,77 +97,84 @@ export default function ApiKeysPage() {
 
   return (
     <AppLayout userRole="admin">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">API 金鑰管理</h1>
-            <p className="text-muted-foreground">管理外部系統存取用的 API 金鑰</p>
+            <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">API 金鑰管理</h1>
+            <p className="text-xs sm:text-base text-muted-foreground">管理外部系統存取用的 API 金鑰</p>
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button size="sm" className="h-8 sm:h-9 text-xs sm:text-sm shrink-0" onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-1 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             建立金鑰
           </Button>
         </div>
 
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : apiKeys.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <KeyRound className="mx-auto h-12 w-12 mb-3 opacity-30" />
-                <p className="text-lg">尚未建立任何 API 金鑰</p>
-                <p className="text-sm mt-1">建立金鑰後，外部系統可透過 API 存取需求文件</p>
+              <div className="text-center py-8 sm:py-12 text-muted-foreground">
+                <KeyRound className="mx-auto h-8 w-8 sm:h-12 sm:w-12 mb-2 sm:mb-3 opacity-30" />
+                <p className="text-sm sm:text-lg">尚未建立任何 API 金鑰</p>
+                <p className="text-xs sm:text-sm mt-1">建立金鑰後，外部系統可透過 API 存取需求文件</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>前綴</TableHead>
-                    <TableHead>名稱</TableHead>
-                    <TableHead>建立者</TableHead>
-                    <TableHead>建立時間</TableHead>
-                    <TableHead>最後使用</TableHead>
-                    <TableHead>狀態</TableHead>
-                    <TableHead className="text-right">操作</TableHead>
+                    <TableHead className="text-xs sm:text-sm">名稱</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">前綴</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden md:table-cell">建立者</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden md:table-cell">建立時間</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">最後使用</TableHead>
+                    <TableHead className="text-xs sm:text-sm">狀態</TableHead>
+                    <TableHead className="text-xs sm:text-sm text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {apiKeys.map((k) => (
                     <TableRow key={k.id}>
-                      <TableCell>
-                        <code className="text-sm bg-muted px-1.5 py-0.5 rounded font-mono">{k.prefix}...</code>
+                      <TableCell className="px-2 sm:px-4">
+                        <div className="font-medium text-xs sm:text-sm">{k.name}</div>
+                        {/* Mobile: show prefix & creator inline */}
+                        <div className="sm:hidden text-[10px] text-muted-foreground mt-0.5">
+                          <code className="bg-muted px-1 py-0.5 rounded font-mono">{k.prefix}...</code>
+                          <span className="ml-1.5">{k.createdBy.name}</span>
+                        </div>
                       </TableCell>
-                      <TableCell className="font-medium">{k.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{k.createdBy.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="hidden sm:table-cell">
+                        <code className="text-xs sm:text-sm bg-muted px-1.5 py-0.5 rounded font-mono">{k.prefix}...</code>
+                      </TableCell>
+                      <TableCell className="text-xs sm:text-sm text-muted-foreground hidden md:table-cell">{k.createdBy.name}</TableCell>
+                      <TableCell className="text-xs sm:text-sm text-muted-foreground hidden md:table-cell">
                         {new Date(k.createdAt).toLocaleDateString("zh-TW")}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-xs sm:text-sm text-muted-foreground hidden sm:table-cell">
                         {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString("zh-TW") : "未使用"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-1 sm:px-4">
                         {k.isActive ? (
-                          <Badge variant="outline" className="border-emerald-300 text-emerald-600">啟用中</Badge>
+                          <Badge variant="outline" className="border-emerald-300 text-emerald-600 text-[10px] sm:text-xs">啟用</Badge>
                         ) : (
-                          <Badge variant="secondary">已撤銷</Badge>
+                          <Badge variant="secondary" className="text-[10px] sm:text-xs">已撤銷</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right px-1 sm:px-4">
                         {k.isActive && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                             disabled={revokingId === k.id}
                             onClick={() => handleRevokeKey(k.id)}
                           >
                             {revokingId === k.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
                             ) : (
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             )}
                           </Button>
                         )}
@@ -181,25 +188,25 @@ export default function ApiKeysPage() {
         </Card>
 
         <Card>
-          <CardContent className="pt-6 text-sm text-muted-foreground space-y-3">
-            <h4 className="font-semibold text-sm text-foreground">API 使用方式</h4>
-            <div className="grid gap-2">
-              <div>
-                <span className="font-medium text-foreground">查詢文件</span>
-                <code className="ml-2 bg-muted px-2 py-1 rounded text-xs">GET /api/external/demands/REQ-2026-001/documents</code>
+          <CardContent className="pt-4 sm:pt-6 px-4 sm:px-6 text-xs sm:text-sm text-muted-foreground space-y-2 sm:space-y-3">
+            <h4 className="font-semibold text-xs sm:text-sm text-foreground">API 使用方式</h4>
+            <div className="grid gap-1.5 sm:gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-0">
+                <span className="font-medium text-foreground shrink-0">查詢文件</span>
+                <code className="sm:ml-2 bg-muted px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs break-all">GET /api/external/demands/REQ-2026-001/documents</code>
               </div>
-              <div>
-                <span className="font-medium text-foreground">預覽文件</span>
-                <code className="ml-2 bg-muted px-2 py-1 rounded text-xs">GET /api/external/documents/&#123;docId&#125;/preview</code>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-0">
+                <span className="font-medium text-foreground shrink-0">預覽文件</span>
+                <code className="sm:ml-2 bg-muted px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs break-all">GET /api/external/documents/&#123;docId&#125;/preview</code>
               </div>
-              <div>
-                <span className="font-medium text-foreground">下載文件</span>
-                <code className="ml-2 bg-muted px-2 py-1 rounded text-xs">GET /api/external/documents/&#123;docId&#125;/download</code>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-0">
+                <span className="font-medium text-foreground shrink-0">下載文件</span>
+                <code className="sm:ml-2 bg-muted px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs break-all">GET /api/external/documents/&#123;docId&#125;/download</code>
               </div>
-              <div className="border-t pt-2">
-                <span className="font-medium text-foreground">認證方式</span>
-                <span className="ml-2">在 HTTP Header 加上</span>
-                <code className="ml-1 bg-muted px-2 py-1 rounded text-xs">X-API-Key: gvk_xxxxx...</code>
+              <div className="border-t pt-1.5 sm:pt-2 flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-0">
+                <span className="font-medium text-foreground shrink-0">認證方式</span>
+                <span className="sm:ml-2">在 HTTP Header 加上</span>
+                <code className="sm:ml-1 bg-muted px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs">X-API-Key: gvk_xxxxx...</code>
               </div>
             </div>
           </CardContent>
@@ -208,25 +215,26 @@ export default function ApiKeysPage() {
 
       {/* Create Key Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>建立 API 金鑰</DialogTitle>
-            <DialogDescription>為外部系統建立一組 API 金鑰，金鑰建立後只會顯示一次。</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">建立 API 金鑰</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">為外部系統建立一組 API 金鑰，金鑰建立後只會顯示一次。</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="keyName">金鑰名稱</Label>
+          <div className="space-y-1 sm:space-y-2">
+            <Label htmlFor="keyName" className="text-xs sm:text-sm">金鑰名稱</Label>
             <Input
               id="keyName"
               placeholder="例如：ERP 系統、考核平台"
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateKey()}
+              className="h-8 sm:h-10 text-sm"
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>取消</Button>
-            <Button onClick={handleCreateKey} disabled={creatingKey || !newKeyName.trim()}>
-              {creatingKey && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={() => setCreateDialogOpen(false)}>取消</Button>
+            <Button size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={handleCreateKey} disabled={creatingKey || !newKeyName.trim()}>
+              {creatingKey && <Loader2 className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4 animate-spin" />}
               建立
             </Button>
           </DialogFooter>
@@ -235,26 +243,26 @@ export default function ApiKeysPage() {
 
       {/* Show Created Key Dialog */}
       <Dialog open={showKeyDialogOpen} onOpenChange={(open) => { if (!open) { setShowKeyDialogOpen(false); setCreatedKey(null) } }}>
-        <DialogContent>
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>金鑰已建立</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">金鑰已建立</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="rounded-md border border-orange-200 bg-orange-50 p-3">
-              <div className="flex items-center gap-2 text-orange-700">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <p className="text-sm font-medium">此金鑰只會顯示一次，請立即複製保存</p>
+          <div className="space-y-2 sm:space-y-3">
+            <div className="rounded-md border border-orange-200 bg-orange-50 p-2.5 sm:p-3">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-orange-700">
+                <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <p className="text-xs sm:text-sm font-medium">此金鑰只會顯示一次，請立即複製保存</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 break-all rounded bg-muted p-3 text-sm font-mono">{createdKey}</code>
-              <Button variant="outline" size="sm" onClick={() => createdKey && copyToClipboard(createdKey)}>
-                {copied ? <CheckCircle className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+              <code className="flex-1 break-all rounded bg-muted p-2 sm:p-3 text-[10px] sm:text-sm font-mono">{createdKey}</code>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => createdKey && copyToClipboard(createdKey)}>
+                {copied ? <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600" /> : <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
               </Button>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => { setShowKeyDialogOpen(false); setCreatedKey(null) }}>關閉</Button>
+            <Button size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={() => { setShowKeyDialogOpen(false); setCreatedKey(null) }}>關閉</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

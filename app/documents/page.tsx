@@ -193,14 +193,14 @@ const SUBSIDIARY_PHASE_DETAIL: Record<string, { desc: string; actions: string[];
 function SubsidiaryGuide() {
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-[1fr_1fr]">
         {/* 需求處理流程 */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">各階段說明</CardTitle>
-            <p className="text-sm text-muted-foreground">您提交的需求會依序經過以下階段，點擊可查看詳細說明</p>
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+            <CardTitle className="text-sm sm:text-base">各階段說明</CardTitle>
+            <p className="text-xs sm:text-sm text-muted-foreground">您提交的需求會依序經過以下階段，點擊可查看詳細說明</p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <Accordion type="single" collapsible className="w-full">
               {PIPELINE_STEPS.map((step) => {
                 const info = STATUS_MAP[step]
@@ -208,9 +208,9 @@ function SubsidiaryGuide() {
                 return (
                   <AccordionItem key={step} value={step}>
                     <AccordionTrigger>
-                      <div className="flex items-center gap-3">
-                        <Badge className={info.color}>{info.label}</Badge>
-                        <span className="text-sm text-muted-foreground font-normal">
+                      <div className="flex items-center gap-2 sm:gap-3 text-left">
+                        <Badge className={`${info.color} shrink-0 text-[10px] sm:text-xs`}>{info.label}</Badge>
+                        <span className="text-xs sm:text-sm text-muted-foreground font-normal">
                           {detail.desc}
                         </span>
                       </div>
@@ -221,11 +221,11 @@ function SubsidiaryGuide() {
                         const allDocs = docs ? [...docs.required, ...docs.optional] : []
                         const reviewGuide = SIGNOFF_REVIEW_GUIDE[step]
                         return (
-                          <div className="space-y-3 pl-2">
+                          <div className="space-y-3 pl-1 sm:pl-2">
                             {detail.actions.length > 0 && (
                               <div>
-                                <p className="text-sm font-medium text-foreground mb-2">您需要做的事</p>
-                                <ul className="space-y-1 text-sm text-muted-foreground">
+                                <p className="text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">您需要做的事</p>
+                                <ul className="space-y-1 text-xs sm:text-sm text-muted-foreground">
                                   {detail.actions.map((a, i) => (
                                     <li key={i} className="flex items-center gap-2">
                                       <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
@@ -237,12 +237,12 @@ function SubsidiaryGuide() {
                             )}
                             {allDocs.length > 0 && (
                               <div className={detail.actions.length > 0 ? "border-t pt-3" : ""}>
-                                <p className="text-sm font-medium text-foreground mb-2">相關文件</p>
+                                <p className="text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">相關文件</p>
                                 <div className="space-y-1.5">
                                   {allDocs.map((d) => {
                                     const isRequired = docs!.required.includes(d)
                                     return (
-                                      <div key={d} className="flex items-baseline gap-2 text-sm">
+                                      <div key={d} className="flex flex-wrap items-baseline gap-1 sm:gap-2 text-xs sm:text-sm">
                                         <span className="font-medium text-foreground shrink-0">
                                           {DOCUMENT_TYPE_LABELS[d] ?? d}
                                         </span>
@@ -252,7 +252,7 @@ function SubsidiaryGuide() {
                                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">選填</Badge>
                                         )}
                                         {DOC_DESCRIPTIONS[d] && (
-                                          <span className="text-muted-foreground text-xs">{DOC_DESCRIPTIONS[d]}</span>
+                                          <span className="text-muted-foreground text-[10px] sm:text-xs">{DOC_DESCRIPTIONS[d]}</span>
                                         )}
                                       </div>
                                     )
@@ -264,25 +264,25 @@ function SubsidiaryGuide() {
                               <div className="border-t pt-3">
                                 <Dialog>
                                   <DialogTrigger asChild>
-                                    <button className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors">
-                                      <FileSearch className="h-4 w-4" />
+                                    <button className="flex items-center gap-2 text-xs sm:text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors">
+                                      <FileSearch className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                       需求者審核指引
                                     </button>
                                   </DialogTrigger>
-                                  <DialogContent className="max-w-md">
+                                  <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md p-4 sm:p-6">
                                     <DialogHeader>
-                                      <DialogTitle className="flex items-center gap-2">
-                                        <Badge className={info.color}>{info.label}</Badge>
+                                      <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                                        <Badge className={`${info.color} text-[10px] sm:text-xs`}>{info.label}</Badge>
                                         審核指引
                                       </DialogTitle>
                                     </DialogHeader>
-                                    <div className="mt-2 space-y-3">
-                                      <p className="text-sm text-muted-foreground">{reviewGuide.summary}</p>
-                                      <div className="bg-muted/40 rounded-lg p-3">
-                                        <p className="text-xs font-medium text-foreground mb-2">審核重點</p>
+                                    <div className="mt-2 space-y-2 sm:space-y-3">
+                                      <p className="text-xs sm:text-sm text-muted-foreground">{reviewGuide.summary}</p>
+                                      <div className="bg-muted/40 rounded-lg p-2.5 sm:p-3">
+                                        <p className="text-[10px] sm:text-xs font-medium text-foreground mb-1.5 sm:mb-2">審核重點</p>
                                         <ul className="space-y-1.5">
                                           {reviewGuide.points.map((point, pi) => (
-                                            <li key={pi} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                            <li key={pi} className="flex items-start gap-2 text-[10px] sm:text-xs text-muted-foreground">
                                               <span className="h-1 w-1 rounded-full bg-blue-400 shrink-0 mt-1.5" />
                                               {point}
                                             </li>
@@ -295,10 +295,10 @@ function SubsidiaryGuide() {
                               </div>
                             )}
                             {detail.note && (
-                              <p className="text-xs text-muted-foreground/70 border-t pt-2">※ {detail.note}</p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground/70 border-t pt-2">※ {detail.note}</p>
                             )}
                             {detail.actions.length === 0 && allDocs.length === 0 && !reviewGuide && (
-                              <p className="text-sm text-muted-foreground">此階段為結案狀態，無需額外操作。</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">此階段為結案狀態，無需額外操作。</p>
                             )}
                           </div>
                         )
@@ -308,7 +308,7 @@ function SubsidiaryGuide() {
                 )
               })}
             </Accordion>
-            <p className="text-xs text-muted-foreground mt-4">
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-3 sm:mt-4">
               ※ 需求在任何階段都可能被駁回。駁回後需重新建立新需求。
             </p>
           </CardContent>
@@ -316,10 +316,10 @@ function SubsidiaryGuide() {
 
         {/* SP 點數（需求者版） */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">SP 點數</CardTitle>
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+            <CardTitle className="text-sm sm:text-base">SP 點數</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground divide-y">
+          <CardContent className="text-xs sm:text-sm text-muted-foreground divide-y px-4 sm:px-6">
             <div className="pb-4">
               <p className="font-medium text-foreground mb-1">什麼是 SP？</p>
               <p>
@@ -356,66 +356,66 @@ function SubsidiaryGuide() {
 
       {/* SP 漸進消耗機制 */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">SP 漸進消耗機制</CardTitle>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-sm sm:text-base">SP 漸進消耗機制</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-4">
+        <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
           <p>
             系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">審核通過</span>為計算基準。
             需求確認與 MVP 審核中的需求<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待 MVP 架構確認<span className="font-medium text-foreground">審核通過</span>後才開始計算消耗 80%，結案<span className="font-medium text-foreground">審核通過</span>時達到 100%。
           </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table className="w-full text-xs sm:text-sm">
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium text-foreground">階段</th>
                   <th className="pb-2 font-medium text-foreground text-center">累計消耗</th>
-                  <th className="pb-2 font-medium text-foreground text-center">階段增量</th>
-                  <th className="pb-2 font-medium text-foreground">說明</th>
+                  <th className="pb-2 font-medium text-foreground text-center hidden sm:table-cell">階段增量</th>
+                  <th className="pb-2 font-medium text-foreground hidden sm:table-cell">說明</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 <tr>
-                  <td className="py-2.5"><Badge className="bg-blue-100 text-blue-700">需求確認</Badge></td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5">僅需求訪談，不列入 SP 扣除範圍</td>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-blue-100 text-blue-700 text-[10px] sm:text-xs">需求確認</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground">—</td>
+                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground hidden sm:table-cell">—</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">僅需求訪談，不列入 SP 扣除範圍</td>
                 </tr>
                 <tr>
-                  <td className="py-2.5"><Badge className="bg-amber-100 text-amber-700">MVP 確認</Badge></td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5">審核通過前不計算消耗</td>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-amber-100 text-amber-700 text-[10px] sm:text-xs">MVP 確認</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground">—</td>
+                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground hidden sm:table-cell">—</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">審核通過前不計算消耗</td>
                 </tr>
                 <tr>
-                  <td className="py-2.5">
+                  <td className="py-2 sm:py-2.5">
                     <div className="flex flex-wrap gap-1">
-                      <Badge className="bg-orange-100 text-orange-700">開案確認</Badge>
-                      <Badge className="bg-violet-100 text-violet-700">開發中</Badge>
-                      <Badge className="bg-purple-100 text-purple-700">驗收中</Badge>
+                      <Badge className="bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
+                      <Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
+                      <Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge>
                     </div>
                   </td>
-                  <td className="py-2.5 text-center font-semibold text-foreground">80%</td>
-                  <td className="py-2.5 text-center text-foreground">訪談 50% + MVP 30%</td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">80%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">訪談 50% + MVP 30%</td>
                   <td className="py-2.5">MVP 審核通過後一次起算 80%</td>
                 </tr>
                 <tr>
-                  <td className="py-2.5"><Badge className="bg-emerald-100 text-emerald-700">已結案</Badge></td>
-                  <td className="py-2.5 text-center font-semibold text-foreground">100%</td>
-                  <td className="py-2.5 text-center text-foreground">+20%</td>
-                  <td className="py-2.5">結案審核通過後完整消耗全部 SP</td>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">100%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+20%</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案審核通過後完整消耗全部 SP</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-            <p className="font-medium text-foreground text-xs">計算範例</p>
-            <p className="text-xs">
+          <div className="rounded-lg border bg-muted/30 p-2.5 sm:p-3 space-y-1.5 sm:space-y-2">
+            <p className="font-medium text-foreground text-[10px] sm:text-xs">計算範例</p>
+            <p className="text-[10px] sm:text-xs">
               假設一筆需求預估 <span className="font-semibold text-foreground">20 SP</span>：
             </p>
-            <ul className="text-xs space-y-1">
+            <ul className="text-[10px] sm:text-xs space-y-1">
               <li className="flex items-center gap-2">
                 <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
                 提出需求（需求確認） → 消耗 <span className="font-semibold text-foreground">0 SP</span>（僅訪談，不扣除）
@@ -435,7 +435,7 @@ function SubsidiaryGuide() {
             </ul>
           </div>
 
-          <p className="text-xs text-muted-foreground/70">
+          <p className="text-[10px] sm:text-xs text-muted-foreground/70">
             ※ 需求被駁回（取消／暫緩）時，已消耗的 SP 會全數退還。結案時若有 SP 調整（增減），以調整後的 SP 為準計算。
           </p>
         </CardContent>
@@ -443,29 +443,29 @@ function SubsidiaryGuide() {
 
       {/* 設計變更流程（需求者視角） */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Badge className="bg-indigo-100 text-indigo-700">設計變更</Badge>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+            <Badge className="bg-indigo-100 text-indigo-700 text-[10px] sm:text-xs">設計變更</Badge>
             流程說明
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             設計變更是用於記錄專案進行中需求內容新增或調整的機制，
             通知工程團隊有新任務並作為後續 SP 增減的依據。此流程非必要，僅在需要留下正式紀錄時啟動。
           </p>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-4">
+        <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
           <div>
-            <p className="font-medium text-foreground mb-2">可發起階段</p>
+            <p className="font-medium text-foreground mb-1.5 sm:mb-2">可發起階段</p>
             <p>
               僅能在以下三個階段發起設計變更：
-              <Badge className="ml-1 bg-amber-100 text-amber-700">MVP 確認</Badge>
-              <Badge className="ml-1 bg-orange-100 text-orange-700">開案確認</Badge>
-              <Badge className="ml-1 bg-purple-100 text-purple-700">驗收中</Badge>
+              <Badge className="ml-1 bg-amber-100 text-amber-700 text-[10px] sm:text-xs">MVP 確認</Badge>
+              <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
+              <Badge className="ml-1 bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge>
             </p>
           </div>
 
           <div className="border-t pt-3">
-            <p className="font-medium text-foreground mb-2">審核流程</p>
+            <p className="font-medium text-foreground mb-1.5 sm:mb-2">審核流程</p>
             <ol className="space-y-1.5 list-decimal list-inside">
               <li>收到設計變更通知後，進入需求詳情頁</li>
               <li>閱讀變更原因與上傳的附件</li>
@@ -517,17 +517,17 @@ function SubsidiaryGuide() {
 
       {/* 如何使用系統 */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">如何使用系統</CardTitle>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-sm sm:text-base">如何使用系統</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="track">
               <AccordionTrigger>
-                <span className="text-sm">追蹤需求進度</span>
+                <span className="text-xs sm:text-sm">追蹤需求進度</span>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="text-sm text-muted-foreground space-y-2">
+                <div className="text-xs sm:text-sm text-muted-foreground space-y-2">
                   <p>在「需求列表」中點擊任一需求可查看詳細資訊，包含：</p>
                   <ul className="space-y-1">
                     <li className="flex items-center gap-2">
@@ -548,10 +548,10 @@ function SubsidiaryGuide() {
             </AccordionItem>
             <AccordionItem value="wallet">
               <AccordionTrigger>
-                <span className="text-sm">查看 SP 錢包</span>
+                <span className="text-xs sm:text-sm">查看 SP 錢包</span>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="text-sm text-muted-foreground space-y-2">
+                <div className="text-xs sm:text-sm text-muted-foreground space-y-2">
                   <p>前往「SP 錢包」頁面可查看：</p>
                   <ul className="space-y-1">
                     <li className="flex items-center gap-2">
@@ -572,17 +572,17 @@ function SubsidiaryGuide() {
             </AccordionItem>
             <AccordionItem value="acceptance">
               <AccordionTrigger>
-                <span className="text-sm">驗收需求</span>
+                <span className="text-xs sm:text-sm">驗收需求</span>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="text-sm text-muted-foreground space-y-2">
+                <div className="text-xs sm:text-sm text-muted-foreground space-y-2">
                   <p>當需求進入「驗收中」階段，您需要：</p>
                   <ol className="space-y-1 list-decimal list-inside">
                     <li>查看工程師提供測試報告和確認清單</li>
                     <li>確認開發成果是否符合需求</li>
                     <li>通過驗收後需求進入「已結案」</li>
                   </ol>
-                  <p className="text-xs">驗收不通過會退回開發階段重新修正。</p>
+                  <p className="text-[10px] sm:text-xs">驗收不通過會退回開發階段重新修正。</p>
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -597,13 +597,13 @@ function SubsidiaryGuide() {
 function AdminDeliveryGuide() {
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-[1fr_1fr]">
         {/* 各階段說明 */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">各階段說明</CardTitle>
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+            <CardTitle className="text-sm sm:text-base">各階段說明</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <Accordion type="single" collapsible className="w-full">
               {PIPELINE_STEPS.map((step) => {
                 const info = STATUS_MAP[step]
@@ -613,19 +613,19 @@ function AdminDeliveryGuide() {
                 return (
                   <AccordionItem key={step} value={step}>
                     <AccordionTrigger>
-                      <div className="flex items-center gap-3">
-                        <Badge className={info.color}>{info.label}</Badge>
-                        <span className="text-sm text-muted-foreground font-normal">
+                      <div className="flex items-center gap-2 sm:gap-3 text-left">
+                        <Badge className={`${info.color} shrink-0 text-[10px] sm:text-xs`}>{info.label}</Badge>
+                        <span className="text-xs sm:text-sm text-muted-foreground font-normal">
                           {PHASE_DESCRIPTIONS[step]}
                         </span>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <div className="space-y-4 pl-2">
+                      <div className="space-y-3 sm:space-y-4 pl-1 sm:pl-2">
                         {actions.length > 0 && (
                           <div>
-                            <p className="text-sm font-medium text-foreground mb-2">關鍵動作</p>
-                            <ul className="space-y-1 text-sm text-muted-foreground">
+                            <p className="text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">關鍵動作</p>
+                            <ul className="space-y-1 text-xs sm:text-sm text-muted-foreground">
                               {actions.map((a, i) => (
                                 <li key={i} className="flex items-center gap-2">
                                   <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
@@ -637,10 +637,10 @@ function AdminDeliveryGuide() {
                         )}
                         {allDocs.length > 0 && (
                           <div className="border-t pt-3">
-                            <p className="text-sm font-medium text-foreground mb-2">相關文件</p>
-                            <div className="space-y-2">
+                            <p className="text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">相關文件</p>
+                            <div className="space-y-1.5 sm:space-y-2">
                               {allDocs.map((d) => (
-                                <div key={d} className="flex items-baseline gap-2 text-sm">
+                                <div key={d} className="flex flex-wrap items-baseline gap-1 sm:gap-2 text-xs sm:text-sm">
                                   <span className="font-medium text-foreground shrink-0">
                                     {DOCUMENT_TYPE_LABELS[d] ?? d}
                                   </span>
@@ -650,7 +650,7 @@ function AdminDeliveryGuide() {
                                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0">選填</Badge>
                                   )}
                                   {DOC_DESCRIPTIONS[d] && (
-                                    <span className="text-muted-foreground">{DOC_DESCRIPTIONS[d]}</span>
+                                    <span className="text-muted-foreground text-[10px] sm:text-xs">{DOC_DESCRIPTIONS[d]}</span>
                                   )}
                                 </div>
                               ))}
@@ -658,7 +658,7 @@ function AdminDeliveryGuide() {
                           </div>
                         )}
                         {actions.length === 0 && allDocs.length === 0 && (
-                          <p className="text-sm text-muted-foreground">此階段為結案狀態，無需額外操作。</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">此階段為結案狀態，無需額外操作。</p>
                         )}
                       </div>
                     </AccordionContent>
@@ -671,10 +671,10 @@ function AdminDeliveryGuide() {
 
         {/* SP 點數 */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">SP 點數</CardTitle>
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+            <CardTitle className="text-sm sm:text-base">SP 點數</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground divide-y">
+          <CardContent className="text-xs sm:text-sm text-muted-foreground divide-y px-4 sm:px-6">
             <div className="pb-4">
               <p className="font-medium text-foreground mb-1">什麼是 SP？</p>
               <p>
@@ -711,23 +711,23 @@ function AdminDeliveryGuide() {
 
       {/* SP 漸進消耗機制 */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">SP 漸進消耗機制</CardTitle>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-sm sm:text-base">SP 漸進消耗機制</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-4">
+        <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
           <p>
             系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">審核通過</span>為計算基準。
             需求確認與 MVP 審核中的需求<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待 MVP 架構確認<span className="font-medium text-foreground">審核通過</span>後才開始計算消耗 80%，結案<span className="font-medium text-foreground">審核通過</span>時達到 100%。
           </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table className="w-full text-xs sm:text-sm">
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium text-foreground">階段</th>
                   <th className="pb-2 font-medium text-foreground text-center">累計消耗</th>
-                  <th className="pb-2 font-medium text-foreground text-center">階段增量</th>
-                  <th className="pb-2 font-medium text-foreground">說明</th>
+                  <th className="pb-2 font-medium text-foreground text-center hidden sm:table-cell">階段增量</th>
+                  <th className="pb-2 font-medium text-foreground hidden sm:table-cell">說明</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -744,28 +744,28 @@ function AdminDeliveryGuide() {
                   <td className="py-2.5">審核通過前不計算消耗</td>
                 </tr>
                 <tr>
-                  <td className="py-2.5">
+                  <td className="py-2 sm:py-2.5">
                     <div className="flex flex-wrap gap-1">
-                      <Badge className="bg-orange-100 text-orange-700">開案確認</Badge>
-                      <Badge className="bg-violet-100 text-violet-700">開發中</Badge>
-                      <Badge className="bg-purple-100 text-purple-700">驗收中</Badge>
+                      <Badge className="bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
+                      <Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
+                      <Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge>
                     </div>
                   </td>
-                  <td className="py-2.5 text-center font-semibold text-foreground">80%</td>
-                  <td className="py-2.5 text-center text-foreground">訪談 50% + MVP 30%</td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">80%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">訪談 50% + MVP 30%</td>
                   <td className="py-2.5">MVP 審核通過後一次起算 80%</td>
                 </tr>
                 <tr>
-                  <td className="py-2.5"><Badge className="bg-emerald-100 text-emerald-700">已結案</Badge></td>
-                  <td className="py-2.5 text-center font-semibold text-foreground">100%</td>
-                  <td className="py-2.5 text-center text-foreground">+20%</td>
-                  <td className="py-2.5">結案審核通過後完整消耗，可進行 SP 調整</td>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">100%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+20%</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案審核通過後完整消耗，可進行 SP 調整</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-xs">
+          <div className="rounded-lg border bg-muted/30 p-2.5 sm:p-3 space-y-1.5 text-[10px] sm:text-xs">
             <p className="font-medium text-foreground">Wallet 計算邏輯</p>
             <p>已使用 SP = Σ（各需求確認 SP × 該階段消耗比例）</p>
             <p>可用 SP = 年度配額 − 已使用 SP</p>
@@ -778,24 +778,24 @@ function AdminDeliveryGuide() {
 
       {/* 設計變更流程（管理/交付視角） */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Badge className="bg-indigo-100 text-indigo-700">設計變更</Badge>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+            <Badge className="bg-indigo-100 text-indigo-700 text-[10px] sm:text-xs">設計變更</Badge>
             流程說明
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             設計變更是用於記錄專案進行中需求內容新增或調整的機制，通知工程團隊有新任務並作為結案時 SP 增減的依據。
             此流程非必要，僅在需要留下正式紀錄時發起。
           </p>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-4">
+        <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
           <div>
-            <p className="font-medium text-foreground mb-2">可發起階段</p>
+            <p className="font-medium text-foreground mb-1.5 sm:mb-2">可發起階段</p>
             <p>
               僅能在以下三個階段發起：
-              <Badge className="ml-1 bg-amber-100 text-amber-700">MVP 確認</Badge>
-              <Badge className="ml-1 bg-orange-100 text-orange-700">開案確認</Badge>
-              <Badge className="ml-1 bg-purple-100 text-purple-700">驗收中</Badge>
+              <Badge className="ml-1 bg-amber-100 text-amber-700 text-[10px] sm:text-xs">MVP 確認</Badge>
+              <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
+              <Badge className="ml-1 bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge>
             </p>
           </div>
 
@@ -869,45 +869,45 @@ function AdminDeliveryGuide() {
 
       {/* 常見問題 */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">常見問題</CardTitle>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-sm sm:text-base">常見問題</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="q1">
-              <AccordionTrigger>如何推進需求階段？</AccordionTrigger>
+              <AccordionTrigger className="text-xs sm:text-sm">如何推進需求階段？</AccordionTrigger>
               <AccordionContent>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   在需求詳情頁確認該階段所有必要文件已上傳且關鍵動作已完成後，點擊「推進階段」按鈕即可將需求推進至下一階段。
                 </p>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="q2">
-              <AccordionTrigger>如何調整子公司的 SP 配額？</AccordionTrigger>
+              <AccordionTrigger className="text-xs sm:text-sm">如何調整子公司的 SP 配額？</AccordionTrigger>
               <AccordionContent>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   前往「管理設定」中的 SP 錢包管理功能，可為各子公司設定年度配額或進行追加。
                 </p>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="q3">
-              <AccordionTrigger>需求被駁回後會怎樣？</AccordionTrigger>
+              <AccordionTrigger className="text-xs sm:text-sm">需求被駁回後會怎樣？</AccordionTrigger>
               <AccordionContent>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   駁回後需求不再進入流程，佔用的 SP 會釋放。需求者需根據駁回原因重新建立新需求。
                 </p>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="q4">
-              <AccordionTrigger>什麼情況該用設計變更而不是駁回？</AccordionTrigger>
+              <AccordionTrigger className="text-xs sm:text-sm">什麼情況該用設計變更而不是駁回？</AccordionTrigger>
               <AccordionContent>
-                <div className="text-sm text-muted-foreground space-y-3">
+                <div className="text-xs sm:text-sm text-muted-foreground space-y-2 sm:space-y-3">
                   <p>
                     簡單說：
                     <span className="text-red-700 font-medium">駁回</span>是「目前完成的內容不符合需求方要求」；
                     <span className="text-indigo-700 font-medium">設計變更</span>是「需求方有新需求，且認為需要討論」。
                   </p>
-                  <div className="rounded-md border border-red-200 bg-red-50/40 p-3 space-y-1.5">
+                  <div className="rounded-md border border-red-200 bg-red-50/40 p-2.5 sm:p-3 space-y-1.5">
                     <p className="font-medium text-red-900">駁回 — 現有內容不符合要求</p>
                     <ul className="text-red-900/80 space-y-1 list-none">
                       <li>• 觸發：審核者在簽核當下選擇不通過</li>
@@ -915,7 +915,7 @@ function AdminDeliveryGuide() {
                       <li>• 常見情境：內容不完整、品質不達標、文件缺漏</li>
                     </ul>
                   </div>
-                  <div className="rounded-md border border-indigo-200 bg-indigo-50/40 p-3 space-y-1.5">
+                  <div className="rounded-md border border-indigo-200 bg-indigo-50/40 p-2.5 sm:p-3 space-y-1.5">
                     <p className="font-medium text-indigo-900">設計變更 — 需求方有新需求需要討論</p>
                     <ul className="text-indigo-900/80 space-y-1 list-none">
                       <li>• 觸發：管理者在專案進行中主動發起</li>
@@ -946,12 +946,12 @@ export default function DocumentsPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">
             使用指南
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-xs sm:text-base text-muted-foreground">
             {isSubsidiary
               ? "了解如何提交需求、追蹤進度與管理 SP 點數"
               : "了解需求流程、SP 點數與各階段操作方式"}
