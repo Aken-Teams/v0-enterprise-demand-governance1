@@ -427,16 +427,22 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
   // Check if selected document is confidential
   const isConfidential = selectedDoc ? CONFIDENTIAL_DOC_TYPES.has(selectedDoc.type) : false
+  const selectedDocExt = selectedDoc?.fileName.split(".").pop()?.toLowerCase() || ""
+  const isPreviewEmpty = !!selectedDoc && ["txt", "md"].includes(selectedDocExt) && !textLoading && !textContent
 
   // Fetch text content for txt/md files
   useEffect(() => {
+    setTextContent("")
     if (!selectedDoc?.fileUrl || isConfidential) return
     const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
     if (!["txt", "md"].includes(ext)) return
     setTextLoading(true)
     fetch(selectedDoc.fileUrl)
-      .then((r) => r.text())
-      .then(setTextContent)
+      .then((r) => {
+        if (!r.ok) { setTextContent(""); setTextLoading(false); return }
+        return r.text()
+      })
+      .then((t) => { if (t !== undefined) setTextContent(t) })
       .catch(() => setTextContent(""))
       .finally(() => setTextLoading(false))
   }, [selectedDoc, isConfidential])
@@ -1119,9 +1125,9 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
-                      <div className="relative min-h-[300px] sm:min-h-[520px] h-full">
+                      <div className={cn("relative h-full flex flex-col", isPreviewEmpty ? "min-h-[120px]" : "min-h-[300px] sm:min-h-[520px]")}>
                         {/* Preview toolbar */}
-                        <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20">
+                        <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20 shrink-0">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
                             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 lg:hidden" onClick={() => setSelectedDoc(null)}>
                               <ArrowLeft className="h-3.5 w-3.5" />
@@ -1166,7 +1172,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                             </TooltipProvider>
                           </div>
                         </div>
-                        <div className="h-full min-h-[300px] sm:min-h-[520px] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+                        <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
                           {(() => {
                             // Block confidential documents
                             if (isConfidential) {
@@ -1262,6 +1268,15 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               if (textLoading) {
                                 return <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                               }
+                              if (!textContent) {
+                                return (
+                                  <div className="text-center space-y-2">
+                                    <FileText className="h-10 w-10 mx-auto text-muted-foreground/30" />
+                                    <p className="text-sm text-muted-foreground">檔案不存在</p>
+                                    <p className="text-xs text-muted-foreground/60">檔案可能尚未同步或已被移除</p>
+                                  </div>
+                                )
+                              }
                               if (ext === "md") {
                                 return (
                                   <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
@@ -1302,11 +1317,13 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
                             if (["xls", "xlsx"].includes(ext) && excelReady) {
                               return (
-                                <div className="absolute inset-0">
-                                  <ExcelPreview
-                                    fileUrl={selectedDoc.fileUrl}
-                                    fileName={selectedDoc.fileName}
-                                  />
+                                <div className="w-full min-h-[300px] sm:min-h-[520px] relative">
+                                  <div className="absolute inset-0">
+                                    <ExcelPreview
+                                      fileUrl={selectedDoc.fileUrl}
+                                      fileName={selectedDoc.fileName}
+                                    />
+                                  </div>
                                 </div>
                               )
                             }
@@ -1340,16 +1357,18 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                             )
                           })()}
                         </div>
-                        {/* Watermark overlay */}
-                        <div
-                          className="absolute inset-0 pointer-events-none z-10"
-                          style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
-                        />
+                        {/* Watermark overlay – hidden when file content is empty */}
+                        {!isPreviewEmpty && (
+                          <div
+                            className="absolute inset-0 pointer-events-none z-10"
+                            style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
+                          />
+                        )}
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center min-h-[520px] text-muted-foreground">
-                        <Eye className="h-12 w-12 mb-3 opacity-20" />
-                        <p className="text-sm">請選擇文件以預覽</p>
+                      <div className="flex flex-col items-center justify-center min-h-[200px] sm:min-h-[400px] text-muted-foreground">
+                        <Eye className="h-10 w-10 sm:h-12 sm:w-12 mb-3 opacity-20" />
+                        <p className="text-xs sm:text-sm">請選擇文件以預覽</p>
                       </div>
                     )}
                   </CardContent>

@@ -650,8 +650,11 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
 
   // Document preview effects
   const isConfidential = selectedDoc ? CONFIDENTIAL_DOC_TYPES.has(selectedDoc.type) : false
+  const selectedDocExt = selectedDoc?.fileName.split(".").pop()?.toLowerCase() || ""
+  const isPreviewEmpty = !!selectedDoc && ["txt", "md"].includes(selectedDocExt) && !textLoading && !textContent
 
   useEffect(() => {
+    setTextContent("")
     if (!selectedDoc?.fileUrl || isConfidential) return
     const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
     if (!["txt", "md"].includes(ext)) return
@@ -1316,7 +1319,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
-                      <div className="relative min-h-[520px] h-full">
+                      <div className={cn("relative h-full", isPreviewEmpty ? "min-h-[120px]" : "min-h-[300px] sm:min-h-[520px]")}>
                         {/* Preview toolbar */}
                         <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/20">
                           <span className="text-xs text-muted-foreground truncate">{selectedDoc.fileName}</span>
@@ -1324,7 +1327,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                             <Maximize2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        <div className="h-full min-h-[520px] flex items-center justify-center p-4 overflow-hidden">
+                        <div className="h-full flex items-center justify-center p-4 overflow-hidden">
                           {(() => {
                             if (isConfidential) {
                               return (
@@ -1403,7 +1406,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                               return <pre className="text-sm whitespace-pre-wrap break-words w-full max-h-[520px] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">{textContent}</pre>
                             }
                             if (["xls", "xlsx"].includes(ext) && excelReady) {
-                              return <div className="absolute inset-0"><ExcelPreview fileUrl={selectedDoc.fileUrl!} fileName={selectedDoc.fileName} /></div>
+                              return <div className="w-full min-h-[520px] relative"><div className="absolute inset-0"><ExcelPreview fileUrl={selectedDoc.fileUrl!} fileName={selectedDoc.fileName} /></div></div>
                             }
                             if (["ppt", "pptx", "doc", "docx"].includes(ext)) {
                               if (officeLoading) return <div className="flex flex-col items-center gap-3"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /><p className="text-xs text-muted-foreground">正在轉換預覽…</p></div>
@@ -1413,10 +1416,12 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                             return <div className="text-center space-y-3"><FileText className="h-16 w-16 mx-auto text-muted-foreground/40" /><p className="text-sm font-medium">{selectedDoc.fileName}</p></div>
                           })()}
                         </div>
-                        <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />
+                        {!isPreviewEmpty && (
+                          <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />
+                        )}
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center min-h-[520px] text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center min-h-[200px] sm:min-h-[350px] text-muted-foreground">
                         <Eye className="h-12 w-12 mb-3 opacity-20" />
                         <p className="text-sm">請選擇文件以預覽</p>
                       </div>

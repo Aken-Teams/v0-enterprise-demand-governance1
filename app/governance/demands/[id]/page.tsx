@@ -478,9 +478,13 @@ export default function DemandDetailPage() {
       .catch(() => {})
   }, [token, canManage])
 
+  const selectedDocExt = selectedDoc?.fileName.split(".").pop()?.toLowerCase() || ""
+  const isPreviewEmpty = !!selectedDoc && ["txt", "md"].includes(selectedDocExt) && !textLoading && !textContent
+
   // Fetch text content for preview
   useEffect(() => {
-    if (!selectedDoc?.fileUrl) { setTextContent(""); return }
+    setTextContent("")
+    if (!selectedDoc?.fileUrl) return
     const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
     if (!["txt", "md"].includes(ext)) return
     setTextLoading(true)
@@ -1817,9 +1821,9 @@ export default function DemandDetailPage() {
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
-                      <div className="relative min-h-[300px] sm:min-h-[520px] h-full">
+                      <div className={cn("relative h-full flex flex-col", isPreviewEmpty ? "min-h-[120px]" : "min-h-[300px] sm:min-h-[520px]")}>
                         {/* Preview toolbar */}
-                        <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20">
+                        <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20 shrink-0">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
                             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 lg:hidden" onClick={() => setSelectedDoc(null)}>
                               <ArrowLeft className="h-3.5 w-3.5" />
@@ -1866,7 +1870,7 @@ export default function DemandDetailPage() {
                             </TooltipProvider>
                           </div>
                         </div>
-                        <div className="h-full min-h-[300px] sm:min-h-[520px] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+                        <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
                           {(() => {
                             const ext = selectedDoc.fileName.split(".").pop()?.toLowerCase() || ""
                             const url = selectedDoc.fileUrl
@@ -2000,11 +2004,13 @@ export default function DemandDetailPage() {
 
                             if (["xls", "xlsx"].includes(ext) && excelReady) {
                               return (
-                                <div className="absolute inset-0">
-                                  <ExcelPreview
-                                    fileUrl={selectedDoc.fileUrl}
-                                    fileName={selectedDoc.fileName}
-                                  />
+                                <div className="w-full min-h-[300px] sm:min-h-[520px] relative">
+                                  <div className="absolute inset-0">
+                                    <ExcelPreview
+                                      fileUrl={selectedDoc.fileUrl}
+                                      fileName={selectedDoc.fileName}
+                                    />
+                                  </div>
                                 </div>
                               )
                             }
@@ -2050,14 +2056,16 @@ export default function DemandDetailPage() {
                             )
                           })()}
                         </div>
-                        {/* Watermark overlay */}
-                        <div
-                          className="absolute inset-0 pointer-events-none z-10"
-                          style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
-                        />
+                        {/* Watermark overlay – hidden when file content is empty */}
+                        {!isPreviewEmpty && (
+                          <div
+                            className="absolute inset-0 pointer-events-none z-10"
+                            style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
+                          />
+                        )}
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center min-h-[200px] sm:min-h-[520px] text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center min-h-[200px] sm:min-h-[350px] text-muted-foreground">
                         <Eye className="h-10 w-10 sm:h-12 sm:w-12 mb-3 opacity-20" />
                         <p className="text-xs sm:text-sm">請選擇文件以預覽</p>
                       </div>
