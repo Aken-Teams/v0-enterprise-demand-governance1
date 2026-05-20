@@ -29,6 +29,9 @@ import {
   ShieldAlert,
   ClipboardCheck,
   Package,
+  Maximize2,
+  Link2,
+  Check,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -39,6 +42,8 @@ import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
 import { ExcelPreview } from "@/components/excel-preview"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -369,6 +374,9 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
+  const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string }[]>([])
+  const [docLinkCopied, setDocLinkCopied] = useState(false)
   // Tracks if user just approved a DESIGN_CHANGE in this session — used to
   // suppress the PHASE banner so they don't see a second "approve" prompt
   // immediately after. Resets naturally on any new page load.
@@ -398,6 +406,24 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     fetchDemand()
   }, [fetchDemand])
+
+  // Fetch share links for document sharing
+  const fetchShareLinks = useCallback(async () => {
+    if (!token || !id) return
+    try {
+      const res = await fetch(`/api/demands/${id}/share`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setShareLinks(data.shares ?? [])
+      }
+    } catch { /* ignore */ }
+  }, [token, id])
+
+  useEffect(() => {
+    fetchShareLinks()
+  }, [fetchShareLinks])
 
   // Check if selected document is confidential
   const isConfidential = selectedDoc ? CONFIDENTIAL_DOC_TYPES.has(selectedDoc.type) : false
@@ -1093,8 +1119,54 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {selectedDoc ? (
-                      <div className="relative min-h-[520px] h-full">
-                        <div className="h-full min-h-[520px] flex items-center justify-center p-4 overflow-hidden">
+                      <div className="relative min-h-[300px] sm:min-h-[520px] h-full">
+                        {/* Preview toolbar */}
+                        <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 lg:hidden" onClick={() => setSelectedDoc(null)}>
+                              <ArrowLeft className="h-3.5 w-3.5" />
+                            </Button>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground truncate">{selectedDoc.fileName}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <TooltipProvider>
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => {
+                                      const activeShare = shareLinks.find(s => new Date(s.expiresAt) > new Date())
+                                      if (!activeShare) return
+                                      const docUrl = `${window.location.origin}/share/${activeShare.token}?doc=${selectedDoc.id}`
+                                      navigator.clipboard.writeText(docUrl)
+                                      setDocLinkCopied(true)
+                                      setTimeout(() => setDocLinkCopied(false), 2000)
+                                    }}
+                                    disabled={!shareLinks.some(s => new Date(s.expiresAt) > new Date())}
+                                  >
+                                    {docLinkCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Link2 className="h-3.5 w-3.5" />}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {shareLinks.some(s => new Date(s.expiresAt) > new Date())
+                                    ? (docLinkCopied ? "已複製" : "複製文件分享連結")
+                                    : "尚無有效分享連結"}
+                                </TooltipContent>
+                              </UiTooltip>
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFullScreenDoc(selectedDoc)}>
+                                    <Maximize2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>全螢幕預覽</TooltipContent>
+                              </UiTooltip>
+                            </TooltipProvider>
+                          </div>
+                        </div>
+                        <div className="h-full min-h-[300px] sm:min-h-[520px] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
                           {(() => {
                             // Block confidential documents
                             if (isConfidential) {
@@ -1343,6 +1415,14 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Full-screen document preview */}
+      <FullScreenDocumentPreview
+        open={!!fullScreenDoc}
+        onOpenChange={(open) => { if (!open) setFullScreenDoc(null) }}
+        doc={fullScreenDoc}
+        watermarkBg={watermarkBg}
+      />
 
       {/* Image zoom overlay */}
       {zoomedImg && (
