@@ -32,6 +32,9 @@ import {
   Maximize2,
   Link2,
   Check,
+  Share2,
+  Trash2,
+  Copy,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -43,6 +46,7 @@ import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
 import { ExcelPreview } from "@/components/excel-preview"
 import ReactMarkdown from "react-markdown"
@@ -375,7 +379,10 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
   const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
-  const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string }[]>([])
+  const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareCopied, setShareCopied] = useState<string | null>(null)
   const [docLinkCopied, setDocLinkCopied] = useState(false)
   // Tracks if user just approved a DESIGN_CHANGE in this session — used to
   // suppress the PHASE banner so they don't see a second "approve" prompt
@@ -410,6 +417,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   // Fetch share links for document sharing
   const fetchShareLinks = useCallback(async () => {
     if (!token || !id) return
+    setShareLoading(true)
     try {
       const res = await fetch(`/api/demands/${id}/share`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -419,11 +427,44 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
         setShareLinks(data.shares ?? [])
       }
     } catch { /* ignore */ }
+    finally { setShareLoading(false) }
   }, [token, id])
 
   useEffect(() => {
     fetchShareLinks()
   }, [fetchShareLinks])
+
+  const createShareLink = async () => {
+    if (!token) return
+    setShareLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${id}/share`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) fetchShareLinks()
+    } catch { /* ignore */ }
+    finally { setShareLoading(false) }
+  }
+
+  const deleteShareLink = async (shareId: string) => {
+    if (!token) return
+    try {
+      await fetch(`/api/demands/${id}/share`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ shareId }),
+      })
+      fetchShareLinks()
+    } catch { /* ignore */ }
+  }
+
+  const copyShareUrl = (shareToken: string) => {
+    const url = `${window.location.origin}/share/${shareToken}`
+    navigator.clipboard.writeText(url)
+    setShareCopied(shareToken)
+    setTimeout(() => setShareCopied(null), 2000)
+  }
 
   // Check if selected document is confidential
   const isConfidential = selectedDoc ? CONFIDENTIAL_DOC_TYPES.has(selectedDoc.type) : false
@@ -567,12 +608,84 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <p className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</p>
                 <Badge className={cn("text-[10px] sm:text-xs whitespace-nowrap shrink-0", statusInfo.color)}>
                   {statusInfo.label}
                   {dcHasPending && <span className="ml-1">- 設計變更</span>}
                 </Badge>
+                <Dialog open={shareDialogOpen} onOpenChange={(open) => { setShareDialogOpen(open); if (open) fetchShareLinks() }}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] sm:text-xs gap-1">
+                      <Share2 className="h-3 w-3" />
+                      分享
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md p-4 sm:p-6">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                        <Link2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                        分享連結管理
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-2">
+                      {shareLoading && shareLinks.length === 0 ? (
+                        <div className="flex justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (() => {
+                        const hasActive = shareLinks.some((s) => new Date(s.expiresAt) > new Date())
+                        return (
+                        <>
+                          {shareLinks.length > 0 ? (
+                            <div className="space-y-2">
+                              {shareLinks.map((s) => {
+                                const expired = new Date(s.expiresAt) <= new Date()
+                                return (
+                                <div key={s.id} className={cn("rounded-lg border p-3 space-y-2", expired && "opacity-60 bg-muted/30")}>
+                                  <div className="flex items-center gap-2">
+                                    <p className={cn("text-sm font-mono break-all flex-1", expired ? "text-muted-foreground line-through" : "text-foreground")}>
+                                      {typeof window !== "undefined" ? `${window.location.origin}/share/${s.token}` : `/share/${s.token}`}
+                                    </p>
+                                    {expired && (
+                                      <Badge variant="outline" className="text-[10px] text-red-500 border-red-200 shrink-0">已失效</Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs text-muted-foreground">
+                                      {expired ? "已於" : "有效至"} {new Date(s.expiresAt).toLocaleDateString("zh-TW")} {expired ? "過期" : ""} · {s.createdBy.name} 建立
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                      {!expired && (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyShareUrl(s.token)}>
+                                          {shareCopied === s.token ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                                        </Button>
+                                      )}
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteShareLink(s.id)}>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-2">目前沒有分享連結</p>
+                          )}
+                          <Button onClick={createShareLink} disabled={shareLoading || hasActive} className="w-full">
+                            {shareLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Share2 className="h-4 w-4 mr-2" />}
+                            產生新的分享連結（7 天有效）
+                          </Button>
+                          <p className="text-[11px] text-muted-foreground text-center">
+                            {hasActive ? "已有有效連結，到期後才可產生新連結" : "唯讀分享，登入後可簽核"}
+                          </p>
+                        </>
+                        )
+                      })()}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
               <h1 className="text-lg sm:text-xl font-bold tracking-tight leading-snug break-words">{demand.title}</h1>
             </div>
@@ -1144,13 +1257,12 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                     className="h-7 w-7"
                                     onClick={() => {
                                       const activeShare = shareLinks.find(s => new Date(s.expiresAt) > new Date())
-                                      if (!activeShare) return
+                                      if (!activeShare) { setShareDialogOpen(true); return }
                                       const docUrl = `${window.location.origin}/share/${activeShare.token}?doc=${selectedDoc.id}`
                                       navigator.clipboard.writeText(docUrl)
                                       setDocLinkCopied(true)
                                       setTimeout(() => setDocLinkCopied(false), 2000)
                                     }}
-                                    disabled={!shareLinks.some(s => new Date(s.expiresAt) > new Date())}
                                   >
                                     {docLinkCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Link2 className="h-3.5 w-3.5" />}
                                   </Button>
@@ -1158,7 +1270,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 <TooltipContent>
                                   {shareLinks.some(s => new Date(s.expiresAt) > new Date())
                                     ? (docLinkCopied ? "已複製" : "複製文件分享連結")
-                                    : "尚無有效分享連結"}
+                                    : "先建立分享連結"}
                                 </TooltipContent>
                               </UiTooltip>
                               <UiTooltip>

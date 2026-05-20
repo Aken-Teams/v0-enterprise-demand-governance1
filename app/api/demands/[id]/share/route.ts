@@ -11,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = verifyRole(request, ["admin", "delivery"])
+    const auth = verifyRole(request, ["admin", "delivery", "subsidiary"])
     const { id } = await params
 
     const demand = await prisma.demand.findUnique({ where: { id } })
@@ -26,6 +26,14 @@ export async function POST(
       })
       if (!canWrite) {
         return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+      }
+    }
+
+    // Subsidiary: verify user belongs to the demand's organization
+    if (auth.role === "subsidiary") {
+      const user = await prisma.user.findUnique({ where: { id: auth.userId }, select: { organizationId: true } })
+      if (user?.organizationId !== demand.organizationId) {
+        return NextResponse.json({ error: "無權限分享此需求" }, { status: 403 })
       }
     }
 
@@ -72,7 +80,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery"])
+    verifyRole(request, ["admin", "delivery", "subsidiary"])
     const { id } = await params
 
     const shares = await prisma.demandShare.findMany({
@@ -97,7 +105,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = verifyRole(request, ["admin", "delivery"])
+    const auth = verifyRole(request, ["admin", "delivery", "subsidiary"])
     const { id } = await params
 
     const { shareId } = await request.json()
