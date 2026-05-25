@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
-import { calcUsedSp, calcUsedSpRaw, SP_RATE } from "@/lib/constants/demand"
+import { calcUsedSp, SP_RATE } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
     // Fetch all data in parallel
-    const [demands, wallets, statusHistories, allOrgs, latestComments, latestSignoffs] = await Promise.all([
+    const [demands, wallets, statusHistories, allOrgs, latestComments, latestSignoffs, approvedSignoffs] = await Promise.all([
       prisma.demand.findMany({
         select: {
           id: true,
@@ -72,6 +72,12 @@ export async function GET(request: NextRequest) {
       prisma.phaseSignoff.groupBy({
         by: ["demandId"],
         _max: { requestedAt: true, respondedAt: true },
+      }),
+      // Approved phase signoffs for monthly ledger (簽核為主)
+      prisma.phaseSignoff.findMany({
+        where: { status: "APPROVED", kind: "PHASE" },
+        select: { demandId: true, phase: true, respondedAt: true },
+        orderBy: { respondedAt: "desc" },
       }),
     ])
 
@@ -178,12 +184,11 @@ export async function GET(request: NextRequest) {
     const orgSpData = allOrgs.map((org) => {
       const w = walletMap.get(org.id)
       const orgDemands = demands.filter((d) => d.organizationId === org.id)
-      let rawUsedSp = 0
+      let usedSp = 0
       for (const d of orgDemands) {
         const sp = d.confirmedSp ?? d.estimatedSp
-        rawUsedSp += calcUsedSpRaw(d.status, sp, d.heldFromStatus)
+        usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
       }
-      const usedSp = Math.round(rawUsedSp)
       const totalQuota = w?.totalQuota ?? 0
       return {
         name: org.name,
@@ -332,7 +337,7 @@ export async function GET(request: NextRequest) {
       devWorkload[key].count++
       const sp = d.confirmedSp ?? d.estimatedSp ?? 0
       devWorkload[key].totalSp += sp
-      devWorkload[key].usedSp += calcUsedSpRaw(d.status, sp, d.heldFromStatus)
+      devWorkload[key].usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
     }
 
     // --- Financial data (permission-gated) ---
@@ -360,13 +365,12 @@ export async function GET(request: NextRequest) {
         const quotaSp = w?.totalQuota ?? 0
         const orgDemands = demands.filter((d) => d.organizationId === org.id && d.status !== "REJECTED")
         let totalSp = 0
-        let rawUsedSp = 0
+        let usedSp = 0
         for (const dem of orgDemands) {
           const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
           totalSp += sp
-          rawUsedSp += calcUsedSpRaw(dem.status, sp, dem.heldFromStatus)
+          usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus)
         }
-        const usedSp = Math.round(rawUsedSp)
         return {
           name: org.name,
           quotaSp,
@@ -401,59 +405,106 @@ export async function GET(request: NextRequest) {
         })
 
       // Monthly ledger: SP consumption deltas from status transitions
+      // Build signoff date lookup: demandId → phase → respondedAt[] (簽核為主)
+      const signoffDates = new Map<string, Map<string, Date[]>>()
+      for (const s of approvedSignoffs) {
+        if (!s.respondedAt) continue
+        if (!signoffDates.has(s.demandId)) signoffDates.set(s.demandId, new Map())
+        const phaseMap = signoffDates.get(s.demandId)!
+        if (!phaseMap.has(s.phase)) phaseMap.set(s.phase, [])
+        phaseMap.get(s.phase)!.push(s.respondedAt)
+      }
+      // Phase signoff → status transition mapping
+      const SIGNOFF_PHASE_MAP: Record<string, string> = {
+        "SP_REVIEW": "DEVELOPING",    // SP_REVIEW signoff → enters DEVELOPING
+        "ACCEPTANCE": "CLOSED",       // ACCEPTANCE signoff → enters CLOSED
+        "PRD_REVIEW": "SP_REVIEW",    // PRD_REVIEW signoff → enters SP_REVIEW
+      }
+
       const demandMap = new Map(demands.map((d) => [d.id, {
         demandNumber: d.demandNumber, title: d.title, orgName: d.organization.name,
         estimatedSp: d.estimatedSp, confirmedSp: d.confirmedSp,
       }]))
 
       // Collect all transition deltas
+      // Group by demand and process chronologically to track effective SP at each point
       const allDeltas: { month: string; org: string; detail: LedgerDetail }[] = []
 
+      const histByDemand = new Map<string, typeof statusHistories>()
       for (const h of statusHistories) {
-        const dem = demandMap.get(h.demandId)
-        if (!dem) continue
+        if (!demandMap.has(h.demandId)) continue
+        if (!histByDemand.has(h.demandId)) histByDemand.set(h.demandId, [])
+        histByDemand.get(h.demandId)!.push(h)
+      }
 
-        let spAdj: { type: string; oldSp: number; newSp: number; reason: string } | null = null
-        if (h.comment) {
-          try {
-            const parsed = JSON.parse(h.comment)
-            if (parsed?.type === "SP_ADJUSTMENT") spAdj = parsed
-          } catch { /* not JSON */ }
+      for (const [demandId, histories] of histByDemand) {
+        const dem = demandMap.get(demandId)!
+        // Sort chronologically (oldest first) to track running SP
+        histories.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        let runningSp = dem.estimatedSp ?? 0
+
+        for (const h of histories) {
+          let spAdj: { type: string; oldSp: number; newSp: number; reason: string } | null = null
+          if (h.comment) {
+            try {
+              const parsed = JSON.parse(h.comment)
+              if (parsed?.type === "SP_ADJUSTMENT") spAdj = parsed
+            } catch { /* not JSON */ }
+          }
+
+          let oldUsed: number, newUsed: number
+
+          // For ON_HOLD / REJECTED transitions, infer heldFromStatus from the other side
+          const inferHeld = (s: string | null, other: string | null) =>
+            (s === "ON_HOLD" || s === "REJECTED") ? other : null
+
+          if (spAdj) {
+            oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, spAdj.oldSp, inferHeld(h.fromStatus, h.toStatus)) : 0
+            newUsed = calcUsedSp(h.toStatus, spAdj.newSp, inferHeld(h.toStatus, h.fromStatus))
+            runningSp = spAdj.newSp
+          } else {
+            oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, runningSp, inferHeld(h.fromStatus, h.toStatus)) : 0
+            newUsed = calcUsedSp(h.toStatus, runningSp, inferHeld(h.toStatus, h.fromStatus))
+          }
+
+          const deltaSp = newUsed - oldUsed
+          if (deltaSp === 0) continue
+
+          // 簽核為主：find the signoff date for this transition if available
+          let effectiveDate = new Date(h.createdAt)
+          if (h.fromStatus && !spAdj) {
+            // Check if this transition corresponds to a phase signoff
+            for (const [phase, targetStatus] of Object.entries(SIGNOFF_PHASE_MAP)) {
+              if (h.toStatus === targetStatus && h.fromStatus === phase) {
+                const dates = signoffDates.get(h.demandId)?.get(phase)
+                if (dates?.length) {
+                  // Find the latest signoff respondedAt that is before or close to the status change
+                  const hTime = new Date(h.createdAt).getTime()
+                  const match = dates
+                    .filter((d) => d.getTime() <= hTime + 86400000) // within 1 day
+                    .sort((a, b) => b.getTime() - a.getTime())[0]
+                  if (match) effectiveDate = match
+                }
+                break
+              }
+            }
+          }
+          const dt = effectiveDate
+          const monthKey = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}`
+
+          allDeltas.push({
+            month: monthKey,
+            org: dem.orgName,
+            detail: {
+              demandNumber: dem.demandNumber, title: dem.title,
+              fromStatus: h.fromStatus, toStatus: h.toStatus,
+              sp: spAdj ? spAdj.newSp : runningSp,
+              deltaSp, deltaAmount: deltaSp * SP_RATE,
+              date: effectiveDate.toISOString(),
+              ...(spAdj ? { spChange: { from: spAdj.oldSp, to: spAdj.newSp, reason: spAdj.reason || "" } } : {}),
+            },
+          })
         }
-
-        const effectiveSp = dem.confirmedSp ?? dem.estimatedSp ?? 0
-        let oldUsed: number, newUsed: number
-
-        // For ON_HOLD / REJECTED transitions, infer heldFromStatus from the other side
-        const inferHeld = (s: string | null, other: string | null) =>
-          (s === "ON_HOLD" || s === "REJECTED") ? other : null
-
-        if (spAdj) {
-          oldUsed = h.fromStatus ? calcUsedSpRaw(h.fromStatus, spAdj.oldSp, inferHeld(h.fromStatus, h.toStatus)) : 0
-          newUsed = calcUsedSpRaw(h.toStatus, spAdj.newSp, inferHeld(h.toStatus, h.fromStatus))
-        } else {
-          oldUsed = h.fromStatus ? calcUsedSpRaw(h.fromStatus, effectiveSp, inferHeld(h.fromStatus, h.toStatus)) : 0
-          newUsed = calcUsedSpRaw(h.toStatus, effectiveSp, inferHeld(h.toStatus, h.fromStatus))
-        }
-
-        const deltaSp = newUsed - oldUsed
-        if (deltaSp === 0) continue
-
-        const dt = new Date(h.createdAt)
-        const monthKey = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, "0")}`
-
-        allDeltas.push({
-          month: monthKey,
-          org: dem.orgName,
-          detail: {
-            demandNumber: dem.demandNumber, title: dem.title,
-            fromStatus: h.fromStatus, toStatus: h.toStatus,
-            sp: spAdj ? spAdj.newSp : effectiveSp,
-            deltaSp, deltaAmount: deltaSp * SP_RATE,
-            date: new Date(h.createdAt).toISOString(),
-            ...(spAdj ? { spChange: { from: spAdj.oldSp, to: spAdj.newSp, reason: spAdj.reason || "" } } : {}),
-          },
-        })
       }
 
       // Group by month → org, last 12 months
@@ -468,8 +519,8 @@ export async function GET(request: NextRequest) {
       // Generate last 12 months (even if empty)
       const monthlyLedger: MonthlyLedger[] = []
       for (let i = 11; i >= 0; i--) {
-        const dt = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        const monthLabel = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, "0")}`
+        const dt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+        const monthLabel = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}`
         const orgMap = monthlyLedgerMap.get(monthLabel)
         const data: MonthlyLedgerOrg[] = []
         if (orgMap) {

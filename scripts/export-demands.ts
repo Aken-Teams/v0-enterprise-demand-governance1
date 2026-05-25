@@ -31,9 +31,9 @@ const STATUS_LABEL: Record<string, string> = {
 const SP_PROGRESS_RATE: Record<string, number> = {
   SUBMITTED:   0,
   PRD_REVIEW:  0,
-  SP_REVIEW:   0.8,
-  DEVELOPING:  0.8,
-  ACCEPTANCE:  0.8,
+  SP_REVIEW:   0,
+  DEVELOPING:  0.5,
+  ACCEPTANCE:  0.75,
   CLOSED:      1.0,
   ON_HOLD:     0,
   REJECTED:    0,

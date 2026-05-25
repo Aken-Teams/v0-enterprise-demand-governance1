@@ -138,13 +138,13 @@ export const SIGNOFF_KIND_LABELS: Record<string, string> = {
 /** SP 單價 (NT$) */
 export const SP_RATE = 20000
 
-/** SP 漸進消耗比例：MVP 審核通過（進入開案確認）起算 80% → 結案審核通過 100%（需求確認、MVP 審核中不扣 SP） */
+/** SP 漸進消耗比例：開案通過 50% → 開發完成 75% → 結案 100%（簽核為主，無簽核看狀態） */
 export const SP_PROGRESS_RATE: Record<string, number> = {
   SUBMITTED: 0,
   PRD_REVIEW: 0,
-  SP_REVIEW: 0.8,
-  DEVELOPING: 0.8,
-  ACCEPTANCE: 0.8,
+  SP_REVIEW: 0,
+  DEVELOPING: 0.5,
+  ACCEPTANCE: 0.75,
   CLOSED: 1.0,
   ON_HOLD: 0,
 }
