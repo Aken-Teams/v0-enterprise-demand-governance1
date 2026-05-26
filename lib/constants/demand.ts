@@ -149,19 +149,14 @@ export const SP_PROGRESS_RATE: Record<string, number> = {
   ON_HOLD: 0,
 }
 
-/** 依據狀態計算漸進已使用 SP（未捨入，用於彙總後再 Math.round） */
-export function calcUsedSpRaw(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
+/** 依據狀態計算漸進已使用 SP（精確數值，不四捨五入） */
+export function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
   let effectiveStatus = status
   if (status === "ON_HOLD" || status === "REJECTED") {
     effectiveStatus = heldFromStatus || status
   }
   const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
   return effectiveSp * rate
-}
-
-/** 依據狀態計算漸進已使用 SP（單筆捨入，用於個別需求顯示） */
-export function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
-  return Math.round(calcUsedSpRaw(status, effectiveSp, heldFromStatus))
 }
 
 export const DEFAULT_SUBTASK_TEMPLATES = [

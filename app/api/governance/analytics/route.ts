@@ -525,15 +525,12 @@ export async function GET(request: NextRequest) {
         const data: MonthlyLedgerOrg[] = []
         if (orgMap) {
           for (const [org, details] of orgMap) {
-            const rawDeltaSp = details.reduce((s, d) => s + d.deltaSp, 0)
-            const deltaSp = Math.round(rawDeltaSp)
-            // Round individual detail deltaSp for display
-            const roundedDetails = details
-              .map((d) => ({ ...d, deltaSp: Math.round(d.deltaSp), deltaAmount: Math.round(d.deltaSp) * SP_RATE }))
+            const deltaSp = details.reduce((s, d) => s + d.deltaSp, 0)
+            const sortedDetails = details
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             data.push({
               organization: org, deltaSp, deltaAmount: deltaSp * SP_RATE,
-              details: roundedDetails,
+              details: sortedDetails,
             })
           }
           data.sort((a, b) => b.deltaAmount - a.deltaAmount)

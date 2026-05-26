@@ -18,7 +18,7 @@ const SP_PROGRESS_RATE: Record<string, number> = {
   CLOSED: 1.0,
 }
 
-function calcUsedSpRaw(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
+function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
   let effectiveStatus = status
   if (status === "ON_HOLD" || status === "REJECTED") {
     effectiveStatus = heldFromStatus || status
@@ -50,10 +50,10 @@ async function main() {
         select: { status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
       })
 
-      const usedSp = Math.round(demands.reduce((sum, d) => {
+      const usedSp = demands.reduce((sum, d) => {
         const sp = d.confirmedSp ?? d.estimatedSp
-        return sum + calcUsedSpRaw(d.status, sp, d.heldFromStatus)
-      }, 0))
+        return sum + calcUsedSp(d.status, sp, d.heldFromStatus)
+      }, 0)
 
       await prisma.spWallet.update({
         where: { id: wallet.id },

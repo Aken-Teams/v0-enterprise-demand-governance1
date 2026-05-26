@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 import { notifyUsers, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
-import { calcUsedSpRaw } from "@/lib/constants/demand"
+import { calcUsedSp } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
       if (!spByOrg[d.organizationId]) spByOrg[d.organizationId] = { used: 0 }
-      spByOrg[d.organizationId].used += calcUsedSpRaw(d.status, sp, d.heldFromStatus)
+      spByOrg[d.organizationId].used += calcUsedSp(d.status, sp, d.heldFromStatus)
     }
 
     const result = organizations.map((org) => {

@@ -45,7 +45,7 @@ function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string
     effectiveStatus = heldFromStatus || status
   }
   const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
-  return Math.round(effectiveSp * rate)
+  return effectiveSp * rate
 }
 
 function fmtDate(d: Date | null | undefined): string {
