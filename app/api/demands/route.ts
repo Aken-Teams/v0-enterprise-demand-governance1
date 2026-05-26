@@ -3,7 +3,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
-import { calcUsedSp } from "@/lib/constants/demand"
+import { calcUsedSp, PHASE_DOCUMENT_MAP, DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
 import { createDemandSchema } from "@/lib/validations/demand"
 import { generateDemandNumber } from "@/lib/demand-number"
 import { buildDemandVisibilityFilter } from "@/lib/demand-access"
@@ -299,7 +299,8 @@ export async function GET(request: NextRequest) {
           developer: { select: { name: true } },
           contactPerson_: { select: { name: true } },
           demandManager: { select: { name: true } },
-          _count: { select: { documents: true, comments: true } },
+          documents: { select: { type: true, phase: true } },
+          _count: { select: { comments: true } },
           phaseSignoffs: {
             where: {
               OR: [
@@ -389,6 +390,16 @@ export async function GET(request: NextRequest) {
         const latestRound = phaseSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestRoundTime)
         const hasCurrentPhaseReject = latestRound.some(s => s.status === "REJECTED")
         const hasCurrentPhaseApproved = latestRound.length > 0 && latestRound.every(s => s.status === "APPROVED" || s.status === "SKIPPED") && latestRound.some(s => s.status === "APPROVED")
+        // Current phase: missing docs
+        const requiredDocs = PHASE_DOCUMENT_MAP[d.status]?.required || []
+        const missingDocs = requiredDocs
+          .filter(type => !d.documents.some(doc => doc.phase === d.status && doc.type === type))
+          .map(type => DOCUMENT_TYPE_LABELS[type] || type)
+
+        // Signoff status for current phase
+        const pendingSignoffs = latestRound.filter(s => s.status === "PENDING").length
+        const totalSignoffs = latestRound.length
+
         return {
           id: d.id,
           demandNumber: d.demandNumber,
@@ -407,7 +418,7 @@ export async function GET(request: NextRequest) {
           developer: d.developer?.name || null,
           contactPerson: (d as unknown as { contactPerson_: { name: string } | null }).contactPerson_?.name || null,
           demandManager: d.demandManager?.name || null,
-          documentCount: d._count.documents,
+          documentCount: d.documents.length,
           commentCount: d._count.comments,
           hasPendingDesignChange: signoffs.some(
             (s) => s.kind === "DESIGN_CHANGE" && s.phase === d.status,
@@ -415,6 +426,7 @@ export async function GET(request: NextRequest) {
           hasCurrentPhaseReject,
           hasCurrentPhaseApproved,
           holdReason: (d as unknown as { holdReason: string | null }).holdReason || null,
+          phaseCompletion: { missingDocs, pendingSignoffs, totalSignoffs },
         }
       }),
       total,

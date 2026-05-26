@@ -59,6 +59,11 @@ interface Demand {
   hasCurrentPhaseReject: boolean
   hasCurrentPhaseApproved: boolean
   holdReason: string | null
+  phaseCompletion?: {
+    missingDocs: string[]
+    pendingSignoffs: number
+    totalSignoffs: number
+  }
 }
 
 interface FilterOption {
@@ -619,6 +624,7 @@ export default function InboxPage() {
             <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3">
               {paginatedDemands.map((demand) => {
                 const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+                const pc = demand.phaseCompletion
                 return (
                   <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
                     <CardContent className="px-3 py-2 sm:px-4 sm:py-3 space-y-1.5 sm:space-y-2">
@@ -651,6 +657,22 @@ export default function InboxPage() {
                         <div className="flex items-start gap-1.5 text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1">
                           <PauseCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                           <span className="line-clamp-2">{demand.holdReason}</span>
+                        </div>
+                      )}
+
+                      {/* Phase status: missing docs / pending signoffs */}
+                      {pc && (pc.missingDocs.length > 0 || pc.pendingSignoffs > 0) && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
+                          {pc.missingDocs.length > 0 && (
+                            <span className="flex items-center gap-1 text-destructive/80">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              <span className="truncate">缺：{pc.missingDocs.join("、")}</span>
+                            </span>
+                          )}
+                          {pc.missingDocs.length > 0 && pc.pendingSignoffs > 0 && <span>·</span>}
+                          {pc.pendingSignoffs > 0 && (
+                            <span className="text-amber-600">待簽核 {pc.pendingSignoffs}/{pc.totalSignoffs}</span>
+                          )}
                         </div>
                       )}
 
