@@ -660,8 +660,8 @@ export default function InboxPage() {
                         </div>
                       )}
 
-                      {/* Phase status: missing docs / pending signoffs */}
-                      {pc && (pc.missingDocs.length > 0 || pc.pendingSignoffs > 0) && (
+                      {/* Phase status: missing docs / pending signoffs (admin only) */}
+                      {isAdmin && pc && (pc.missingDocs.length > 0 || pc.pendingSignoffs > 0) && (
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
                           {pc.missingDocs.length > 0 && (
                             <span className="flex items-center gap-1 text-destructive/80">
