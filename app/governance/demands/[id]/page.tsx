@@ -399,6 +399,8 @@ export default function DemandDetailPage() {
   const [designChangeOpen, setDesignChangeOpen] = useState(false)
   // Notify signers dialog
   const [notifySignersOpen, setNotifySignersOpen] = useState(false)
+  const [notifyShareUrl, setNotifyShareUrl] = useState<string | undefined>(undefined)
+  const [notifyPreparing, setNotifyPreparing] = useState(false)
 
   // Board override dialog
   const [boardOverrideOpen, setBoardOverrideOpen] = useState(false)
@@ -611,6 +613,51 @@ export default function DemandDetailPage() {
       })
       fetchShareLinks()
     } catch { /* ignore */ }
+  }
+
+  // Ensure an active share link exists, then open notify signers dialog
+  const openNotifySigners = async () => {
+    if (!token) return
+    setNotifyPreparing(true)
+    try {
+      // Fetch existing share links
+      const res = await fetch(`/api/demands/${demandId}/share`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error("無法取得分享連結")
+      const data = await res.json()
+      const shares = data.shares as typeof shareLinks
+      setShareLinks(shares)
+
+      // Find active (non-expired) share link
+      let activeShare = shares.find((s: { expiresAt: string }) => new Date(s.expiresAt) > new Date())
+
+      // If none exists, create one
+      if (!activeShare) {
+        const createRes = await fetch(`/api/demands/${demandId}/share`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!createRes.ok) throw new Error("無法建立分享連結")
+        const created = await createRes.json()
+        activeShare = created
+        // Refresh share links list
+        fetchShareLinks()
+      }
+
+      if (activeShare?.token) {
+        setNotifyShareUrl(`${window.location.origin}/share/${activeShare.token}`)
+      } else {
+        setNotifyShareUrl(undefined)
+      }
+      setNotifySignersOpen(true)
+    } catch {
+      // Fallback: open dialog without share URL
+      setNotifyShareUrl(undefined)
+      setNotifySignersOpen(true)
+    } finally {
+      setNotifyPreparing(false)
+    }
   }
 
   const copyShareUrl = (shareToken: string) => {
@@ -1149,10 +1196,15 @@ export default function DemandDetailPage() {
                                 size="sm"
                                 variant="outline"
                                 className="border-blue-300 text-blue-700 hover:bg-blue-50 shrink-0 h-6 w-6 p-0 sm:h-7 sm:w-auto sm:px-2"
-                                onClick={() => setNotifySignersOpen(true)}
+                                onClick={openNotifySigners}
+                                disabled={notifyPreparing}
                               >
-                                <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" />
-                                <span className="hidden sm:inline text-xs">通知簽核人</span>
+                                {notifyPreparing ? (
+                                  <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin sm:mr-1" />
+                                ) : (
+                                  <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" />
+                                )}
+                                <span className="hidden sm:inline text-xs">{notifyPreparing ? "準備中..." : "通知簽核人"}</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="sm:hidden">通知簽核人</TooltipContent>
@@ -2213,6 +2265,7 @@ export default function DemandDetailPage() {
         phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
         pendingSignoffs={currentPhaseSignoffs.filter((s) => s.status === "PENDING")}
         organizationId={demand.organizationId}
+        shareUrl={notifyShareUrl}
       />
 
       {/* Board override dialog */}
