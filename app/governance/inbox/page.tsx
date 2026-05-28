@@ -306,6 +306,8 @@ export default function InboxPage() {
   }, [filteredSubmitterOptions])
 
   const hasActiveFilters = filterStatus !== "all" || filterOrg !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all" || filterSignoff !== "all" || filterVendor !== "all"
+  const advancedFilterCount = [filterSubmitter, filterDeveloper, filterSignoff].filter(v => v !== "all").length
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
 
   return (
     <AppLayout>
@@ -362,82 +364,7 @@ export default function InboxPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canSeeAll && orgOptions.length > 0 && (
-              <Select value={filterOrg} onValueChange={(v) => {
-                setFilterOrg(v)
-                setFilterSubmitter("all")
-              }}>
-                <SelectTrigger className="w-auto min-w-[140px]">
-                  <SelectValue placeholder="組織" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部組織</SelectItem>
-                  {orgOptions.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {canSeeAll && (
-              <Popover open={submitterOpen} onOpenChange={setSubmitterOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={submitterOpen} className="w-auto min-w-[160px] justify-between font-normal">
-                    <span className="truncate">
-                      {filterSubmitter === "all"
-                        ? "全部需求者"
-                        : filteredSubmitterOptions.find((u) => u.id === filterSubmitter)?.name || "全部需求者"}
-                    </span>
-                    <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[220px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="搜尋需求者..." />
-                    <CommandList>
-                      <CommandEmpty>找不到需求者</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="全部需求者"
-                          onSelect={() => { setFilterSubmitter("all"); setSubmitterOpen(false) }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", filterSubmitter === "all" ? "opacity-100" : "opacity-0")} />
-                          全部需求者
-                        </CommandItem>
-                      </CommandGroup>
-                      {submitterGroups.map(([orgName, users]) => (
-                        <CommandGroup key={orgName} heading={orgName}>
-                          {users.map((u) => (
-                            <CommandItem
-                              key={u.id}
-                              value={`${u.name} ${u.organizationName || ""}`}
-                              onSelect={() => { setFilterSubmitter(u.id); setSubmitterOpen(false) }}
-                            >
-                              <Check className={cn("mr-2 h-4 w-4", filterSubmitter === u.id ? "opacity-100" : "opacity-0")} />
-                              <span className="truncate">{u.name}</span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            )}
-            {canSeeAll && (
-              <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
-                <SelectTrigger className="w-auto min-w-[140px]">
-                  <SelectValue placeholder="開發者" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部開發者</SelectItem>
-                  <SelectItem value="unassigned">尚未指派</SelectItem>
-                  {developerOptions.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+          <div className="flex items-center gap-2">
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-auto min-w-[140px]">
                 <SelectValue placeholder="狀態" />
@@ -451,6 +378,19 @@ export default function InboxPage() {
                 ))}
               </SelectContent>
             </Select>
+            {canSeeAll && orgOptions.length > 0 && (
+              <Select value={filterOrg} onValueChange={(v) => { setFilterOrg(v); setFilterSubmitter("all") }}>
+                <SelectTrigger className="w-auto min-w-[120px]">
+                  <SelectValue placeholder="組織" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部組織</SelectItem>
+                  {orgOptions.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {vendorOptions.length > 1 && (
               <Select value={filterVendor} onValueChange={setFilterVendor}>
                 <SelectTrigger className="w-auto min-w-[120px]">
@@ -464,17 +404,99 @@ export default function InboxPage() {
                 </SelectContent>
               </Select>
             )}
-            {(isAdmin || user?.role === "delivery") && (
-              <Select value={filterSignoff} onValueChange={setFilterSignoff}>
-                <SelectTrigger className="w-auto min-w-[140px]">
-                  <SelectValue placeholder="審核狀態" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部審核</SelectItem>
-                  <SelectItem value="approved">已通過</SelectItem>
-                  <SelectItem value="rejected">已駁回</SelectItem>
-                </SelectContent>
-              </Select>
+            {canSeeAll && (
+              <Popover open={moreFiltersOpen} onOpenChange={setMoreFiltersOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant={advancedFilterCount > 0 ? "default" : "outline"} size="sm" className="h-9 px-3 gap-1.5">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    <span className="text-sm">更多篩選</span>
+                    {advancedFilterCount > 0 && (
+                      <Badge variant="secondary" className="h-5 min-w-[20px] px-1 text-xs">{advancedFilterCount}</Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[280px] p-4" align="end">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">進階篩選</span>
+                      {advancedFilterCount > 0 && (
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => {
+                          setFilterSubmitter("all"); setFilterDeveloper("all"); setFilterSignoff("all")
+                        }}>清除</Button>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">需求者</label>
+                      <Popover open={submitterOpen} onOpenChange={setSubmitterOpen}>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" role="combobox" aria-expanded={submitterOpen} className="w-full h-8 text-sm justify-between font-normal">
+                            <span className="truncate">
+                              {filterSubmitter === "all"
+                                ? "全部需求者"
+                                : filteredSubmitterOptions.find((u) => u.id === filterSubmitter)?.name || "全部需求者"}
+                            </span>
+                            <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[250px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="搜尋需求者..." />
+                            <CommandList>
+                              <CommandEmpty>找不到需求者</CommandEmpty>
+                              <CommandGroup>
+                                <CommandItem value="全部需求者" onSelect={() => { setFilterSubmitter("all"); setSubmitterOpen(false) }}>
+                                  <Check className={cn("mr-2 h-4 w-4", filterSubmitter === "all" ? "opacity-100" : "opacity-0")} />
+                                  全部需求者
+                                </CommandItem>
+                              </CommandGroup>
+                              {submitterGroups.map(([orgName, users]) => (
+                                <CommandGroup key={orgName} heading={orgName}>
+                                  {users.map((u) => (
+                                    <CommandItem key={u.id} value={`${u.name} ${u.organizationName || ""}`} onSelect={() => { setFilterSubmitter(u.id); setSubmitterOpen(false) }}>
+                                      <Check className={cn("mr-2 h-4 w-4", filterSubmitter === u.id ? "opacity-100" : "opacity-0")} />
+                                      <span className="truncate">{u.name}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              ))}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">開發者</label>
+                      <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue placeholder="全部開發者" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全部開發者</SelectItem>
+                          <SelectItem value="unassigned">尚未指派</SelectItem>
+                          {developerOptions.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {(isAdmin || user?.role === "delivery") && (
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">審核狀態</label>
+                        <Select value={filterSignoff} onValueChange={setFilterSignoff}>
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="全部審核" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">全部審核</SelectItem>
+                            <SelectItem value="approved">已通過</SelectItem>
+                            <SelectItem value="rejected">已駁回</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
             {hasActiveFilters && (
               <Button

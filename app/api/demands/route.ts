@@ -360,24 +360,29 @@ export async function GET(request: NextRequest) {
     }
 
     // SP wallet summary for organization-scoped queries (progressive consumption)
-    let spSummary: { totalQuota: number; usedSp: number } | undefined
+    let spSummary: { totalQuota: number; usedSp: number; byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number }[] } | undefined
     if (organizationId) {
       const currentYear = new Date().getFullYear()
-      const [wallet, orgDemands] = await Promise.all([
-        prisma.spWallet.findFirst({
+      const [wallets, orgDemands] = await Promise.all([
+        prisma.spWallet.findMany({
           where: { organizationId, year: currentYear },
-          select: { totalQuota: true },
+          select: { vendor: true, totalQuota: true },
         }),
         prisma.demand.findMany({
           where: { organizationId, status: { notIn: ["REJECTED"] } },
-          select: { status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
+          select: { vendor: true, status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
         }),
       ])
+      const totalQuota = wallets.reduce((s, w) => s + w.totalQuota, 0)
       const usedSp = orgDemands.reduce((sum, d) => sum + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus), 0)
-      spSummary = {
-        totalQuota: wallet?.totalQuota ?? 0,
-        usedSp,
-      }
+      // Per-vendor breakdown
+      const vendorSet = new Set([...wallets.map(w => w.vendor), ...orgDemands.map(d => d.vendor)])
+      const byVendor = Array.from(vendorSet).sort().map((vendor) => {
+        const vQuota = wallets.find(w => w.vendor === vendor)?.totalQuota ?? 0
+        const vUsed = orgDemands.filter(d => d.vendor === vendor).reduce((s, d) => s + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus), 0)
+        return { vendor, totalQuota: vQuota, usedSp: vUsed, availableSp: vQuota - vUsed }
+      })
+      spSummary = { totalQuota, usedSp, byVendor: byVendor.length > 1 ? byVendor : undefined }
     }
 
     return NextResponse.json({

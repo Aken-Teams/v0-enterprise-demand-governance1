@@ -11,6 +11,9 @@ import { useAuth } from "@/hooks/use-auth"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
+/** Vendor color palette */
+const VENDOR_COLORS = ["#3b82f6", "#f59e0b", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4"]
+
 const STATUS_LABEL: Record<string, { label: string; color: string; rate: string }> = {
   SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700", rate: "不扣除" },
   PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-100 text-amber-700", rate: "不扣除" },
@@ -87,7 +90,7 @@ export default function WalletPage() {
           <p className="text-xs sm:text-base text-muted-foreground">管理您的 Story Points 配額與使用記錄</p>
         </div>
 
-        {/* Compact summary */}
+        {/* SP summary */}
         <Card>
           <CardContent className="pt-3 sm:pt-4 space-y-3 px-4 sm:px-6">
             {/* Numbers row */}
@@ -108,54 +111,53 @@ export default function WalletPage() {
               </div>
             </div>
 
-            {/* Stacked bar */}
             {totalQuota > 0 ? (
-              <div>
+              <>
+                {/* Stacked bar — per-vendor colors when available */}
                 <div className="h-2.5 sm:h-3 w-full overflow-hidden rounded-full bg-secondary flex">
-                  {pctUsed > 0 && (
-                    <div className="h-full bg-chart-1 transition-all" style={{ width: `${pctUsed}%` }} />
-                  )}
+                  {data?.byVendor && data.byVendor.length > 1
+                    ? data.byVendor.map((v, i) => {
+                        const w = totalQuota > 0 ? (v.usedSp / totalQuota) * 100 : 0
+                        return w > 0 ? (
+                          <div key={v.vendor} className="h-full transition-all" style={{ width: `${w}%`, backgroundColor: VENDOR_COLORS[i % VENDOR_COLORS.length] }} />
+                        ) : null
+                      })
+                    : pctUsed > 0 && (
+                        <div className="h-full bg-chart-1 transition-all" style={{ width: `${pctUsed}%` }} />
+                      )
+                  }
                 </div>
-                <div className="flex items-center gap-4 sm:gap-5 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1 sm:gap-1.5">
-                    <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-chart-1" />已使用 {pctUsed.toFixed(0)}%
-                  </span>
-                  <span className="flex items-center gap-1 sm:gap-1.5">
-                    <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
-                  </span>
+
+                {/* Legend */}
+                <div className="flex items-center gap-4 sm:gap-5 flex-wrap text-[10px] sm:text-xs text-muted-foreground">
+                  {data?.byVendor && data.byVendor.length > 1
+                    ? <>
+                        {data.byVendor.map((v, i) => (
+                          <span key={v.vendor} className="flex items-center gap-1 sm:gap-1.5">
+                            <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm shrink-0" style={{ backgroundColor: VENDOR_COLORS[i % VENDOR_COLORS.length] }} />
+                            {v.vendor} {v.usedSp}/{v.totalQuota}
+                          </span>
+                        ))}
+                        <span className="flex items-center gap-1 sm:gap-1.5">
+                          <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
+                        </span>
+                      </>
+                    : <>
+                        <span className="flex items-center gap-1 sm:gap-1.5">
+                          <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-chart-1" />已使用 {pctUsed.toFixed(0)}%
+                        </span>
+                        <span className="flex items-center gap-1 sm:gap-1.5">
+                          <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
+                        </span>
+                      </>
+                  }
                 </div>
-              </div>
+              </>
             ) : (
               <p className="text-xs sm:text-sm text-muted-foreground">尚未分配年度配額</p>
             )}
           </CardContent>
         </Card>
-
-        {/* Per-vendor breakdown */}
-        {data?.byVendor && data.byVendor.length > 1 && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {data.byVendor.map((v) => {
-              const pct = v.totalQuota > 0 ? (v.usedSp / v.totalQuota) * 100 : 0
-              return (
-                <Card key={v.vendor}>
-                  <CardContent className="pt-3 sm:pt-4 px-4 sm:px-6 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{v.vendor}</span>
-                      <span className="text-xs text-muted-foreground">{v.usedSp} / {v.totalQuota} SP</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                      <div className="h-full bg-chart-1 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
-                      <span>可用 {v.availableSp}</span>
-                      <span>{pct.toFixed(0)}%</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        )}
 
         {/* Demand SP Breakdown */}
         <Card className="overflow-hidden">

@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, ChevronLeft, ChevronRight, Loader2, Inbox, ClipboardCheck } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
@@ -105,7 +106,7 @@ export default function MyDemandsPage() {
   const [loading, setLoading] = useState(true)
   const [demands, setDemands] = useState<Demand[]>([])
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
-  const [spSummary, setSpSummary] = useState({ totalQuota: 0, usedSp: 0 })
+  const [spSummary, setSpSummary] = useState<{ totalQuota: number; usedSp: number; byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number }[] }>({ totalQuota: 0, usedSp: 0 })
 
   const [activeTab, setActiveTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -205,20 +206,36 @@ export default function MyDemandsPage() {
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">追蹤您提交的所有需求狀態</p>
           </div>
           {!user?.restrictedView && (
-            <div className="flex items-center gap-4 sm:gap-6">
-              <div className="text-center">
-                <div className="text-lg sm:text-2xl font-bold text-emerald-600">{remainingSp}</div>
-                <div className="text-[10px] sm:text-xs text-muted-foreground">可用 SP</div>
+            <TooltipProvider>
+              <div className="flex items-center gap-4 sm:gap-6">
+                {[
+                  { value: remainingSp, label: "可用 SP", color: "text-emerald-600",
+                    tip: spSummary.byVendor?.map(v => `${v.vendor}: 可用 ${v.availableSp}`) },
+                  { value: spSummary.usedSp, label: "已使用 SP", color: "text-primary",
+                    tip: spSummary.byVendor?.map(v => `${v.vendor}: 已用 ${v.usedSp}`) },
+                  { value: spSummary.totalQuota, label: "年度配額", color: "text-muted-foreground",
+                    tip: spSummary.byVendor?.map(v => `${v.vendor}: ${v.totalQuota}`) },
+                ].map((item) => {
+                  const cell = (
+                    <div className="text-center">
+                      <div className={`text-lg sm:text-2xl font-bold ${item.color}`}>{item.value}</div>
+                      <div className="text-[10px] sm:text-xs text-muted-foreground">{item.label}</div>
+                    </div>
+                  )
+                  if (item.tip && item.tip.length > 1) {
+                    return (
+                      <Tooltip key={item.label}>
+                        <TooltipTrigger asChild>{cell}</TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs space-y-0.5">
+                          {item.tip.map((line, i) => <div key={i}>{line}</div>)}
+                        </TooltipContent>
+                      </Tooltip>
+                    )
+                  }
+                  return <div key={item.label}>{cell}</div>
+                })}
               </div>
-              <div className="text-center">
-                <div className="text-lg sm:text-2xl font-bold text-primary">{spSummary.usedSp}</div>
-                <div className="text-[10px] sm:text-xs text-muted-foreground">已使用 SP</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg sm:text-2xl font-bold text-muted-foreground">{spSummary.totalQuota}</div>
-                <div className="text-[10px] sm:text-xs text-muted-foreground">年度配額</div>
-              </div>
-            </div>
+            </TooltipProvider>
           )}
         </div>
 

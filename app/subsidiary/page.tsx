@@ -22,8 +22,12 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
+
+/** Vendor color palette — first vendor gets blue, then rotate */
+const VENDOR_COLORS = ["#3b82f6", "#f59e0b", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4"]
 
 /** SP donut chart config for Recharts + shadcn ChartContainer */
 const spChartConfig = {
@@ -105,11 +109,21 @@ export default function SubsidiaryDashboard() {
   const monthlyTrends = data?.monthlyTrends ?? []
   const recentChanges = data?.recentChanges ?? []
 
-  // Recharts data for SP donut — include all three segments
-  const spDonutData = [
-    { key: "used", label: "已使用", value: sp.usedSp, fill: "#3b82f6" },
-    { key: "available", label: "可用", value: sp.availableSp, fill: "#e5e7eb" },
-  ]
+  // Recharts data for SP donut — per-vendor colored segments + available
+  const spDonutData = sp.byVendor && sp.byVendor.length > 1
+    ? [
+        ...sp.byVendor.map((v, i) => ({
+          key: `vendor-${v.vendor}`,
+          label: v.vendor,
+          value: v.usedSp,
+          fill: VENDOR_COLORS[i % VENDOR_COLORS.length],
+        })),
+        { key: "available", label: "可用", value: sp.availableSp, fill: "#e5e7eb" },
+      ]
+    : [
+        { key: "used", label: "已使用", value: sp.usedSp, fill: "#3b82f6" },
+        { key: "available", label: "可用", value: sp.availableSp, fill: "#e5e7eb" },
+      ]
 
   const maxMonthlyVal = Math.max(...monthlyTrends.map((m) => Math.max(m.submitted, m.completed)), 1)
 
@@ -166,34 +180,77 @@ export default function SubsidiaryDashboard() {
 
           {/* SP 配額 */}
           <Card className="py-3 sm:py-4">
-            <CardContent className="pb-0 px-3 sm:px-6 space-y-1.5">
-              <div className="flex items-center gap-3 sm:gap-6">
-                <Coins className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xl sm:text-2xl font-bold">{sp.totalQuota}</span>
-                  <span className="text-xs sm:text-sm text-muted-foreground">SP 配額</span>
-                </div>
-                <div className="h-6 sm:h-8 w-px bg-border" />
-                <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
-                  <div className="flex items-center gap-1 sm:gap-1.5">
-                    <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-blue-500 shrink-0" />
-                    <span className="text-muted-foreground">已使用</span>
-                    <span className="font-medium">{sp.usedSp}</span>
+            <CardContent className="pb-0 px-3 sm:px-6">
+              <TooltipProvider>
+                <div className="flex items-center gap-3 sm:gap-6">
+                  <Coins className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-baseline gap-1 cursor-default">
+                        <span className="text-xl sm:text-2xl font-bold">{sp.totalQuota}</span>
+                        <span className="text-xs sm:text-sm text-muted-foreground">SP 配額</span>
+                      </div>
+                    </TooltipTrigger>
+                    {sp.byVendor && sp.byVendor.length > 1 && (
+                      <TooltipContent>
+                        <div className="space-y-1 text-xs">
+                          {sp.byVendor.map((v) => (
+                            <div key={v.vendor} className="flex justify-between gap-4">
+                              <span>{v.vendor}</span>
+                              <span className="font-medium">{v.totalQuota}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                  <div className="h-6 sm:h-8 w-px bg-border" />
+                  <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1 sm:gap-1.5 cursor-default">
+                          <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-blue-500 shrink-0" />
+                          <span className="text-muted-foreground">已使用</span>
+                          <span className="font-medium">{sp.usedSp}</span>
+                        </div>
+                      </TooltipTrigger>
+                      {sp.byVendor && sp.byVendor.length > 1 && (
+                        <TooltipContent>
+                          <div className="space-y-1 text-xs">
+                            {sp.byVendor.map((v) => (
+                              <div key={v.vendor} className="flex justify-between gap-4">
+                                <span>{v.vendor}</span>
+                                <span className="font-medium">{v.usedSp}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1 sm:gap-1.5 cursor-default">
+                          <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0" />
+                          <span className="text-muted-foreground">可用</span>
+                          <span className="font-medium">{sp.availableSp}</span>
+                        </div>
+                      </TooltipTrigger>
+                      {sp.byVendor && sp.byVendor.length > 1 && (
+                        <TooltipContent>
+                          <div className="space-y-1 text-xs">
+                            {sp.byVendor.map((v) => (
+                              <div key={v.vendor} className="flex justify-between gap-4">
+                                <span>{v.vendor}</span>
+                                <span className="font-medium">{v.availableSp}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
                   </div>
-                  <div className="flex items-center gap-1 sm:gap-1.5">
-                    <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0" />
-                    <span className="text-muted-foreground">可用</span>
-                    <span className="font-medium">{sp.availableSp}</span>
-                  </div>
                 </div>
-              </div>
-              {sp.byVendor && sp.byVendor.length > 1 && (
-                <div className="flex items-center gap-3 text-[10px] sm:text-xs text-muted-foreground pl-7 sm:pl-11">
-                  {sp.byVendor.map((v) => (
-                    <span key={v.vendor}>{v.vendor}: {v.usedSp}/{v.totalQuota}</span>
-                  ))}
-                </div>
-              )}
+              </TooltipProvider>
             </CardContent>
           </Card>
         </div>
@@ -258,17 +315,36 @@ export default function SubsidiaryDashboard() {
                   </Pie>
                 </PieChart>
               </ChartContainer>
-              <div className="flex items-center justify-center gap-6 sm:grid sm:grid-cols-2 sm:gap-4 w-full text-center">
-                <div className="flex items-center gap-1.5 sm:block sm:space-y-1">
-                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-blue-500 sm:mx-auto" />
-                  <div className="text-xs sm:text-sm font-medium">{sp.usedSp}</div>
-                  <div className="text-[10px] sm:text-xs text-muted-foreground">已使用</div>
-                </div>
-                <div className="flex items-center gap-1.5 sm:block sm:space-y-1">
-                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-gray-300 sm:mx-auto" />
-                  <div className="text-xs sm:text-sm font-medium">{sp.availableSp}</div>
-                  <div className="text-[10px] sm:text-xs text-muted-foreground">可用</div>
-                </div>
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-5 w-full">
+                {sp.byVendor && sp.byVendor.length > 1 ? (
+                  <>
+                    {sp.byVendor.map((v, i) => (
+                      <div key={v.vendor} className="flex items-center gap-1.5 text-center">
+                        <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: VENDOR_COLORS[i % VENDOR_COLORS.length] }} />
+                        <div className="text-xs sm:text-sm font-medium">{v.usedSp}</div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">{v.vendor}</div>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-1.5 text-center">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-gray-300 shrink-0" />
+                      <div className="text-xs sm:text-sm font-medium">{sp.availableSp}</div>
+                      <div className="text-[10px] sm:text-xs text-muted-foreground">可用</div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-1.5 text-center">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-blue-500 shrink-0" />
+                      <div className="text-xs sm:text-sm font-medium">{sp.usedSp}</div>
+                      <div className="text-[10px] sm:text-xs text-muted-foreground">已使用</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-center">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-gray-300 shrink-0" />
+                      <div className="text-xs sm:text-sm font-medium">{sp.availableSp}</div>
+                      <div className="text-[10px] sm:text-xs text-muted-foreground">可用</div>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
