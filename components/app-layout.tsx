@@ -86,7 +86,7 @@ const navSections: NavSection[] = [
     items: [
       { title: "帳號管理", href: "/admin/users", icon: UserCog, roles: ["admin"] },
       { title: "AD 組織架構", href: "/admin/ldap", icon: Network, roles: ["admin"] },
-      { title: "SP 管理", href: "/admin/organizations", icon: Building2, roles: ["admin"] },
+      { title: "組織管理", href: "/admin/organizations", icon: Building2, roles: ["admin"] },
       { title: "郵件管理", href: "/admin/mail-logs", icon: Mail, roles: ["admin"] },
       { title: "API 金鑰", href: "/admin/api-keys", icon: KeyRound, roles: ["admin"] },
       { title: "操作紀錄", href: "/admin/audit-log", icon: ScrollText, roles: ["admin"] },

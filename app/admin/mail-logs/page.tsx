@@ -586,7 +586,7 @@ function MailSettingsTab({ token }: { token: string | null }) {
       <Card>
         <CardContent className="py-12 text-center">
           <Mail className="h-10 w-10 mx-auto mb-3 opacity-30 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">尚無組織資料，請先至 SP 管理新增組織</p>
+          <p className="text-sm text-muted-foreground">尚無組織資料，請先至組織管理新增組織</p>
         </CardContent>
       </Card>
     )

@@ -239,7 +239,7 @@ export default function SpManagementPage() {
     <AppLayout userRole="admin">
       <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">SP 管理</h1>
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">組織管理</h1>
           <p className="text-xs sm:text-base text-muted-foreground">管理各子公司 SP 配額、開發商與使用狀況</p>
         </div>
 
