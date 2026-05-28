@@ -781,7 +781,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between py-2.5">
           <div className="flex flex-col">
-            <span className="font-bold text-sm leading-snug">JV 需求管理平台</span>
+            <span className="font-bold text-sm leading-snug">企業需求管理平台</span>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span>唯讀分享</span>
               {expiresAt && (

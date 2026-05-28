@@ -231,7 +231,15 @@ export default function GovernanceAnalyticsPage() {
         <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
           <KpiCard color="#6366f1" icon={FileText} title="活躍需求" value={d.kpi.activeDemands} sub={`共 ${d.kpi.totalDemands} 筆`} />
           <KpiCard color="#f59e0b" icon={CheckCircle} title="本月交付" value={d.kpi.thisMonthClosed} sub="本月結案" />
-          <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.sp.totalUsedSp} / ${d.sp.totalQuota}`} sub={d.sp.byVendor && d.sp.byVendor.length > 1 ? d.sp.byVendor.map(v => `${v.vendor}: ${v.usedSp}/${v.totalQuota}`).join(" · ") : `可用 ${d.sp.totalAvailable}`} />
+          <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.sp.totalUsedSp} / ${d.sp.totalQuota}`} sub={
+            d.sp.byVendor && d.sp.byVendor.length > 1
+              ? <div className="flex flex-col sm:flex-row sm:gap-1">
+                  {d.sp.byVendor.map((v, i) => (
+                    <span key={v.vendor}>{v.vendor}: {v.usedSp}/{v.totalQuota}{i < d.sp.byVendor!.length - 1 && <span className="hidden sm:inline"> · </span>}</span>
+                  ))}
+                </div>
+              : `可用 ${d.sp.totalAvailable}`
+          } />
           <KpiCard color="#10b981" icon={TrendingUp} title="交付率" value={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"} sub={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeCount} / ${d.performance.deliverableTotal} 準時交付` : "尚無驗收/結案需求"} />
         </div>
 
@@ -1030,7 +1038,7 @@ export default function GovernanceAnalyticsPage() {
   )
 }
 
-function KpiCard({ color, icon: Icon, title, value, sub }: { color: string; icon: React.ComponentType<{ className?: string }>; title: string; value: React.ReactNode; sub: string }) {
+function KpiCard({ color, icon: Icon, title, value, sub }: { color: string; icon: React.ComponentType<{ className?: string }>; title: string; value: React.ReactNode; sub: React.ReactNode }) {
   return (
     <div className="flex gap-2 sm:gap-3 rounded-lg bg-card px-2 py-2 sm:px-4 sm:py-3">
       <div className="w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: color }} />
@@ -1041,7 +1049,7 @@ function KpiCard({ color, icon: Icon, title, value, sub }: { color: string; icon
             <span className="text-xs font-medium text-muted-foreground">{title}</span>
           </div>
           <span className="text-lg sm:text-2xl font-bold">{value}</span>
-          <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{sub}</p>
+          <div className="text-[10px] sm:text-xs text-muted-foreground">{sub}</div>
         </div>
         <div className="hidden sm:flex items-center gap-1.5 self-start">
           <Icon className="h-3.5 w-3.5 text-muted-foreground" />

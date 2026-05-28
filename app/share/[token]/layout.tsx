@@ -14,10 +14,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   })
 
   if (!share) {
-    return { title: "需求分享 — JV 需求管理平台" }
+    return { title: "需求分享 — 企業需求管理平台" }
   }
 
-  const title = `${share.demand.demandNumber} ${share.demand.title} — JV 需求管理平台`
+  const title = `${share.demand.demandNumber} ${share.demand.title} — 企業需求管理平台`
   return {
     title,
     openGraph: { title },

@@ -284,7 +284,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
                 <Building2 className="h-5 w-5 text-primary-foreground" />
               </div>
-              {!effectiveCollapsed && <span className="text-sm font-semibold text-sidebar-foreground">JV 需求管理平台</span>}
+              {!effectiveCollapsed && <span className="text-sm font-semibold text-sidebar-foreground">企業需求管理平台</span>}
             </Link>
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
               <X className="h-5 w-5" />

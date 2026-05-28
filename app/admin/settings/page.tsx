@@ -44,7 +44,7 @@ interface SystemSettings {
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SystemSettings>({
-    systemName: "JV 需求管理平台",
+    systemName: "企業需求管理平台",
     systemVersion: "1.0.0",
     defaultSprintCapacity: 100,
     sprintDurationDays: 14,
@@ -82,7 +82,7 @@ export default function SettingsPage() {
 
   const resetSettings = () => {
     setSettings({
-      systemName: "JV 需求管理平台",
+      systemName: "企業需求管理平台",
       systemVersion: "1.0.0",
       defaultSprintCapacity: 100,
       sprintDurationDays: 14,

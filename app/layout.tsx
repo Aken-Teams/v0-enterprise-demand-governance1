@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "JV 需求管理平台",
+  title: "企業需求管理平台",
   description: "企業 IT 需求管理 — 需求提案、資源配置、開發追蹤、交付管控",
   generator: "v0.app",
   icons: {
