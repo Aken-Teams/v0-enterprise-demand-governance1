@@ -35,12 +35,14 @@ interface AnalyticsData {
     totalQuota: number
     totalUsedSp: number
     totalAvailable: number
+    byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number }[]
     byOrganization: {
       name: string
       totalQuota: number
       usedSp: number
       availableSp: number
       demandCount: number
+      byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demandCount: number }[]
     }[]
   }
   performance: {
@@ -74,9 +76,9 @@ interface AnalyticsData {
   financial?: {
     totalQuotaSp: number
     totalQuotaAmount: number
-    orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[]
-    demandDetail: { organization: string; demandNumber: string; title: string; status: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
-    monthlyLedger: { month: string; data: { organization: string; deltaSp: number; deltaAmount: number; details: { demandNumber: string; title: string; fromStatus: string | null; toStatus: string; sp: number; deltaSp: number; deltaAmount: number; date: string; spChange?: { from: number; to: number; reason: string } }[] }[] }[]
+    orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number; byVendor?: { vendor: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[] }[]
+    demandDetail: { organization: string; demandNumber: string; title: string; status: string; vendor?: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
+    monthlyLedger: { month: string; data: { organization: string; deltaSp: number; deltaAmount: number; details: { demandNumber: string; title: string; vendor?: string; fromStatus: string | null; toStatus: string; sp: number; deltaSp: number; deltaAmount: number; date: string; spChange?: { from: number; to: number; reason: string } }[] }[] }[]
   }
 }
 
@@ -229,7 +231,7 @@ export default function GovernanceAnalyticsPage() {
         <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
           <KpiCard color="#6366f1" icon={FileText} title="活躍需求" value={d.kpi.activeDemands} sub={`共 ${d.kpi.totalDemands} 筆`} />
           <KpiCard color="#f59e0b" icon={CheckCircle} title="本月交付" value={d.kpi.thisMonthClosed} sub="本月結案" />
-          <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.sp.totalUsedSp} / ${d.sp.totalQuota}`} sub={`可用 ${d.sp.totalAvailable}`} />
+          <KpiCard color="#8b5cf6" icon={Coins} title="SP" value={`${d.sp.totalUsedSp} / ${d.sp.totalQuota}`} sub={d.sp.byVendor && d.sp.byVendor.length > 1 ? d.sp.byVendor.map(v => `${v.vendor}: ${v.usedSp}/${v.totalQuota}`).join(" · ") : `可用 ${d.sp.totalAvailable}`} />
           <KpiCard color="#10b981" icon={TrendingUp} title="交付率" value={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeRate}%` : "—"} sub={d.performance.deliverableTotal > 0 ? `${d.performance.onTimeCount} / ${d.performance.deliverableTotal} 準時交付` : "尚無驗收/結案需求"} />
         </div>
 
@@ -603,6 +605,37 @@ export default function GovernanceAnalyticsPage() {
               </Card>
             </div>
 
+            {/* Vendor SP overview */}
+            {d.sp.byVendor && d.sp.byVendor.length > 1 && (
+              <Card className="mt-3 sm:mt-4">
+                <CardHeader className="p-3 sm:p-6 pb-0 sm:pb-0">
+                  <CardTitle className="text-sm sm:text-base">開發商 SP 配額</CardTitle>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-6 pt-2 sm:pt-4">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {d.sp.byVendor.map((v) => {
+                      const pct = v.totalQuota > 0 ? Math.round((v.usedSp / v.totalQuota) * 100) : 0
+                      return (
+                        <div key={v.vendor} className="rounded-lg border p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{v.vendor}</span>
+                            <span className="text-xs text-muted-foreground">{pct}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>已使用 {v.usedSp}</span>
+                            <span>配額 {v.totalQuota}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* SP detail table */}
             {d.sp.byOrganization.length > 0 && (
               <Card className="mt-3 sm:mt-4">
@@ -623,13 +656,24 @@ export default function GovernanceAnalyticsPage() {
                       </thead>
                       <tbody>
                         {d.sp.byOrganization.map((org) => (
-                          <tr key={org.name} className="border-b last:border-0">
-                            <td className="py-1.5 sm:py-2 font-medium">{org.name}</td>
-                            <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.totalQuota}</td>
-                            <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.usedSp}</td>
-                            <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.availableSp}</td>
-                            <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.demandCount}</td>
-                          </tr>
+                          <React.Fragment key={org.name}>
+                            <tr className="border-b last:border-0">
+                              <td className="py-1.5 sm:py-2 font-medium">{org.name}</td>
+                              <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.totalQuota}</td>
+                              <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.usedSp}</td>
+                              <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.availableSp}</td>
+                              <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.demandCount}</td>
+                            </tr>
+                            {org.byVendor && org.byVendor.length > 1 && org.byVendor.map((v) => (
+                              <tr key={`${org.name}-${v.vendor}`} className="border-b last:border-0 text-muted-foreground">
+                                <td className="py-1 sm:py-1.5 pl-4 text-xs">└ {v.vendor}</td>
+                                <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.totalQuota}</td>
+                                <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.usedSp}</td>
+                                <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.availableSp}</td>
+                                <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.demandCount}</td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         ))}
                       </tbody>
                     </table>
@@ -947,6 +991,7 @@ export default function GovernanceAnalyticsPage() {
                                   <tr className="bg-muted/30 text-left text-muted-foreground text-[10px] sm:text-xs">
                                     <th className="px-2 sm:px-4 py-1 sm:py-1.5 font-medium">編號</th>
                                     <th className="px-2 sm:px-4 py-1 sm:py-1.5 font-medium">需求名稱</th>
+                                    <th className="px-2 sm:px-4 py-1 sm:py-1.5 font-medium hidden sm:table-cell">開發商</th>
                                     <th className="px-2 sm:px-4 py-1 sm:py-1.5 font-medium hidden sm:table-cell">狀態</th>
                                     <th className="px-2 sm:px-4 py-1 sm:py-1.5 font-medium text-right">金額</th>
                                     <th className="px-2 sm:px-4 py-1 sm:py-1.5 font-medium text-right hidden sm:table-cell">已消耗</th>
@@ -957,6 +1002,7 @@ export default function GovernanceAnalyticsPage() {
                                     <tr key={dd.demandNumber} className="border-b last:border-0">
                                       <td className="px-2 sm:px-4 py-1 sm:py-1.5 font-mono text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">{dd.demandNumber}</td>
                                       <td className="px-2 sm:px-4 py-1 sm:py-1.5 max-w-[120px] sm:max-w-[240px] truncate">{dd.title}</td>
+                                      <td className="px-2 sm:px-4 py-1 sm:py-1.5 hidden sm:table-cell text-xs text-muted-foreground">{dd.vendor || "—"}</td>
                                       <td className="px-2 sm:px-4 py-1 sm:py-1.5 hidden sm:table-cell">
                                         <span className={`${STATUS_MAP[dd.status]?.color} text-xs px-2 py-0.5 rounded-full`}>
                                           {STATUS_MAP[dd.status]?.label}

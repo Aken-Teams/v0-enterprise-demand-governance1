@@ -372,6 +372,7 @@ export async function PATCH(
       }
       if (data.organizationId) updateData.organizationId = data.organizationId
       if (data.submitterId) updateData.submitterId = data.submitterId
+      if (data.vendor) updateData.vendor = data.vendor
       const updated = await prisma.demand.update({
         where: { id },
         data: updateData,

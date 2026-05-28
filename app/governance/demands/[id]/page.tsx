@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  ArrowLeft, Building2, User, Calendar, FileText,
+  ArrowLeft, Building2, User, Calendar, FileText, Code2,
   Loader2, Pencil, Trash2, Check, ChevronDown,
   BarChart3, GanttChart, FolderOpen,
   AlertCircle, CircleDot, Info, UserPlus,
@@ -74,6 +74,7 @@ interface DemandDetail {
   demandManager: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
+  vendor: string
   organization: { id: string; name: string }
   submitter: { id: string; name: string; email: string }
   creator: { id: string; name: string }
@@ -376,6 +377,7 @@ export default function DemandDetailPage() {
   const [loading, setLoading] = useState(true)
   const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string; organizationId?: string | null }[]>([])
   const [accessUsers, setAccessUsers] = useState<{ id: string; name: string; signoffRole: string }[]>([])
+  const [vendorOptions, setVendorOptions] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState("overview")
   const [docPhaseKey, setDocPhaseKey] = useState(0)
   const [spPlanOpen, setSpPlanOpen] = useState<boolean | null>(null)
@@ -479,6 +481,29 @@ export default function DemandDetailPage() {
       })
       .catch(() => {})
   }, [token, canManage])
+
+  // Fetch vendor options
+  useEffect(() => {
+    if (!token) return
+    fetch("/api/vendors", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.vendors) setVendorOptions(data.vendors.map((v: { name: string }) => v.name))
+      })
+      .catch(() => {})
+  }, [token])
+
+  const handleVendorChange = async (vendor: string) => {
+    if (!token || !demand) return
+    try {
+      const res = await fetch(`/api/demands/${demand.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ vendor }),
+      })
+      if (res.ok) fetchDemand()
+    } catch { /* ignore */ }
+  }
 
   const selectedDocExt = selectedDoc?.fileName.split(".").pop()?.toLowerCase() || ""
   const isPreviewEmpty = !!selectedDoc && ["txt", "md"].includes(selectedDocExt) && !textLoading && !textContent
@@ -1563,6 +1588,27 @@ export default function DemandDetailPage() {
                       <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground w-14 sm:w-16 shrink-0">子公司</span>
                       <span className="font-medium">{demand.organization.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <Code2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground w-14 sm:w-16 shrink-0">開發商</span>
+                      {isAdminWithWrite && !isClosed && vendorOptions.length > 1 ? (
+                        <Select
+                          value={demand.vendor}
+                          onValueChange={(v) => handleVendorChange(v)}
+                        >
+                          <SelectTrigger className="h-7 text-xs flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {vendorOptions.map((v) => (
+                              <SelectItem key={v} value={v}>{v}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="font-medium">{demand.vendor}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-xs sm:text-sm">
                       <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />

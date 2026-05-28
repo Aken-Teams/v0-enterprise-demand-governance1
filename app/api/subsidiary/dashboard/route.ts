@@ -29,13 +29,11 @@ export async function GET(request: NextRequest) {
     const currentYear = new Date().getFullYear()
 
     // Fetch all data in parallel
-    const [wallet, demands, statusHistories] = await Promise.all([
-      // SP wallet
-      prisma.spWallet.findUnique({
-        where: {
-          organizationId_year: { organizationId: orgId, year: currentYear },
-        },
-        select: { totalQuota: true, usedSp: true },
+    const [orgWallets, demands, statusHistories] = await Promise.all([
+      // SP wallets (all vendors)
+      prisma.spWallet.findMany({
+        where: { organizationId: orgId, year: currentYear },
+        select: { vendor: true, totalQuota: true, usedSp: true },
       }),
       // All demands for this org
       prisma.demand.findMany({
@@ -49,6 +47,7 @@ export async function GET(request: NextRequest) {
           estimatedSp: true,
           confirmedSp: true,
           heldFromStatus: true,
+          vendor: true,
           createdAt: true,
           desiredDate: true,
           expectedDate: true,
@@ -73,13 +72,21 @@ export async function GET(request: NextRequest) {
     const inProgress = demands.filter((d) => inProgressStatuses.has(d.status)).length
     const completed = demands.filter((d) => d.status === "CLOSED").length
 
-    // SP data (progressive consumption)
-    const totalQuota = wallet?.totalQuota ?? 0
-    let usedSp = 0
-    for (const d of demands) {
-      const sp = d.confirmedSp ?? d.estimatedSp
-      usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
-    }
+    // SP data (progressive consumption) — per-vendor breakdown
+    const vendorSet = new Set([...orgWallets.map(w => w.vendor), ...demands.map(d => d.vendor)])
+    const spByVendor = Array.from(vendorSet).sort().map((vendor) => {
+      const w = orgWallets.find(ww => ww.vendor === vendor)
+      const vQuota = w?.totalQuota ?? 0
+      let vUsed = 0
+      for (const d of demands) {
+        if (d.vendor !== vendor) continue
+        const sp = d.confirmedSp ?? d.estimatedSp
+        vUsed += calcUsedSp(d.status, sp, d.heldFromStatus)
+      }
+      return { vendor, totalQuota: vQuota, usedSp: vUsed, availableSp: vQuota - vUsed }
+    })
+    const totalQuota = spByVendor.reduce((s, v) => s + v.totalQuota, 0)
+    const usedSp = spByVendor.reduce((s, v) => s + v.usedSp, 0)
     const availableSp = totalQuota - usedSp
 
     // Completion rate (completed / total excluding rejected)
@@ -202,6 +209,7 @@ export async function GET(request: NextRequest) {
       status: d.status,
       statusLabel: STATUS_LABELS[d.status] ?? d.status,
       priority: d.priority,
+      vendor: d.vendor,
       sp: d.confirmedSp ?? d.estimatedSp,
       statusChangedAt: statusDateMap.get(d.id) ?? d.updatedAt,
     }))
@@ -218,6 +226,7 @@ export async function GET(request: NextRequest) {
         usedSp,
         availableSp,
         availablePercent: totalQuota > 0 ? Math.round((availableSp / totalQuota) * 1000) / 10 : 0,
+        byVendor: spByVendor,
       },
       performance: {
         deliveryRate,

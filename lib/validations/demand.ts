@@ -15,6 +15,7 @@ export const createDemandSchema = z.object({
     .optional()
     .transform((val) => (val ? new Date(val) : undefined)),
   adminNotes: z.string().optional().default(""),
+  vendor: z.string().optional().default("JV"),
 })
 
 export type CreateDemandInput = z.infer<typeof createDemandSchema>
@@ -36,6 +37,7 @@ export const updateDemandSchema = z.object({
     .nullable()
     .transform((val) => (val ? new Date(val + "T12:00:00Z") : null)),
   adminNotes: z.string().optional().default(""),
+  vendor: z.string().optional(),
 })
 
 export type UpdateDemandInput = z.infer<typeof updateDemandSchema>

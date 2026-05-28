@@ -25,6 +25,7 @@ interface WalletData {
   totalQuota: number
   usedSp: number
   availableSp: number
+  byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demands: { id: string; demandNumber: string; title: string; status: string; sp: number; spUsed: number; vendor: string; updatedAt: string }[] }[]
   demands: {
     id: string
     demandNumber: string
@@ -32,6 +33,7 @@ interface WalletData {
     status: string
     sp: number
     spUsed: number
+    vendor?: string
     updatedAt: string
   }[]
 }
@@ -128,6 +130,32 @@ export default function WalletPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Per-vendor breakdown */}
+        {data?.byVendor && data.byVendor.length > 1 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {data.byVendor.map((v) => {
+              const pct = v.totalQuota > 0 ? (v.usedSp / v.totalQuota) * 100 : 0
+              return (
+                <Card key={v.vendor}>
+                  <CardContent className="pt-3 sm:pt-4 px-4 sm:px-6 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{v.vendor}</span>
+                      <span className="text-xs text-muted-foreground">{v.usedSp} / {v.totalQuota} SP</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-chart-1 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>可用 {v.availableSp}</span>
+                      <span>{pct.toFixed(0)}%</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
 
         {/* Demand SP Breakdown */}
         <Card className="overflow-hidden">

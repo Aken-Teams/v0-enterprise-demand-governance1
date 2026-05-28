@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       estimatedSp: formData.get("estimatedSp") as string,
       desiredDate: formData.get("desiredDate") as string,
       adminNotes: formData.get("adminNotes") as string,
+      vendor: (formData.get("vendor") as string) || undefined,
     }
 
     const parseResult = createDemandSchema.safeParse(rawData)
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
           estimatedSp: validated.estimatedSp,
           desiredDate: validated.desiredDate || null,
           adminNotes: validated.adminNotes || null,
+          vendor: validated.vendor || "JV",
           organizationId: validated.organizationId,
           submitterId: submitter.id,
           creatorId: auth.userId,
@@ -237,6 +239,7 @@ export async function GET(request: NextRequest) {
     const submitterId = searchParams.get("submitterId")
     const developerId = searchParams.get("developerId")
     const organizationId = searchParams.get("organizationId")
+    const vendor = searchParams.get("vendor")
 
     // Server-side visibility filter based on user's whitelist
     const visibilityFilter = await buildDemandVisibilityFilter(auth)
@@ -248,6 +251,9 @@ export async function GET(request: NextRequest) {
     }
     if (organizationId) {
       where.organizationId = organizationId
+    }
+    if (vendor) {
+      where.vendor = vendor
     }
     if (submitterId) {
       where.OR = [
@@ -406,6 +412,7 @@ export async function GET(request: NextRequest) {
           title: d.title,
           description: d.description,
           status: d.status,
+          vendor: d.vendor,
           priority: d.priority,
           estimatedSp: d.estimatedSp,
           confirmedSp: d.confirmedSp,

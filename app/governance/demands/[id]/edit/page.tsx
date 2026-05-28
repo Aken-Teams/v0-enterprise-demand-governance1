@@ -25,6 +25,7 @@ interface DemandForEdit {
   estimatedSp: number
   desiredDate: string | null
   adminNotes: string | null
+  vendor: string
   submitter: { id: string; name: string }
   organization: { id: string; name: string }
 }
@@ -47,10 +48,12 @@ export default function EditDemandPage() {
   const [error, setError] = useState("")
   const [demand, setDemand] = useState<DemandForEdit | null>(null)
   const [allOrgs, setAllOrgs] = useState<{ id: string; name: string; users: { id: string; name: string }[] }[]>([])
+  const [vendorOptions, setVendorOptions] = useState<string[]>([])
 
   // Form state
   const [title, setTitle] = useState("")
   const [organizationId, setOrganizationId] = useState("")
+  const [vendor, setVendor] = useState("JV")
   const [description, setDescription] = useState("")
   const [painPoint, setPainPoint] = useState("")
   const [expectedBenefit, setExpectedBenefit] = useState("")
@@ -76,6 +79,7 @@ export default function EditDemandPage() {
         setEstimatedSp(String(d.estimatedSp))
         setDesiredDate(toDateInput(d.desiredDate))
         setAdminNotes(d.adminNotes || "")
+        setVendor(d.vendor || "JV")
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
@@ -99,6 +103,17 @@ export default function EditDemandPage() {
       .catch(() => {})
   }, [token])
 
+  // Fetch vendor options
+  useEffect(() => {
+    if (!token) return
+    fetch("/api/vendors", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.vendors) setVendorOptions(data.vendors.map((v: { name: string }) => v.name))
+      })
+      .catch(() => {})
+  }, [token])
+
   const handleSave = async () => {
     if (!token || !demand) return
     setSaving(true)
@@ -116,6 +131,7 @@ export default function EditDemandPage() {
           estimatedSp,
           desiredDate: desiredDate || null,
           adminNotes,
+          vendor,
         }),
       })
       const data = await res.json()
@@ -185,18 +201,35 @@ export default function EditDemandPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>需求單位</Label>
-              <Select value={organizationId} onValueChange={setOrganizationId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="選擇需求單位" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allOrgs.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>需求單位</Label>
+                <Select value={organizationId} onValueChange={setOrganizationId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇需求單位" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allOrgs.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {vendorOptions.length > 0 && (
+                <div className="space-y-2">
+                  <Label>開發商</Label>
+                  <Select value={vendor} onValueChange={setVendor}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇開發商" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vendorOptions.map((v) => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

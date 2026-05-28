@@ -45,6 +45,7 @@ interface DashboardData {
     usedSp: number
     availableSp: number
     availablePercent: number
+    byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number }[]
   }
   performance: {
     deliveryRate: number
@@ -165,25 +166,34 @@ export default function SubsidiaryDashboard() {
 
           {/* SP 配額 */}
           <Card className="py-3 sm:py-4">
-            <CardContent className="flex items-center gap-3 sm:gap-6 pb-0 px-3 sm:px-6">
-              <Coins className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-              <div className="flex items-baseline gap-1">
-                <span className="text-xl sm:text-2xl font-bold">{sp.totalQuota}</span>
-                <span className="text-xs sm:text-sm text-muted-foreground">SP 配額</span>
-              </div>
-              <div className="h-6 sm:h-8 w-px bg-border" />
-              <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
-                <div className="flex items-center gap-1 sm:gap-1.5">
-                  <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-blue-500 shrink-0" />
-                  <span className="text-muted-foreground">已使用</span>
-                  <span className="font-medium">{sp.usedSp}</span>
+            <CardContent className="pb-0 px-3 sm:px-6 space-y-1.5">
+              <div className="flex items-center gap-3 sm:gap-6">
+                <Coins className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl sm:text-2xl font-bold">{sp.totalQuota}</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground">SP 配額</span>
                 </div>
-                <div className="flex items-center gap-1 sm:gap-1.5">
-                  <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0" />
-                  <span className="text-muted-foreground">可用</span>
-                  <span className="font-medium">{sp.availableSp}</span>
+                <div className="h-6 sm:h-8 w-px bg-border" />
+                <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-blue-500 shrink-0" />
+                    <span className="text-muted-foreground">已使用</span>
+                    <span className="font-medium">{sp.usedSp}</span>
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0" />
+                    <span className="text-muted-foreground">可用</span>
+                    <span className="font-medium">{sp.availableSp}</span>
+                  </div>
                 </div>
               </div>
+              {sp.byVendor && sp.byVendor.length > 1 && (
+                <div className="flex items-center gap-3 text-[10px] sm:text-xs text-muted-foreground pl-7 sm:pl-11">
+                  {sp.byVendor.map((v) => (
+                    <span key={v.vendor}>{v.vendor}: {v.usedSp}/{v.totalQuota}</span>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
           completedDate: true,
           createdAt: true,
           updatedAt: true,
+          vendor: true,
           organizationId: true,
           organization: { select: { name: true } },
           developer: { select: { name: true } },
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
       prisma.spWallet.findMany({
         where: { year: currentYear },
         select: {
+          vendor: true,
           totalQuota: true,
           usedSp: true,
           committedSp: true,
@@ -179,29 +181,52 @@ export async function GET(request: NextRequest) {
       monthlyTrends.push({ month: monthLabel, submitted, completed })
     }
 
-    // --- Organization SP breakdown (all orgs) ---
-    const walletMap = new Map(wallets.map((w) => [w.organizationId, w]))
+    // --- Organization SP breakdown (all orgs), with vendor sub-breakdown ---
     const orgSpData = allOrgs.map((org) => {
-      const w = walletMap.get(org.id)
+      const orgWallets = wallets.filter((w) => w.organizationId === org.id)
       const orgDemands = demands.filter((d) => d.organizationId === org.id)
-      let usedSp = 0
-      for (const d of orgDemands) {
-        const sp = d.confirmedSp ?? d.estimatedSp
-        usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
-      }
-      const totalQuota = w?.totalQuota ?? 0
+
+      // Per-vendor breakdown
+      const vendorSet = new Set([...orgWallets.map(w => w.vendor), ...orgDemands.map(d => d.vendor)])
+      const byVendor = Array.from(vendorSet).sort().map((vendor) => {
+        const w = orgWallets.find(ww => ww.vendor === vendor)
+        const vDemands = orgDemands.filter(d => d.vendor === vendor)
+        let usedSp = 0
+        for (const d of vDemands) {
+          const sp = d.confirmedSp ?? d.estimatedSp
+          usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
+        }
+        const totalQuota = w?.totalQuota ?? 0
+        return { vendor, totalQuota, usedSp, availableSp: totalQuota - usedSp, demandCount: vDemands.length }
+      })
+
+      const totalQuota = byVendor.reduce((s, v) => s + v.totalQuota, 0)
+      const usedSp = byVendor.reduce((s, v) => s + v.usedSp, 0)
       return {
         name: org.name,
         totalQuota,
         usedSp,
         availableSp: totalQuota - usedSp,
         demandCount: orgDemands.length,
+        byVendor,
       }
     })
 
-    // Global SP totals
+    // Global SP totals + per-vendor global breakdown
     const totalQuota = wallets.reduce((s, w) => s + w.totalQuota, 0)
     const totalUsedSp = orgSpData.reduce((s, o) => s + o.usedSp, 0)
+
+    const globalVendorSet = new Set([...wallets.map(w => w.vendor), ...demands.map(d => d.vendor)])
+    const spByVendor = Array.from(globalVendorSet).sort().map((vendor) => {
+      const vQuota = wallets.filter(w => w.vendor === vendor).reduce((s, w) => s + w.totalQuota, 0)
+      let vUsed = 0
+      for (const d of demands) {
+        if (d.vendor !== vendor) continue
+        const sp = d.confirmedSp ?? d.estimatedSp
+        vUsed += calcUsedSp(d.status, sp, d.heldFromStatus)
+      }
+      return { vendor, totalQuota: vQuota, usedSp: vUsed, availableSp: vQuota - vUsed }
+    })
 
     // --- On-time delivery rate ---
     // Include ACCEPTANCE + CLOSED (development is complete for both)
@@ -341,15 +366,15 @@ export async function GET(request: NextRequest) {
     }
 
     // --- Financial data (permission-gated) ---
-    type LedgerDetail = { demandNumber: string; title: string; fromStatus: string | null; toStatus: string; sp: number; deltaSp: number; deltaAmount: number; date: string; spChange?: { from: number; to: number; reason: string } }
+    type LedgerDetail = { demandNumber: string; title: string; vendor: string; fromStatus: string | null; toStatus: string; sp: number; deltaSp: number; deltaAmount: number; date: string; spChange?: { from: number; to: number; reason: string } }
     type MonthlyLedgerOrg = { organization: string; deltaSp: number; deltaAmount: number; details: LedgerDetail[] }
     type MonthlyLedger = { month: string; data: MonthlyLedgerOrg[] }
 
     let financial: {
       totalQuotaSp: number
       totalQuotaAmount: number
-      orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[]
-      demandDetail: { organization: string; demandNumber: string; title: string; status: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
+      orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number; byVendor: { vendor: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[] }[]
+      demandDetail: { organization: string; demandNumber: string; title: string; status: string; vendor: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
       monthlyLedger: MonthlyLedger[]
     } | null = null
 
@@ -359,13 +384,28 @@ export async function GET(request: NextRequest) {
     })
 
     if (userRecord?.canViewFinancial) {
-      // Org summary — include wallet quota for budget context
+      // Org summary — include wallet quota for budget context, with per-vendor breakdown
       const orgSummary = allOrgs.map((org) => {
-        const w = walletMap.get(org.id)
-        const quotaSp = w?.totalQuota ?? 0
+        const orgWallets = wallets.filter((w) => w.organizationId === org.id)
         const orgDemands = demands.filter((d) => d.organizationId === org.id && d.status !== "REJECTED")
-        let totalSp = 0
-        let usedSp = 0
+
+        // Per-vendor breakdown
+        const vendorSet = new Set([...orgWallets.map(w => w.vendor), ...orgDemands.map(d => d.vendor)])
+        const byVendor = Array.from(vendorSet).sort().map((vendor) => {
+          const w = orgWallets.find(ww => ww.vendor === vendor)
+          const vDemands = orgDemands.filter(d => d.vendor === vendor)
+          let totalSp = 0, usedSp = 0
+          for (const dem of vDemands) {
+            const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
+            totalSp += sp
+            usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus)
+          }
+          const quotaSp = w?.totalQuota ?? 0
+          return { vendor, quotaSp, quotaAmount: quotaSp * SP_RATE, totalSp, usedSp, amount: totalSp * SP_RATE, usedAmount: usedSp * SP_RATE, demandCount: vDemands.length }
+        })
+
+        const quotaSp = byVendor.reduce((s, v) => s + v.quotaSp, 0)
+        let totalSp = 0, usedSp = 0
         for (const dem of orgDemands) {
           const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
           totalSp += sp
@@ -380,6 +420,7 @@ export async function GET(request: NextRequest) {
           amount: totalSp * SP_RATE,
           usedAmount: usedSp * SP_RATE,
           demandCount: orgDemands.length,
+          byVendor,
         }
       }).filter((o) => o.demandCount > 0 || o.quotaSp > 0)
 
@@ -397,6 +438,7 @@ export async function GET(request: NextRequest) {
             demandNumber: d.demandNumber,
             title: d.title,
             status: d.status,
+            vendor: d.vendor,
             sp,
             usedSp: used,
             amount: sp * SP_RATE,
@@ -423,12 +465,12 @@ export async function GET(request: NextRequest) {
 
       const demandMap = new Map(demands.map((d) => [d.id, {
         demandNumber: d.demandNumber, title: d.title, orgName: d.organization.name,
-        estimatedSp: d.estimatedSp, confirmedSp: d.confirmedSp,
+        vendor: d.vendor, estimatedSp: d.estimatedSp, confirmedSp: d.confirmedSp,
       }]))
 
       // Collect all transition deltas
       // Group by demand and process chronologically to track effective SP at each point
-      const allDeltas: { month: string; org: string; detail: LedgerDetail }[] = []
+      const allDeltas: { month: string; org: string; vendor: string; detail: LedgerDetail }[] = []
 
       const histByDemand = new Map<string, typeof statusHistories>()
       for (const h of statusHistories) {
@@ -495,8 +537,10 @@ export async function GET(request: NextRequest) {
           allDeltas.push({
             month: monthKey,
             org: dem.orgName,
+            vendor: dem.vendor,
             detail: {
               demandNumber: dem.demandNumber, title: dem.title,
+              vendor: dem.vendor,
               fromStatus: h.fromStatus, toStatus: h.toStatus,
               sp: spAdj ? spAdj.newSp : runningSp,
               deltaSp, deltaAmount: deltaSp * SP_RATE,
@@ -558,6 +602,7 @@ export async function GET(request: NextRequest) {
         totalQuota,
         totalUsedSp,
         totalAvailable: totalQuota - totalUsedSp,
+        byVendor: spByVendor,
         byOrganization: orgSpData,
       },
       performance: {

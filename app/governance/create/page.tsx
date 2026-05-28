@@ -93,6 +93,8 @@ export default function CreateDemandPage() {
   const [painPoint, setPainPoint] = useState("")
   const [expectedBenefit, setExpectedBenefit] = useState("")
   const [estimatedSp, setEstimatedSp] = useState("")
+  const [vendor, setVendor] = useState("JV")
+  const [vendorOptions, setVendorOptions] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -110,6 +112,17 @@ export default function CreateDemandPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.organizations) setOrganizations(data.organizations)
+      })
+      .catch(() => {})
+  }, [token])
+
+  // Fetch vendor options
+  useEffect(() => {
+    if (!token) return
+    fetch("/api/vendors", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.vendors) setVendorOptions(data.vendors.map((v: { name: string }) => v.name))
       })
       .catch(() => {})
   }, [token])
@@ -148,6 +161,7 @@ export default function CreateDemandPage() {
     try {
       const formData = new FormData()
       formData.append("organizationId", selectedOrgId)
+      formData.append("vendor", vendor)
       formData.append("title", title)
       formData.append("description", description)
       formData.append("painPoint", painPoint)
@@ -277,6 +291,22 @@ export default function CreateDemandPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {vendorOptions.length > 1 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm sm:text-base">開發商</Label>
+                    <Select value={vendor} onValueChange={setVendor}>
+                      <SelectTrigger className="h-9 sm:h-11 w-full">
+                        <SelectValue placeholder="選擇開發商" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendorOptions.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="title" className="text-sm sm:text-base">需求標題 <span className="text-red-500">*</span></Label>
@@ -440,10 +470,14 @@ export default function CreateDemandPage() {
                     <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     基本資訊
                   </h3>
-                  <div className="grid gap-2 sm:gap-4 md:grid-cols-2">
+                  <div className="grid gap-2 sm:gap-4 md:grid-cols-3">
                     <div className="rounded-lg bg-muted/50 p-3">
                       <p className="text-xs text-muted-foreground mb-1">子公司</p>
                       <p className="text-sm font-medium">{selectedOrg?.name || "—"}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">開發商</p>
+                      <p className="text-sm font-medium">{vendor}</p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
                       <p className="text-xs text-muted-foreground mb-1">SP 估點</p>

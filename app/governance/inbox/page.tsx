@@ -55,6 +55,7 @@ interface Demand {
   contactPerson: string | null
   documentCount: number
   commentCount: number
+  vendor: string
   hasPendingDesignChange: boolean
   hasCurrentPhaseReject: boolean
   hasCurrentPhaseApproved: boolean
@@ -118,6 +119,8 @@ export default function InboxPage() {
   const [filterSubmitter, setFilterSubmitter] = useState("all")
   const [filterDeveloper, setFilterDeveloper] = useState("all")
   const [filterSignoff, setFilterSignoff] = useState("all")
+  const [filterVendor, setFilterVendor] = useState("all")
+  const [vendorOptions, setVendorOptions] = useState<string[]>([])
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([])
@@ -141,6 +144,7 @@ export default function InboxPage() {
     if (s.submitter) setFilterSubmitter(s.submitter)
     if (s.developer) setFilterDeveloper(s.developer)
     if (s.signoff) setFilterSignoff(s.signoff)
+    if (s.vendor) setFilterVendor(s.vendor)
     if (s.q) { setSearchQuery(s.q); setDebouncedSearch(s.q) }
     if (s.page) { const p = parseInt(s.page, 10); if (p > 0) setCurrentPage(p) }
   }, [])
@@ -153,10 +157,11 @@ export default function InboxPage() {
     if (filterSubmitter !== "all") data.submitter = filterSubmitter
     if (filterDeveloper !== "all") data.developer = filterDeveloper
     if (filterSignoff !== "all") data.signoff = filterSignoff
+    if (filterVendor !== "all") data.vendor = filterVendor
     if (debouncedSearch) data.q = debouncedSearch
     if (currentPage > 1) data.page = String(currentPage)
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
-  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterSignoff, debouncedSearch, currentPage])
+  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterSignoff, filterVendor, debouncedSearch, currentPage])
 
   // Debounce search
   useEffect(() => {
@@ -174,6 +179,7 @@ export default function InboxPage() {
       if (canSeeAll && filterOrg !== "all") params.set("organizationId", filterOrg)
       if (canSeeAll && filterSubmitter !== "all") params.set("submitterId", filterSubmitter)
       if (canSeeAll && filterDeveloper !== "all") params.set("developerId", filterDeveloper)
+      if (filterVendor !== "all") params.set("vendor", filterVendor)
       if (debouncedSearch) params.set("search", debouncedSearch)
 
       const res = await fetch(`/api/demands?${params}`, {
@@ -195,11 +201,22 @@ export default function InboxPage() {
     } finally {
       setLoading(false)
     }
-  }, [token, isAdmin, user?.id, filterStatus, filterOrg, filterSubmitter, filterDeveloper, debouncedSearch])
+  }, [token, isAdmin, user?.id, filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterVendor, debouncedSearch])
 
   useEffect(() => {
     fetchDemands(true)
   }, [fetchDemands])
+
+  // Fetch vendor options
+  useEffect(() => {
+    if (!token) return
+    fetch("/api/vendors", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.vendors) setVendorOptions(data.vendors.map((v: { name: string }) => v.name))
+      })
+      .catch(() => {})
+  }, [token])
 
   const handleDelete = async (demandId: string) => {
     if (!token) return
@@ -248,7 +265,7 @@ export default function InboxPage() {
   useEffect(() => {
     if (!didMount.current) { didMount.current = true; return }
     setCurrentPage(1)
-  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterSignoff, debouncedSearch])
+  }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterSignoff, filterVendor, debouncedSearch])
 
   // Client-side signoff status filter
   const filteredDemands = useMemo(() => {
@@ -288,7 +305,7 @@ export default function InboxPage() {
     return Array.from(map.entries())
   }, [filteredSubmitterOptions])
 
-  const hasActiveFilters = filterStatus !== "all" || filterOrg !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all" || filterSignoff !== "all"
+  const hasActiveFilters = filterStatus !== "all" || filterOrg !== "all" || filterSubmitter !== "all" || filterDeveloper !== "all" || filterSignoff !== "all" || filterVendor !== "all"
 
   return (
     <AppLayout>
@@ -434,6 +451,19 @@ export default function InboxPage() {
                 ))}
               </SelectContent>
             </Select>
+            {vendorOptions.length > 1 && (
+              <Select value={filterVendor} onValueChange={setFilterVendor}>
+                <SelectTrigger className="w-auto min-w-[120px]">
+                  <SelectValue placeholder="開發商" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部開發商</SelectItem>
+                  {vendorOptions.map((v) => (
+                    <SelectItem key={v} value={v}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {(isAdmin || user?.role === "delivery") && (
               <Select value={filterSignoff} onValueChange={setFilterSignoff}>
                 <SelectTrigger className="w-auto min-w-[140px]">
@@ -457,6 +487,7 @@ export default function InboxPage() {
                   setFilterSubmitter("all")
                   setFilterDeveloper("all")
                   setFilterSignoff("all")
+                  setFilterVendor("all")
                 }}
               >
                 清除篩選
@@ -485,7 +516,7 @@ export default function InboxPage() {
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               {hasActiveFilters && (
-                <span className="ml-1 text-xs">{[filterOrg, filterSubmitter, filterDeveloper, filterStatus, filterSignoff].filter(v => v !== "all").length}</span>
+                <span className="ml-1 text-xs">{[filterOrg, filterSubmitter, filterDeveloper, filterStatus, filterSignoff, filterVendor].filter(v => v !== "all").length}</span>
               )}
             </Button>
           </div>
@@ -505,6 +536,7 @@ export default function InboxPage() {
                         setFilterSubmitter("all")
                         setFilterDeveloper("all")
                         setFilterSignoff("all")
+                        setFilterVendor("all")
                       }}
                     >
                       清除
@@ -560,6 +592,19 @@ export default function InboxPage() {
                       <SelectItem value="unassigned">尚未指派</SelectItem>
                       {developerOptions.map((u) => (
                         <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {vendorOptions.length > 1 && (
+                  <Select value={filterVendor} onValueChange={setFilterVendor}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="開發商" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部開發商</SelectItem>
+                      {vendorOptions.map((v) => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -628,9 +673,14 @@ export default function InboxPage() {
                 return (
                   <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
                     <CardContent className="px-3 py-2 sm:px-4 sm:py-3 space-y-1.5 sm:space-y-2">
-                      {/* Row 1: number + status */}
+                      {/* Row 1: number + vendor + status */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono text-muted-foreground">{demand.demandNumber}</span>
+                          {vendorOptions.length > 1 && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">{demand.vendor}</Badge>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5 flex-wrap justify-end">
                           <Badge variant="secondary" className={cn("text-xs px-2 py-0", statusInfo.color)}>
                             {statusInfo.label}

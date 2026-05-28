@@ -27,21 +27,11 @@ export async function GET(request: NextRequest) {
 
     const currentYear = new Date().getFullYear()
 
-    // Fetch wallet and demands in parallel
-    const [wallet, demands] = await Promise.all([
-      prisma.spWallet.findUnique({
-        where: {
-          organizationId_year: {
-            organizationId: user.organizationId,
-            year: currentYear,
-          },
-        },
-        select: {
-          totalQuota: true,
-          usedSp: true,
-          committedSp: true,
-          year: true,
-        },
+    // Fetch wallets (per vendor) and demands in parallel
+    const [wallets, demands] = await Promise.all([
+      prisma.spWallet.findMany({
+        where: { organizationId: user.organizationId, year: currentYear },
+        select: { vendor: true, totalQuota: true },
       }),
       prisma.demand.findMany({
         where: { organizationId: user.organizationId },
@@ -50,6 +40,7 @@ export async function GET(request: NextRequest) {
           demandNumber: true,
           title: true,
           status: true,
+          vendor: true,
           estimatedSp: true,
           confirmedSp: true,
           heldFromStatus: true,
@@ -60,33 +51,57 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
-    const totalQuota = wallet?.totalQuota ?? 0
+    // Build per-vendor breakdown
+    const walletMap = new Map(wallets.map((w) => [w.vendor, w.totalQuota]))
+    const vendorMap = new Map<string, {
+      totalQuota: number; usedSp: number
+      demands: { id: string; demandNumber: string; title: string; status: string; vendor: string; sp: number; spUsed: number; updatedAt: Date }[]
+    }>()
 
-    // Calculate progressive SP consumption from actual demands (per-demand rounding)
-    let usedSp = 0
-    const demandBreakdown: {
-      id: string; demandNumber: string; title: string
-      status: string; sp: number; spUsed: number; updatedAt: Date
-    }[] = []
+    // Initialize with wallets
+    for (const w of wallets) {
+      vendorMap.set(w.vendor, { totalQuota: w.totalQuota, usedSp: 0, demands: [] })
+    }
 
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
       const spUsed = calcUsedSp(d.status, sp, d.heldFromStatus)
-      usedSp += spUsed
-      demandBreakdown.push({
+      if (!vendorMap.has(d.vendor)) {
+        vendorMap.set(d.vendor, { totalQuota: walletMap.get(d.vendor) ?? 0, usedSp: 0, demands: [] })
+      }
+      const entry = vendorMap.get(d.vendor)!
+      entry.usedSp += spUsed
+      entry.demands.push({
         id: d.id, demandNumber: d.demandNumber, title: d.title,
-        status: d.status, sp, spUsed, updatedAt: d.updatedAt,
+        status: d.status, vendor: d.vendor, sp, spUsed, updatedAt: d.updatedAt,
       })
     }
 
-    const availableSp = totalQuota - usedSp
+    // Build response with both combined totals and per-vendor breakdown
+    let totalQuota = 0
+    let totalUsedSp = 0
+    const byVendor: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demands: typeof demands }[] = []
+
+    for (const [vendor, data] of vendorMap) {
+      totalQuota += data.totalQuota
+      totalUsedSp += data.usedSp
+      byVendor.push({
+        vendor,
+        totalQuota: data.totalQuota,
+        usedSp: data.usedSp,
+        availableSp: data.totalQuota - data.usedSp,
+        demands: data.demands as typeof demands,
+      })
+    }
 
     return NextResponse.json({
       year: currentYear,
       totalQuota,
-      usedSp,
-      availableSp,
-      demands: demandBreakdown,
+      usedSp: totalUsedSp,
+      availableSp: totalQuota - totalUsedSp,
+      byVendor,
+      // Legacy: flat demands list (all vendors combined)
+      demands: byVendor.flatMap((v) => v.demands),
     })
   } catch (error) {
     if (error instanceof AuthError) {
