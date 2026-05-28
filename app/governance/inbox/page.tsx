@@ -31,8 +31,8 @@ import {
   SlidersHorizontal, X,
 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command"
@@ -90,36 +90,36 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
 }
 
-const STORAGE_KEY = "inbox-filters"
-
-/** Read saved filters from sessionStorage */
-function readSavedFilters(): Record<string, string> {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch { return {} }
+export default function InboxPage() {
+  return (
+    <Suspense>
+      <InboxContent />
+    </Suspense>
+  )
 }
 
-export default function InboxPage() {
+function InboxContent() {
   const { token, user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const isAdmin = user?.role === "admin"
   const isViewer = user?.role === "viewer"
   const canSeeAll = isAdmin || isViewer
   const isFullAdmin = isAdmin && (!user?.adminScopeType || user.adminScopeType === "all")
 
+  // Initialize filters from URL search params
   const [demands, setDemands] = useState<Demand[]>([])
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [filterOrg, setFilterOrg] = useState("all")
-  const [filterSubmitter, setFilterSubmitter] = useState("all")
-  const [filterDeveloper, setFilterDeveloper] = useState("all")
-  const [filterSignoff, setFilterSignoff] = useState("all")
-  const [filterVendor, setFilterVendor] = useState("all")
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "")
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get("q") || "")
+  const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "all")
+  const [filterOrg, setFilterOrg] = useState(searchParams.get("org") || "all")
+  const [filterSubmitter, setFilterSubmitter] = useState(searchParams.get("submitter") || "all")
+  const [filterDeveloper, setFilterDeveloper] = useState(searchParams.get("developer") || "all")
+  const [filterSignoff, setFilterSignoff] = useState(searchParams.get("signoff") || "all")
+  const [filterVendor, setFilterVendor] = useState(searchParams.get("vendor") || "all")
   const [vendorOptions, setVendorOptions] = useState<string[]>([])
   const [submitterOptions, setSubmitterOptions] = useState<FilterOption[]>([])
   const [developerOptions, setDeveloperOptions] = useState<FilterOption[]>([])
@@ -130,37 +130,28 @@ export default function InboxPage() {
   const [holdTarget, setHoldTarget] = useState<Demand | null>(null)
   const [holdReason, setHoldReason] = useState("")
   const [holdLoading, setHoldLoading] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage, setCurrentPage] = useState(() => {
+    const p = parseInt(searchParams.get("page") || "", 10)
+    return p > 0 ? p : 1
+  })
   const ITEMS_PER_PAGE = 12
 
-  // Restore filters from sessionStorage after hydration
-  const restoredRef = useRef(false)
+  // Sync filters to URL search params
   useEffect(() => {
-    if (restoredRef.current) return
-    restoredRef.current = true
-    const s = readSavedFilters()
-    if (s.status) setFilterStatus(s.status)
-    if (s.org) setFilterOrg(s.org)
-    if (s.submitter) setFilterSubmitter(s.submitter)
-    if (s.developer) setFilterDeveloper(s.developer)
-    if (s.signoff) setFilterSignoff(s.signoff)
-    if (s.vendor) setFilterVendor(s.vendor)
-    if (s.q) { setSearchQuery(s.q); setDebouncedSearch(s.q) }
-    if (s.page) { const p = parseInt(s.page, 10); if (p > 0) setCurrentPage(p) }
-  }, [])
-
-  // Persist filters to sessionStorage on change
-  useEffect(() => {
-    const data: Record<string, string> = {}
-    if (filterStatus !== "all") data.status = filterStatus
-    if (filterOrg !== "all") data.org = filterOrg
-    if (filterSubmitter !== "all") data.submitter = filterSubmitter
-    if (filterDeveloper !== "all") data.developer = filterDeveloper
-    if (filterSignoff !== "all") data.signoff = filterSignoff
-    if (filterVendor !== "all") data.vendor = filterVendor
-    if (debouncedSearch) data.q = debouncedSearch
-    if (currentPage > 1) data.page = String(currentPage)
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
+    const params = new URLSearchParams()
+    if (filterStatus !== "all") params.set("status", filterStatus)
+    if (filterOrg !== "all") params.set("org", filterOrg)
+    if (filterSubmitter !== "all") params.set("submitter", filterSubmitter)
+    if (filterDeveloper !== "all") params.set("developer", filterDeveloper)
+    if (filterSignoff !== "all") params.set("signoff", filterSignoff)
+    if (filterVendor !== "all") params.set("vendor", filterVendor)
+    if (debouncedSearch) params.set("q", debouncedSearch)
+    if (currentPage > 1) params.set("page", String(currentPage))
+    const qs = params.toString()
+    const newUrl = qs ? `?${qs}` : window.location.pathname
+    if (window.location.search !== (qs ? `?${qs}` : "")) {
+      window.history.replaceState(null, "", newUrl)
+    }
   }, [filterStatus, filterOrg, filterSubmitter, filterDeveloper, filterSignoff, filterVendor, debouncedSearch, currentPage])
 
   // Debounce search
