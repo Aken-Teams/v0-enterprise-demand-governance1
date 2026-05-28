@@ -7,9 +7,11 @@
 import "dotenv/config"
 import { PrismaClient } from "../lib/generated/prisma/client"
 import { PrismaMariaDb } from "@prisma/adapter-mariadb"
+import { signoffNotificationTemplate } from "../lib/mail-templates"
 
 const MAIL_BASE_URL = process.env.AD_URL || "http://220.130.234.188:9998"
 const MAIL_API_KEY = process.env.AD_API || ""
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://jv-sp.jvision-ai.com"
 
 async function main() {
   const empNo = process.argv[2]
@@ -36,25 +38,14 @@ async function main() {
     console.log(`找到使用者: ${user.name} (${user.email}), 角色: ${user.role}`)
     console.log(`準備發送測試信到: ${user.email}`)
 
-    const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })
-    const subject = `[測試] 需求治理系統 - 郵件通知測試`
-    const body = `
-      <div style="font-family: 'Microsoft JhengHei', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #2563eb; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0;">需求治理系統 - 測試通知</h2>
-        </div>
-        <div style="padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-          <p>您好，<strong>${user.name}</strong>，</p>
-          <p>這是一封來自需求治理系統的<strong>測試郵件</strong>，用於驗證郵件通知功能是否正常運作。</p>
-          <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-            <tr><td style="padding: 8px; color: #6b7280;">收件人</td><td style="padding: 8px;">${user.name} (${user.email})</td></tr>
-            <tr><td style="padding: 8px; color: #6b7280;">工號</td><td style="padding: 8px;">${user.ldapUsername}</td></tr>
-            <tr><td style="padding: 8px; color: #6b7280;">發送時間</td><td style="padding: 8px;">${now}</td></tr>
-          </table>
-          <p style="color: #6b7280; font-size: 13px;">如果您收到此郵件，表示郵件通知功能運作正常。此為系統測試信，請忽略。</p>
-        </div>
-      </div>
-    `
+    const subject = `[測試] TEST-001 請確認簽核 - 測試需求`
+    const body = signoffNotificationTemplate({
+      demandNumber: "TEST-001",
+      demandTitle: "這是一封測試信件",
+      phaseLabel: "MVP 架構確認",
+      shareUrl: `${BASE_URL}/governance`,
+      signerNames: [user.name],
+    })
 
     const response = await fetch(`${MAIL_BASE_URL}/ldap/api/v1/mail/send`, {
       method: "POST",
