@@ -475,6 +475,7 @@ model PhaseSignoff {
   targetUserId  String?       /// 指定簽核人 (null = 舊資料, 任何有權限的人可簽)
   targetUser    User?         @relation("SignoffTarget", fields: [targetUserId], references: [id])
   targetRole    String?       /// 簽核角色 (REQUESTER / MANAGER / BOARD)
+  overrideTargetStatus DemandStatus? /// 代簽通過後直接結算至此狀態 (僅 BOARD_OVERRIDE，null = 不直接結算，照正常流程)
   comment        String?       @db.Text
   requestComment String?       @db.Text @map("request_comment")
   requestedAt    DateTime      @default(now())

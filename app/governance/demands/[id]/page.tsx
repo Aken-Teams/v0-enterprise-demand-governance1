@@ -18,7 +18,7 @@ import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -134,6 +134,7 @@ interface DemandDetail {
     targetUserId: string | null
     targetUser: { id: string; name: string } | null
     targetRole: string | null
+    overrideTargetStatus: string | null
     comment: string | null
     requestComment: string | null
     requestedAt: string
@@ -409,6 +410,8 @@ export default function DemandDetailPage() {
   const [boardOverrideComment, setBoardOverrideComment] = useState("")
   const [boardOverrideSubmitting, setBoardOverrideSubmitting] = useState(false)
   const [boardOverrideKind, setBoardOverrideKind] = useState<"PHASE" | "DESIGN_CHANGE">("PHASE")
+  // 代簽通過後直接結算的目標狀態（"" = 不直接結算，照正常流程）
+  const [boardOverrideTargetStatus, setBoardOverrideTargetStatus] = useState<string>("")
 
   // Share link state
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
@@ -587,11 +590,16 @@ export default function DemandDetailPage() {
       const res = await fetch(`/api/demands/${demandId}/signoffs/board-override`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: boardOverrideComment.trim(), kind: boardOverrideKind }),
+        body: JSON.stringify({
+          comment: boardOverrideComment.trim(),
+          kind: boardOverrideKind,
+          targetStatus: boardOverrideKind === "PHASE" && boardOverrideTargetStatus ? boardOverrideTargetStatus : null,
+        }),
       })
       if (res.ok) {
         setBoardOverrideOpen(false)
         setBoardOverrideComment("")
+        setBoardOverrideTargetStatus("")
         fetchDemand()
       }
     } catch { /* ignore */ } finally {
@@ -2315,7 +2323,7 @@ export default function DemandDetailPage() {
       />
 
       {/* Board override dialog */}
-      <AlertDialog open={boardOverrideOpen} onOpenChange={(open) => { setBoardOverrideOpen(open); if (!open) setBoardOverrideComment("") }}>
+      <AlertDialog open={boardOverrideOpen} onOpenChange={(open) => { setBoardOverrideOpen(open); if (!open) { setBoardOverrideComment(""); setBoardOverrideTargetStatus("") } }}>
         <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base sm:text-lg">專案 Master 代簽</AlertDialogTitle>
@@ -2330,6 +2338,68 @@ export default function DemandDetailPage() {
             value={boardOverrideComment}
             onChange={(e) => setBoardOverrideComment(e.target.value)}
           />
+          {boardOverrideKind === "PHASE" && demand && (() => {
+            const curIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
+            const settlementStatuses = (["DEVELOPING", "ACCEPTANCE", "CLOSED"] as const)
+              .filter((s) => PIPELINE_STEPS.indexOf(s) > curIdx)
+            if (settlementStatuses.length === 0) return null
+            const sp = demand.confirmedSp ?? demand.estimatedSp
+            const previewRate = boardOverrideTargetStatus ? (SP_PROGRESS_RATE[boardOverrideTargetStatus] ?? 0) : null
+            const previewUsed = previewRate !== null ? Math.round(sp * previewRate) : null
+            return (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-orange-600 shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium text-foreground">代簽通過後直接結算至</span>
+                </div>
+                <Select
+                  value={boardOverrideTargetStatus || "NONE"}
+                  onValueChange={(v) => setBoardOverrideTargetStatus(v === "NONE" ? "" : v)}
+                >
+                  <SelectTrigger className="w-full bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">
+                      <span className="text-muted-foreground">維持流程（不直接結算）</span>
+                    </SelectItem>
+                    {settlementStatuses.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        <span className="flex items-center gap-2">
+                          <Badge className={cn("text-[10px] font-normal", STATUS_MAP[s]?.color)}>
+                            {STATUS_MAP[s]?.label ?? s}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            消耗 {Math.round((SP_PROGRESS_RATE[s] ?? 0) * 100)}%
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {previewUsed !== null ? (
+                  <div className="rounded-md border border-orange-200 bg-orange-50/70 p-2.5 space-y-1.5">
+                    <p className="flex items-center gap-1 text-xs text-orange-900/80">
+                      <span>Master 通過後直接設為</span>
+                      <Badge className={cn("text-[10px] font-normal", STATUS_MAP[boardOverrideTargetStatus]?.color)}>
+                        {STATUS_MAP[boardOverrideTargetStatus]?.label}
+                      </Badge>
+                    </p>
+                    <div className="flex items-baseline justify-between gap-2 text-xs">
+                      <span className="text-orange-900/60">預估消耗</span>
+                      <span className="text-orange-900/70">
+                        <span className="font-semibold text-orange-900">{Math.round((previewRate as number) * 100)}%</span>
+                        {" × "}確認 SP {sp}{" = "}
+                        <span className="font-semibold text-sm text-orange-700">{previewUsed} SP</span>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground leading-relaxed">不選則照原流程推進，僅完成本階段簽核、不直接結算。</p>
+                )}
+              </div>
+            )
+          })()}
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction

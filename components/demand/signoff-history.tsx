@@ -167,9 +167,16 @@ function groupSignoffs(signoffs: SignoffRecord[]): SignoffGroup[] {
 
     for (const m of members) assigned.add(m.id)
 
+    // Once a 代簽 (BOARD_OVERRIDE) is initiated, it supersedes the original
+    // signers (需求者/主管) — show only the 代簽人 in this round.
+    const hasOverride = members.some((m) => m.targetRole === "BOARD_OVERRIDE")
+    const displayMembers = hasOverride
+      ? members.filter((m) => m.targetRole === "BOARD_OVERRIDE")
+      : members
+
     // Sort members: REQUESTER first, MANAGER second, BOARD third, others last
     const roleOrder: Record<string, number> = { REQUESTER: 0, MANAGER: 1, BOARD: 2 }
-    members.sort((a, b) => (roleOrder[a.targetRole || ""] ?? 9) - (roleOrder[b.targetRole || ""] ?? 9))
+    displayMembers.sort((a, b) => (roleOrder[a.targetRole || ""] ?? 9) - (roleOrder[b.targetRole || ""] ?? 9))
 
     groups.push({
       key: `${sKind}:${s.phase}:${s.id}`,
@@ -177,9 +184,9 @@ function groupSignoffs(signoffs: SignoffRecord[]): SignoffGroup[] {
       kind: sKind,
       requestedAt: s.requestedAt,
       requestedBy: s.requestedBy,
-      requestComment: members.find((m) => m.requestComment)?.requestComment || null,
-      signoffs: members,
-      groupStatus: computeGroupStatus(members),
+      requestComment: displayMembers.find((m) => m.requestComment)?.requestComment || null,
+      signoffs: displayMembers,
+      groupStatus: computeGroupStatus(displayMembers),
     })
   }
 

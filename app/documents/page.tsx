@@ -161,12 +161,12 @@ const SUBSIDIARY_PHASE_DETAIL: Record<string, { desc: string; actions: string[];
   SUBMITTED: {
     desc: "管理者與您面談確認需求內容",
     actions: ["與管理者進行需求訪談", "確認需求範圍與期望目標"],
-    note: "此階段不列入 SP 扣除範圍，待進入 MVP 確認後才開始計算消耗。",
+    note: "此階段不列入 SP 扣除範圍，待進入開發階段後才開始計算消耗。",
   },
   PRD_REVIEW: {
     desc: "PM 撰寫需求規格書，工程師進行架構設計",
     actions: ["收到 PRD 後審閱需求規格是否正確", "確認 MVP 架構方向", "簽核確認 PRD 內容"],
-    note: "進入此階段後開始計算消耗（需求訪談 50% + MVP 30% = 80%）。",
+    note: "此階段仍不列入 SP 扣除，待進入開發中後才起算消耗（開發 50% → 驗收 75% → 結案 100%）。",
   },
   SP_REVIEW: {
     desc: "管理者確認 SP 點數與開發時程",
@@ -336,7 +336,7 @@ function SubsidiaryGuide() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（需求訪談 50% + MVP 30% = 80%、結案 +20% = 100%；僅需求確認階段不列入扣除）</span>
+                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（開發中 50% → 驗收中 75% → 結案 100%；需求確認、MVP、開案階段不列入扣除）</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
@@ -361,8 +361,8 @@ function SubsidiaryGuide() {
         </CardHeader>
         <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
           <p>
-            系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">審核通過</span>為計算基準。
-            需求確認與 MVP 審核中的需求<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待 MVP 架構確認<span className="font-medium text-foreground">審核通過</span>後才開始計算消耗 80%，結案<span className="font-medium text-foreground">審核通過</span>時達到 100%。
+            系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">需求所在階段</span>為計算基準。
+            需求確認、MVP 確認與開案確認階段<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待進入<span className="font-medium text-foreground">開發中</span>後才開始計算消耗 50%，驗收中累計 75%，<span className="font-medium text-foreground">結案</span>時達到 100%。
           </p>
 
           <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -386,25 +386,31 @@ function SubsidiaryGuide() {
                   <td className="py-2 sm:py-2.5"><Badge className="bg-amber-100 text-amber-700 text-[10px] sm:text-xs">MVP 確認</Badge></td>
                   <td className="py-2 sm:py-2.5 text-center text-muted-foreground">—</td>
                   <td className="py-2 sm:py-2.5 text-center text-muted-foreground hidden sm:table-cell">—</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">審核通過前不計算消耗</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">架構確認階段尚未起算消耗</td>
                 </tr>
                 <tr>
-                  <td className="py-2 sm:py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      <Badge className="bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
-                      <Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
-                      <Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge>
-                    </div>
-                  </td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">80%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">訪談 50% + MVP 30%</td>
-                  <td className="py-2.5">MVP 審核通過後一次起算 80%</td>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground">—</td>
+                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground hidden sm:table-cell">—</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">確認 SP 與時程，尚未起算消耗</td>
+                </tr>
+                <tr>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">50%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+50%</td>
+                  <td className="py-2.5">進入開發中後起算 50%</td>
+                </tr>
+                <tr>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">75%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
+                  <td className="py-2.5">進入驗收中再消耗 25%</td>
                 </tr>
                 <tr>
                   <td className="py-2 sm:py-2.5"><Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge></td>
                   <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">100%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+20%</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案審核通過後完整消耗全部 SP</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案後完整消耗全部 SP</td>
                 </tr>
               </tbody>
             </table>
@@ -422,15 +428,19 @@ function SubsidiaryGuide() {
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                MVP 審核中 → 消耗 <span className="font-semibold text-foreground">0 SP</span>（審核通過前不計算）
+                MVP 確認 / 開案確認 → 消耗 <span className="font-semibold text-foreground">0 SP</span>（尚未起算）
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                MVP 審核通過（進入開案） → 消耗 <span className="font-semibold text-foreground">16 SP</span>（20 × 80%）
+                進入開發中 → 消耗 <span className="font-semibold text-foreground">10 SP</span>（20 × 50%）
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                結案審核通過 → 完整消耗 <span className="font-semibold text-foreground">20 SP</span>（20 × 100%）
+                進入驗收中 → 消耗 <span className="font-semibold text-foreground">15 SP</span>（20 × 75%）
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
+                結案 → 完整消耗 <span className="font-semibold text-foreground">20 SP</span>（20 × 100%）
               </li>
             </ul>
           </div>
@@ -691,7 +701,7 @@ function AdminDeliveryGuide() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（需求訪談 50% + MVP 30% = 80%、結案 +20% = 100%；僅需求確認階段不列入扣除）</span>
+                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（開發中 50% → 驗收中 75% → 結案 100%；需求確認、MVP、開案階段不列入扣除）</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
@@ -716,8 +726,8 @@ function AdminDeliveryGuide() {
         </CardHeader>
         <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
           <p>
-            系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">審核通過</span>為計算基準。
-            需求確認與 MVP 審核中的需求<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待 MVP 架構確認<span className="font-medium text-foreground">審核通過</span>後才開始計算消耗 80%，結案<span className="font-medium text-foreground">審核通過</span>時達到 100%。
+            系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">需求所在階段</span>為計算基準。
+            需求確認、MVP 確認與開案確認階段<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待進入<span className="font-medium text-foreground">開發中</span>後才開始計算消耗 50%，驗收中累計 75%，<span className="font-medium text-foreground">結案</span>時達到 100%。
           </p>
 
           <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -741,25 +751,31 @@ function AdminDeliveryGuide() {
                   <td className="py-2.5"><Badge className="bg-amber-100 text-amber-700">MVP 確認</Badge></td>
                   <td className="py-2.5 text-center text-muted-foreground">—</td>
                   <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5">審核通過前不計算消耗</td>
+                  <td className="py-2.5">架構確認階段尚未起算消耗</td>
                 </tr>
                 <tr>
-                  <td className="py-2 sm:py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      <Badge className="bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
-                      <Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
-                      <Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge>
-                    </div>
-                  </td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">80%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">訪談 50% + MVP 30%</td>
-                  <td className="py-2.5">MVP 審核通過後一次起算 80%</td>
+                  <td className="py-2.5"><Badge className="bg-orange-100 text-orange-700">開案確認</Badge></td>
+                  <td className="py-2.5 text-center text-muted-foreground">—</td>
+                  <td className="py-2.5 text-center text-muted-foreground">—</td>
+                  <td className="py-2.5">確認 SP 與時程，尚未起算消耗</td>
+                </tr>
+                <tr>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">50%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+50%</td>
+                  <td className="py-2.5">進入開發中後起算 50%</td>
+                </tr>
+                <tr>
+                  <td className="py-2 sm:py-2.5"><Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge></td>
+                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">75%</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
+                  <td className="py-2.5">進入驗收中再消耗 25%</td>
                 </tr>
                 <tr>
                   <td className="py-2 sm:py-2.5"><Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge></td>
                   <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">100%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+20%</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案審核通過後完整消耗，可進行 SP 調整</td>
+                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
+                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案後完整消耗，可進行 SP 調整</td>
                 </tr>
               </tbody>
             </table>
@@ -770,8 +786,8 @@ function AdminDeliveryGuide() {
             <p>已使用 SP = Σ（各需求確認 SP × 該階段消耗比例）</p>
             <p>可用 SP = 年度配額 − 已使用 SP</p>
             <p>狀態變更時自動計算差額（delta）並更新錢包，支援前進與倒退。駁回時全額退還。</p>
-            <p className="text-muted-foreground/70">※ 需求確認與 MVP 審核中的需求 SP 不計入已使用</p>
-            <p className="text-muted-foreground/70">※ SP 消耗以審核通過為準，MVP 通過才起算 80%，結案通過才達 100%</p>
+            <p className="text-muted-foreground/70">※ 需求確認、MVP 確認與開案確認階段的需求 SP 不計入已使用</p>
+            <p className="text-muted-foreground/70">※ SP 依階段累進消耗：開發中 50% → 驗收中 75% → 結案 100%</p>
           </div>
         </CardContent>
       </Card>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, MessageSquare, Download, ShieldCheck } from "lucide-react"
-import { STATUS_MAP, SIGNOFF_STATUS_MAP } from "@/lib/constants/demand"
+import { STATUS_MAP, SIGNOFF_STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
 interface PhaseSignoffBannerProps {
@@ -14,6 +14,7 @@ interface PhaseSignoffBannerProps {
     phase: string
     status: string
     targetRole?: string | null
+    overrideTargetStatus?: string | null
     requestedAt: string
     requestedBy: { id: string; name: string }
     requestComment?: string | null
@@ -160,6 +161,21 @@ export function PhaseSignoffBanner({
               </div>
               <p className={cn("text-[13px] sm:text-sm whitespace-pre-line break-words leading-relaxed", isBoardOverride ? "text-orange-900/80" : "text-indigo-900/80")}>
                 {signoff.requestComment}
+              </p>
+            </div>
+          )}
+
+          {isBoardOverride && signoff.overrideTargetStatus && (
+            <div className="rounded-md bg-orange-100/70 border border-orange-300 p-2.5 sm:p-3">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-orange-600" />
+                <span className="text-xs font-medium text-orange-800">
+                  您確認後將直接結算
+                </span>
+              </div>
+              <p className="text-[13px] sm:text-sm text-orange-900/80 mt-1 leading-relaxed">
+                通過後需求將直接設為「{STATUS_MAP[signoff.overrideTargetStatus]?.label ?? signoff.overrideTargetStatus}」，
+                SP 消耗 <span className="font-semibold">{Math.round((SP_PROGRESS_RATE[signoff.overrideTargetStatus] ?? 0) * 100)}%</span>。
               </p>
             </div>
           )}

@@ -5,8 +5,9 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
-import { notifyUsers, getAdminUserIds } from "@/lib/notify"
+import { notifyUsers, getAdminUserIds, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
+import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -213,6 +214,91 @@ export async function PATCH(
           respondedById: auth.userId,
         },
       })
+    }
+
+    // When an approved BOARD_OVERRIDE carries a settlement target, transition the demand
+    // directly to that status (一步結案 / 指定結算狀態) so it doesn't hang in an intermediate phase.
+    if (action === "approve" && signoff.targetRole === "BOARD_OVERRIDE" && signoff.overrideTargetStatus) {
+      const target = signoff.overrideTargetStatus as DemandStatus
+      const dem = await prisma.demand.findUnique({
+        where: { id },
+        select: { status: true, confirmedSp: true, estimatedSp: true, organizationId: true, demandNumber: true, title: true },
+      })
+      if (dem && dem.status !== target) {
+        const now = new Date()
+        const fromStatus = dem.status
+        const sp = dem.confirmedSp ?? dem.estimatedSp
+        const oldRate = SP_PROGRESS_RATE[fromStatus] ?? 0
+        const newRate = SP_PROGRESS_RATE[target] ?? 0
+        const delta = Math.round(sp * newRate) - Math.round(sp * oldRate)
+        const year = now.getFullYear()
+
+        await prisma.$transaction(async (tx) => {
+          await tx.demand.update({
+            where: { id },
+            data: {
+              status: target,
+              ...(target === "CLOSED" ? { completedDate: now } : {}),
+            },
+          })
+          await tx.demandStatusHistory.create({
+            data: {
+              demandId: id,
+              fromStatus,
+              toStatus: target,
+              comment: "專案 Master 代簽結算",
+              changedBy: auth.userId,
+            },
+          })
+          // Auto-set phase plan actual dates
+          const fromIdx = PIPELINE_STEPS.indexOf(fromStatus as typeof PIPELINE_STEPS[number])
+          const toIdx = PIPELINE_STEPS.indexOf(target as typeof PIPELINE_STEPS[number])
+          if (fromIdx >= 0) {
+            await tx.demandPhasePlan.upsert({
+              where: { demandId_phase: { demandId: id, phase: fromStatus } },
+              create: { demandId: id, phase: fromStatus, actualEnd: now },
+              update: { actualEnd: now },
+            })
+          }
+          if (toIdx >= 0) {
+            await tx.demandPhasePlan.upsert({
+              where: { demandId_phase: { demandId: id, phase: target } },
+              create: { demandId: id, phase: target, actualStart: now },
+              update: { actualStart: now },
+            })
+          }
+          // SP wallet: progressive consumption delta (same formula as status PATCH)
+          if (delta !== 0) {
+            await tx.spWallet.upsert({
+              where: { organizationId_year: { organizationId: dem.organizationId, year } },
+              create: { organizationId: dem.organizationId, year, totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0 },
+              update: { usedSp: { increment: delta } },
+            })
+          }
+        })
+
+        // Notify stakeholders about the settlement status change
+        const fromLabel = STATUS_MAP[fromStatus]?.label ?? fromStatus
+        const toLabel = STATUS_MAP[target]?.label ?? target
+        Promise.all([getDemandStakeholderIds(id), getOrgSubsidiaryUserIds(dem.organizationId)]).then(([sIds, oIds]) => {
+          const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
+          notifyUsers(recipients, {
+            type: "DEMAND_STATUS",
+            title: "需求狀態變更",
+            message: `需求 ${dem.demandNumber}「${dem.title}」經專案 Master 代簽結算，狀態已從「${fromLabel}」變更為「${toLabel}」。`,
+            linkUrl: `/demands/${id}`,
+          })
+        })
+        logAudit({
+          userId: auth.userId,
+          action: "STATUS_CHANGE",
+          entity: "DEMAND",
+          entityId: id,
+          demandId: id,
+          details: { fromStatus, toStatus: target, via: "BOARD_OVERRIDE_SETTLEMENT" },
+          request,
+        })
+      }
     }
 
     // When a non-override signoff is approved, check if all non-override signoffs
