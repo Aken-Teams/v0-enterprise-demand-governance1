@@ -55,6 +55,9 @@ enum DocumentType {
   GITHUB_REPO         // GitHub 連結
   AUDIO               // 音訊
   VIDEO               // 影片
+  SECURITY_REPORT     // 資安報告
+  SECURITY_FIX_REPORT // 資安修正報告
+  OPERATION_MANUAL    // 操作手冊
 }
 
 enum SubTaskStatus {

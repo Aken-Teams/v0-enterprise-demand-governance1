@@ -49,7 +49,7 @@ export const PHASE_DOCUMENT_MAP: Record<
   },
   ACCEPTANCE: {
     required: ["BDD", "TDD", "TEST_REPORT"],
-    optional: ["ATTACHMENT"],
+    optional: ["SECURITY_REPORT", "SECURITY_FIX_REPORT", "OPERATION_MANUAL", "ATTACHMENT"],
   },
   CLOSED: { required: [], optional: ["ATTACHMENT"] },
 }
@@ -68,6 +68,9 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   GITHUB_REPO: "GitHub 連結",
   AUDIO: "音訊",
   VIDEO: "影片",
+  SECURITY_REPORT: "資安報告",
+  SECURITY_FIX_REPORT: "資安修正報告",
+  OPERATION_MANUAL: "操作手冊",
 }
 
 /** 各階段簡要說明，讓管理者了解該階段的工作重點 */
