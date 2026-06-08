@@ -13,9 +13,11 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, Legend,
   LineChart, Line,
 } from "recharts"
+import { Button } from "@/components/ui/button"
 import {
   BarChart3, FileText, Coins, TrendingUp, AlertTriangle,
   CheckCircle, Clock, Loader2, Users, DollarSign, ChevronDown, ChevronLeft, ChevronRight, Calendar,
+  Download,
 } from "lucide-react"
 
 interface AnalyticsData {
@@ -222,9 +224,38 @@ export default function GovernanceAnalyticsPage() {
   return (
     <AppLayout userRole="admin">
       <div className="space-y-3 sm:space-y-6">
-        <div>
-          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">分析報表</h1>
-          <p className="hidden sm:block text-muted-foreground">治理數據分析與決策支援報表</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">分析報表</h1>
+            <p className="hidden sm:block text-muted-foreground">治理數據分析與決策支援報表</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/governance/analytics/export", {
+                  headers: { Authorization: `Bearer ${token}` },
+                })
+                if (!res.ok) throw new Error("Export failed")
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement("a")
+                a.href = url
+                a.download = res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] || "SP_Report.xlsx"
+                document.body.appendChild(a)
+                a.click()
+                a.remove()
+                URL.revokeObjectURL(url)
+              } catch (e) {
+                console.error("Download failed:", e)
+              }
+            }}
+          >
+            <Download className="h-4 w-4 mr-1.5" />
+            下載報表
+          </Button>
         </div>
 
         {/* KPI Cards */}
