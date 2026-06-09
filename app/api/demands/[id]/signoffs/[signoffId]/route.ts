@@ -133,6 +133,12 @@ export async function PATCH(
         if (auth.userId !== signoff.targetUserId) {
           return NextResponse.json({ error: "此簽核指定由其他人員處理" }, { status: 403 })
         }
+        // BOARD_OVERRIDE can only be handled by board members or admin/delivery
+        if (signoff.targetRole === "BOARD_OVERRIDE" && auth.role === "subsidiary") {
+          if (!currentUser?.isBoardMember) {
+            return NextResponse.json({ error: "專案 Master 代簽僅限董事會成員操作" }, { status: 403 })
+          }
+        }
       } else {
         // Legacy signoff (no targetUserId): fall back to role-based check
         const phase = signoff.phase as string

@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       where: {
         status: "PENDING",
         demand: demandFilter,
+        targetUserId: auth.userId,
       },
       include: {
         demand: {
@@ -52,7 +53,31 @@ export async function GET(request: NextRequest) {
       orderBy: { requestedAt: "desc" },
     })
 
-    const demands = pendingSignoffs.map((s) => ({
+    // Exclude signoffs superseded by a BOARD_OVERRIDE for the same demand+phase+kind
+    let filtered = pendingSignoffs
+    const nonOverrides = pendingSignoffs.filter((s) => s.targetRole !== "BOARD_OVERRIDE")
+    if (nonOverrides.length > 0) {
+      const demandIds = [...new Set(nonOverrides.map((s) => s.demandId))]
+      const overrides = await prisma.phaseSignoff.findMany({
+        where: {
+          status: "PENDING",
+          targetRole: "BOARD_OVERRIDE",
+          demandId: { in: demandIds },
+        },
+        select: { demandId: true, phase: true, kind: true },
+      })
+      if (overrides.length > 0) {
+        const overrideKeys = new Set(
+          overrides.map((o) => `${o.demandId}:${o.phase}:${o.kind ?? "PHASE"}`),
+        )
+        filtered = pendingSignoffs.filter((s) => {
+          if (s.targetRole === "BOARD_OVERRIDE") return true
+          return !overrideKeys.has(`${s.demandId}:${s.phase}:${s.kind ?? "PHASE"}`)
+        })
+      }
+    }
+
+    const demands = filtered.map((s) => ({
       id: s.demand.id,
       demandNumber: s.demand.demandNumber,
       title: s.demand.title,

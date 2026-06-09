@@ -555,10 +555,23 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   // Pending sign-off(s) for current phase — find the one targeting current user
   // Org accounts are read-only and can never sign
   const isOrgAccount = user?.isOrgAccount
+  const isBoardMember = user?.isBoardMember
   const myPendingSignoffs = !isOrgAccount
-    ? (demand.phaseSignoffs?.filter(
-        (s) => s.status === "PENDING" && s.targetUserId === user?.id,
-      ) || [])
+    ? (demand.phaseSignoffs?.filter((s) => {
+        if (s.status !== "PENDING" || s.targetUserId !== user?.id) return false
+        if (s.targetRole === "BOARD_OVERRIDE") return !!isBoardMember
+        if (!isBoardMember) {
+          const hasOverride = demand.phaseSignoffs?.some(
+            (o) =>
+              o.status === "PENDING" &&
+              o.targetRole === "BOARD_OVERRIDE" &&
+              o.phase === s.phase &&
+              (o.kind ?? "PHASE") === (s.kind ?? "PHASE"),
+          )
+          if (hasOverride) return false
+        }
+        return true
+      }) || [])
     : []
   // Prefer DESIGN_CHANGE signoff over PHASE when both exist for the same user.
   // After the user approves a DC in this session (justApprovedDc), suppress
