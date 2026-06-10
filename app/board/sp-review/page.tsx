@@ -270,7 +270,7 @@ function SpReviewCard({ item, token, onComplete }: {
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Override info */}
+              {/* Override info (with reason merged) */}
               {item.signoff.targetRole === "BOARD_OVERRIDE" && (
                 <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 space-y-2">
                   <div className="flex items-center gap-1.5">
@@ -288,17 +288,21 @@ function SpReviewCard({ item, token, onComplete }: {
                       需求者目前無法簽核，管理者申請由您代為確認，通過後維持原流程繼續進行。
                     </p>
                   )}
+                  {item.signoff.requestComment && (
+                    <div className="border-t border-orange-200 pt-2 mt-1">
+                      <p className="text-xs text-orange-500 font-medium mb-0.5">代簽原因</p>
+                      <p className="text-sm text-orange-700/80 whitespace-pre-line leading-relaxed">{item.signoff.requestComment}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* 代簽原因 / 提出說明 */}
-              {item.signoff.requestComment && (
+              {/* 提出說明 (non-override only) */}
+              {item.signoff.targetRole !== "BOARD_OVERRIDE" && item.signoff.requestComment && (
                 <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
-                    <span className="text-xs font-medium text-blue-600">
-                      {item.signoff.targetRole === "BOARD_OVERRIDE" ? "代簽原因" : "提出說明"}
-                    </span>
+                    <span className="text-xs font-medium text-blue-600">提出說明</span>
                   </div>
                   <p className="text-sm text-blue-700/80 whitespace-pre-line leading-relaxed">{item.signoff.requestComment}</p>
                 </div>
