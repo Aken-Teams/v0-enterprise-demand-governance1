@@ -256,7 +256,12 @@ export async function PATCH(
               demandId: id,
               fromStatus,
               toStatus: "CLOSED",
-              comment: `專案 Master 代簽結算（依${tierLabel}比例 ${Math.round(settlementRate * 100)}%，原 SP ${effectiveSp} → 結算 ${settledSp} SP）`,
+              comment: JSON.stringify({
+                type: "SP_ADJUSTMENT",
+                oldSp: effectiveSp,
+                newSp: settledSp,
+                reason: `專案 Master 代簽結算（依${tierLabel}比例 ${Math.round(settlementRate * 100)}%）`,
+              }),
               changedBy: auth.userId,
             },
           })

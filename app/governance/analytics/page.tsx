@@ -803,6 +803,7 @@ export default function GovernanceAnalyticsPage() {
                       for (const orgName of allOrgNames) {
                         const entry = m.data.find((dd) => dd.organization === orgName)
                         row[orgName] = entry ? entry.deltaAmount : 0
+                        row[`${orgName}_sp`] = entry ? entry.deltaSp : 0
                       }
                       return row
                     })
@@ -818,12 +819,18 @@ export default function GovernanceAnalyticsPage() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="month" fontSize={12} />
                           <YAxis tickFormatter={(v: number) => v >= 10000 ? `${(v / 10000).toFixed(0)}萬` : v <= -10000 ? `${(v / 10000).toFixed(0)}萬` : v.toLocaleString()} />
-                          <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
-                            <span className="flex items-center justify-between w-full gap-2">
-                              <span className="text-muted-foreground">{name}</span>
-                              <span className="font-medium tabular-nums">{(value as number) >= 0 ? "+" : ""}{fmtAmount(value as number)}</span>
-                            </span>
-                          )} />} />
+                          <ChartTooltip content={<ChartTooltipContent formatter={(value, name, item) => {
+                            const sp = item.payload?.[`${name}_sp`] as number | undefined
+                            return (
+                              <span className="flex items-center justify-between w-full gap-2">
+                                <span className="text-muted-foreground">{name}</span>
+                                <span className="font-medium tabular-nums">
+                                  {sp != null && sp !== 0 && <span className="text-muted-foreground mr-1">{sp > 0 ? "+" : ""}{sp} SP</span>}
+                                  {(value as number) >= 0 ? "+" : ""}{fmtAmount(value as number)}
+                                </span>
+                              </span>
+                            )
+                          }} />} />
                           {allOrgNames.map((name, i) => (
                             <Bar key={name} dataKey={name} stackId="a" fill={ORG_COLORS[i % ORG_COLORS.length]} radius={i === allOrgNames.length - 1 ? [4, 4, 0, 0] : undefined} />
                           ))}
