@@ -136,44 +136,44 @@ function SpReviewCard({ item, token, onComplete }: {
 
   return (
     <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4 space-y-3">
-        {/* Header: demand number + org + phase + SP */}
+      <CardContent className="p-3 sm:p-4 space-y-2.5 sm:space-y-3">
+        {/* Header row: demand number + SP */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span className="text-xs font-mono text-muted-foreground shrink-0">{item.demand.demandNumber}</span>
-            <Badge variant="outline" className="text-[10px] sm:text-xs gap-1 shrink-0">
-              <Building2 className="h-3 w-3" />
-              {item.demand.organization.name}
-            </Badge>
-            <Badge className={`text-[10px] sm:text-xs shrink-0 ${STATUS_MAP[item.signoff.phase]?.color || "bg-gray-100 text-gray-700"}`}>
-              {STATUS_MAP[item.signoff.phase]?.label || item.signoff.phase}
-            </Badge>
-            {item.signoff.targetRole === "BOARD_OVERRIDE" && (
-              <Badge className="text-[10px] sm:text-xs bg-orange-50 text-orange-600 border border-orange-200 gap-0.5 shrink-0">
-                <ShieldCheck className="h-3 w-3" />
-                代簽
-              </Badge>
-            )}
-          </div>
-          <Badge className="bg-orange-100 text-orange-700 gap-1 shrink-0">
+          <span className="text-xs font-mono text-muted-foreground">{item.demand.demandNumber}</span>
+          <Badge className="bg-orange-100 text-orange-700 gap-1 shrink-0 text-[10px] sm:text-xs">
             <Coins className="h-3 w-3" />
             {sp} SP
           </Badge>
         </div>
 
+        {/* Badges row */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge variant="outline" className="text-[10px] sm:text-xs gap-1">
+            <Building2 className="h-3 w-3" />
+            {item.demand.organization.name}
+          </Badge>
+          <Badge className={`text-[10px] sm:text-xs ${STATUS_MAP[item.signoff.phase]?.color || "bg-gray-100 text-gray-700"}`}>
+            {STATUS_MAP[item.signoff.phase]?.label || item.signoff.phase}
+          </Badge>
+          {item.signoff.targetRole === "BOARD_OVERRIDE" && (
+            <Badge className="text-[10px] sm:text-xs bg-orange-50 text-orange-600 border border-orange-200 gap-0.5">
+              <ShieldCheck className="h-3 w-3" />
+              代簽
+            </Badge>
+          )}
+        </div>
+
         {/* Title */}
-        <p className="font-semibold leading-snug">{item.demand.title}</p>
+        <p className="font-semibold leading-snug text-sm sm:text-base">{item.demand.title}</p>
 
         {/* Meta info */}
-        <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-          <span>發起：{item.signoff.requestedBy.name}</span>
-          <span>·</span>
-          <span>{new Date(item.signoff.requestedAt).toLocaleDateString("zh-TW")}</span>
-          <span>·</span>
+        <div className="text-[11px] sm:text-xs text-muted-foreground space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2 sm:flex-wrap">
+          <span>發起：{item.signoff.requestedBy.name} · {new Date(item.signoff.requestedAt).toLocaleDateString("zh-TW")}</span>
+          <span className="hidden sm:inline">·</span>
           <span>需求窗口：{item.demand.contactPerson?.name || item.demand.submitter.name}</span>
           {item.demand.developer && (
             <>
-              <span>·</span>
+              <span className="hidden sm:inline">·</span>
               <span>開發：{item.demand.developer.name}</span>
             </>
           )}
@@ -181,18 +181,23 @@ function SpReviewCard({ item, token, onComplete }: {
 
         {/* Override info banner */}
         {item.signoff.targetRole === "BOARD_OVERRIDE" && (
-          <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-orange-500" />
-              <span className="text-xs font-medium text-orange-700">
-                {item.signoff.overrideTargetStatus
-                  ? `提前結算 — 管理者已決定將此需求提前結算，依目前進度按 ${(SP_PROGRESS_RATE[item.signoff.overrideTargetStatus] ?? 0) * 100}% 比例計算 SP`
-                  : "代為確認 — 需求者目前無法簽核，管理者申請由您代為確認，通過後維持原流程繼續進行"}
-              </span>
+          <div className="rounded-lg bg-orange-50 border border-orange-200 p-2.5 sm:p-3 space-y-1">
+            <div className="flex items-start gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-orange-500 mt-0.5 shrink-0" />
+              <div className="space-y-1 min-w-0">
+                <span className="text-xs font-medium text-orange-700">
+                  {item.signoff.overrideTargetStatus ? "提前結算" : "代為確認"}
+                </span>
+                <p className="text-[11px] sm:text-xs text-orange-600/80 leading-relaxed">
+                  {item.signoff.overrideTargetStatus
+                    ? `管理者已決定將此需求提前結算，依目前進度按 ${(SP_PROGRESS_RATE[item.signoff.overrideTargetStatus] ?? 0) * 100}% 比例計算 SP`
+                    : "需求者目前無法簽核，管理者申請由您代為確認，通過後維持原流程繼續進行"}
+                </p>
+                {item.signoff.requestComment && (
+                  <p className="text-[11px] sm:text-xs text-orange-600/70">原因：{item.signoff.requestComment}</p>
+                )}
+              </div>
             </div>
-            {item.signoff.requestComment && (
-              <p className="text-xs text-orange-600/80 pl-5">代簽原因：{item.signoff.requestComment}</p>
-            )}
           </div>
         )}
 
@@ -203,7 +208,7 @@ function SpReviewCard({ item, token, onComplete }: {
           <Button
             variant="ghost"
             size="sm"
-            className="text-muted-foreground justify-start"
+            className="text-muted-foreground justify-start h-8 sm:h-9"
             onClick={() => setShowDetailDialog(true)}
           >
             <Eye className="h-3.5 w-3.5 mr-1" />
