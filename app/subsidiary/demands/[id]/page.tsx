@@ -745,6 +745,21 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           />
         )}
 
+        {/* ── Approved info banner: user already signed, waiting for admin ── */}
+        {!pendingSignoff && !isClosed && !isRejected && (() => {
+          const approvedByMe = demand.phaseSignoffs?.find(
+            (s) => s.status === "APPROVED" && s.targetUserId === user?.id && s.phase === demand.status
+              && ((s as unknown as { kind?: string }).kind ?? "PHASE") === "PHASE"
+          )
+          if (!approvedByMe) return null
+          return (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 sm:p-4 flex items-center gap-2 sm:gap-2.5">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500 shrink-0" />
+              <p className="text-xs sm:text-sm text-emerald-700"><span className="font-medium">您已確認通過</span><span className="hidden sm:inline"> —</span><span className="sm:hidden">，</span>管理者已收到，正在審閱內容後將推進至下一階段。</p>
+            </div>
+          )
+        })()}
+
         {/* ── Tabs ── */}
         <Tabs defaultValue="overview" className="w-full">
           <div className="overflow-x-auto scrollbar-hide">
