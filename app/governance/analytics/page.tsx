@@ -819,18 +819,51 @@ export default function GovernanceAnalyticsPage() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="month" fontSize={12} />
                           <YAxis tickFormatter={(v: number) => v >= 10000 ? `${(v / 10000).toFixed(0)}萬` : v <= -10000 ? `${(v / 10000).toFixed(0)}萬` : v.toLocaleString()} />
-                          <ChartTooltip content={<ChartTooltipContent formatter={(value, name, item) => {
-                            const sp = item.payload?.[`${name}_sp`] as number | undefined
+                          <ChartTooltip content={({ active, payload, label }) => {
+                            if (!active || !payload?.length) return null
+                            let totalAmount = 0
+                            let totalSp = 0
+                            const rows = payload.filter((p) => (p.value as number) !== 0)
+                            rows.forEach((p) => {
+                              totalAmount += (p.value as number) || 0
+                              totalSp += (p.payload?.[`${p.name}_sp`] as number) || 0
+                            })
                             return (
-                              <span className="flex items-center justify-between w-full gap-2">
-                                <span className="text-muted-foreground">{name}</span>
-                                <span className="font-medium tabular-nums">
-                                  {sp != null && sp !== 0 && <span className="text-muted-foreground mr-1">{sp > 0 ? "+" : ""}{sp} SP</span>}
-                                  {(value as number) >= 0 ? "+" : ""}{fmtAmount(value as number)}
-                                </span>
-                              </span>
+                              <div className="rounded-lg border bg-background p-2.5 shadow-md text-xs">
+                                <p className="font-medium mb-1.5">{label}</p>
+                                <div className="space-y-1">
+                                  {rows.map((p) => {
+                                    const sp = p.payload?.[`${p.name}_sp`] as number | undefined
+                                    const amt = p.value as number
+                                    return (
+                                      <div key={p.name} className="flex items-center justify-between gap-4">
+                                        <span className="flex items-center gap-1.5">
+                                          <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: p.color }} />
+                                          <span className="text-muted-foreground">{p.name}</span>
+                                        </span>
+                                        <span className="font-medium tabular-nums">
+                                          {sp != null && sp !== 0 && <span className="text-muted-foreground mr-1">{sp > 0 ? "+" : ""}{sp} SP</span>}
+                                          {amt >= 0 ? "+" : ""}{fmtAmount(amt)}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                  {rows.length > 1 && (
+                                    <>
+                                      <div className="border-t my-1" />
+                                      <div className="flex items-center justify-between gap-4 font-semibold">
+                                        <span>合計</span>
+                                        <span className="tabular-nums">
+                                          {totalSp !== 0 && <span className="text-muted-foreground font-medium mr-1">{totalSp > 0 ? "+" : ""}{totalSp} SP</span>}
+                                          {totalAmount >= 0 ? "+" : ""}{fmtAmount(totalAmount)}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
                             )
-                          }} />} />
+                          }} />
                           {allOrgNames.map((name, i) => (
                             <Bar key={name} dataKey={name} stackId="a" fill={ORG_COLORS[i % ORG_COLORS.length]} radius={i === allOrgNames.length - 1 ? [4, 4, 0, 0] : undefined} />
                           ))}
