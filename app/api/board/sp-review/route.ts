@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
         status: s.status,
         targetRole: s.targetRole,
         requestComment: s.requestComment,
+        overrideTargetStatus: s.overrideTargetStatus,
         requestedAt: s.requestedAt,
         requestedBy: s.requestedBy,
         documents: s.documents,
