@@ -225,40 +225,43 @@ export async function PATCH(
     // When an approved BOARD_OVERRIDE carries a settlement target, transition the demand
     // directly to that status (一步結案 / 指定結算狀態) so it doesn't hang in an intermediate phase.
     if (action === "approve" && signoff.targetRole === "BOARD_OVERRIDE" && signoff.overrideTargetStatus) {
-      const target = signoff.overrideTargetStatus as DemandStatus
+      const settlementTier = signoff.overrideTargetStatus as DemandStatus
       const dem = await prisma.demand.findUnique({
         where: { id },
-        select: { status: true, confirmedSp: true, estimatedSp: true, organizationId: true, demandNumber: true, title: true },
+        select: { status: true, confirmedSp: true, estimatedSp: true, organizationId: true, vendor: true, demandNumber: true, title: true },
       })
-      if (dem && dem.status !== target) {
+      if (dem && dem.status !== "CLOSED") {
         const now = new Date()
         const fromStatus = dem.status
-        const sp = dem.confirmedSp ?? dem.estimatedSp
+        const effectiveSp = dem.confirmedSp ?? dem.estimatedSp
+        const settlementRate = SP_PROGRESS_RATE[settlementTier] ?? 0
+        const settledSp = Math.round(effectiveSp * settlementRate)
         const oldRate = SP_PROGRESS_RATE[fromStatus] ?? 0
-        const newRate = SP_PROGRESS_RATE[target] ?? 0
-        const delta = Math.round(sp * newRate) - Math.round(sp * oldRate)
+        const oldUsed = Math.round(effectiveSp * oldRate)
+        const delta = settledSp - oldUsed
         const year = now.getFullYear()
+        const tierLabel = STATUS_MAP[settlementTier]?.label ?? settlementTier
 
         await prisma.$transaction(async (tx) => {
           await tx.demand.update({
             where: { id },
             data: {
-              status: target,
-              ...(target === "CLOSED" ? { completedDate: now } : {}),
+              status: "CLOSED",
+              completedDate: now,
+              confirmedSp: settledSp,
             },
           })
           await tx.demandStatusHistory.create({
             data: {
               demandId: id,
               fromStatus,
-              toStatus: target,
-              comment: "專案 Master 代簽結算",
+              toStatus: "CLOSED",
+              comment: `專案 Master 代簽結算（依${tierLabel}比例 ${Math.round(settlementRate * 100)}%，原 SP ${effectiveSp} → 結算 ${settledSp} SP）`,
               changedBy: auth.userId,
             },
           })
-          // Auto-set phase plan actual dates
+          // Close current phase plan
           const fromIdx = PIPELINE_STEPS.indexOf(fromStatus as typeof PIPELINE_STEPS[number])
-          const toIdx = PIPELINE_STEPS.indexOf(target as typeof PIPELINE_STEPS[number])
           if (fromIdx >= 0) {
             await tx.demandPhasePlan.upsert({
               where: { demandId_phase: { demandId: id, phase: fromStatus } },
@@ -266,32 +269,34 @@ export async function PATCH(
               update: { actualEnd: now },
             })
           }
-          if (toIdx >= 0) {
-            await tx.demandPhasePlan.upsert({
-              where: { demandId_phase: { demandId: id, phase: target } },
-              create: { demandId: id, phase: target, actualStart: now },
-              update: { actualStart: now },
-            })
-          }
-          // SP wallet: progressive consumption delta (same formula as status PATCH)
+          // Skip all remaining PENDING signoffs for this demand
+          await tx.phaseSignoff.updateMany({
+            where: { demandId: id, status: "PENDING" },
+            data: {
+              status: "SKIPPED",
+              comment: "專案 Master 代簽結案，自動略過",
+              respondedAt: now,
+              respondedById: auth.userId,
+            },
+          })
+          // SP wallet delta
           if (delta !== 0) {
             await tx.spWallet.upsert({
-              where: { organizationId_year: { organizationId: dem.organizationId, year } },
-              create: { organizationId: dem.organizationId, year, totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0 },
+              where: { organizationId_year_vendor: { organizationId: dem.organizationId, year, vendor: dem.vendor } },
+              create: { organizationId: dem.organizationId, year, vendor: dem.vendor, totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0 },
               update: { usedSp: { increment: delta } },
             })
           }
         })
 
-        // Notify stakeholders about the settlement status change
+        // Notify stakeholders
         const fromLabel = STATUS_MAP[fromStatus]?.label ?? fromStatus
-        const toLabel = STATUS_MAP[target]?.label ?? target
         Promise.all([getDemandStakeholderIds(id), getOrgSubsidiaryUserIds(dem.organizationId)]).then(([sIds, oIds]) => {
           const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
           notifyUsers(recipients, {
             type: "DEMAND_STATUS",
-            title: "需求狀態變更",
-            message: `需求 ${dem.demandNumber}「${dem.title}」經專案 Master 代簽結算，狀態已從「${fromLabel}」變更為「${toLabel}」。`,
+            title: "需求結案",
+            message: `需求 ${dem.demandNumber}「${dem.title}」經專案 Master 代簽結算，已從「${fromLabel}」直接結案（依${tierLabel}比例結算 ${settledSp} SP）。`,
             linkUrl: `/demands/${id}`,
           })
         })
@@ -301,7 +306,7 @@ export async function PATCH(
           entity: "DEMAND",
           entityId: id,
           demandId: id,
-          details: { fromStatus, toStatus: target, via: "BOARD_OVERRIDE_SETTLEMENT" },
+          details: { fromStatus, toStatus: "CLOSED", settlementTier, settlementRate, effectiveSp, settledSp, via: "BOARD_OVERRIDE_SETTLEMENT" },
           request,
         })
       }

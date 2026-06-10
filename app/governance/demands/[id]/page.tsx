@@ -998,7 +998,8 @@ export default function DemandDetailPage() {
                   const isCurrent = !isRejected && i === currentStepIndex
                   const isFuture = isRejected || currentStepIndex < 0 || i > currentStepIndex
 
-                  // Phase completion info
+                  // Phase completion info — skip warnings for phases never entered (e.g. settlement closure)
+                  const phaseVisited = demand.statusHistory?.some((h) => h.toStatus === step)
                   const phaseConfig = PHASE_DOCUMENT_MAP[step]
                   const requiredDocs = phaseConfig?.required || []
                   const missingDocs = requiredDocs.filter(
@@ -1006,7 +1007,7 @@ export default function DemandDetailPage() {
                   )
                   const hasAssignment = step === "PRD_REVIEW" || step === "SP_REVIEW" || step === "DEVELOPING" || step === "ACCEPTANCE"
                   const needsAssignment = hasAssignment && !demand.manager && !demand.developer
-                  const showWarning = (isPast || isCurrent) && (missingDocs.length > 0 || (isCurrent && needsAssignment))
+                  const showWarning = phaseVisited && (isPast || isCurrent) && (missingDocs.length > 0 || (isCurrent && needsAssignment))
 
                   // Signoff status for this phase
                   const signoffPhases = SIGNOFF_REQUIRED_PHASES as readonly string[]
@@ -2350,7 +2351,7 @@ export default function DemandDetailPage() {
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5">
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-orange-600 shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium text-foreground">代簽通過後直接結算至</span>
+                  <span className="text-xs sm:text-sm font-medium text-foreground">代簽通過後直接結案</span>
                 </div>
                 <Select
                   value={boardOverrideTargetStatus || "NONE"}
@@ -2380,16 +2381,17 @@ export default function DemandDetailPage() {
                 {previewUsed !== null ? (
                   <div className="rounded-md border border-orange-200 bg-orange-50/70 p-2.5 space-y-1.5">
                     <p className="flex items-center gap-1 text-xs text-orange-900/80">
-                      <span>Master 通過後直接設為</span>
+                      <span>Master 通過後直接結案，依</span>
                       <Badge className={cn("text-[10px] font-normal", STATUS_MAP[boardOverrideTargetStatus]?.color)}>
                         {STATUS_MAP[boardOverrideTargetStatus]?.label}
                       </Badge>
+                      <span>比例結算</span>
                     </p>
                     <div className="flex items-baseline justify-between gap-2 text-xs">
-                      <span className="text-orange-900/60">預估消耗</span>
+                      <span className="text-orange-900/60">結算 SP</span>
                       <span className="text-orange-900/70">
                         <span className="font-semibold text-orange-900">{Math.round((previewRate as number) * 100)}%</span>
-                        {" × "}確認 SP {sp}{" = "}
+                        {" × "}SP {sp}{" = "}
                         <span className="font-semibold text-sm text-orange-700">{previewUsed} SP</span>
                       </span>
                     </div>

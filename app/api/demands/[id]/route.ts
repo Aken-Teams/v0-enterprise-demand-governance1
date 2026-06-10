@@ -702,8 +702,8 @@ export async function PATCH(
 
       if (delta !== 0) {
         await tx.spWallet.upsert({
-          where: { organizationId_year: { organizationId: demand.organizationId, year } },
-          create: { organizationId: demand.organizationId, year, totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0 },
+          where: { organizationId_year_vendor: { organizationId: demand.organizationId, year, vendor: demand.vendor } },
+          create: { organizationId: demand.organizationId, year, vendor: demand.vendor, totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0 },
           update: { usedSp: { increment: delta } },
         })
       }
