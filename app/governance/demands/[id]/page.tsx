@@ -1813,6 +1813,7 @@ export default function DemandDetailPage() {
                     <SpAllocationChart
                       phasePlans={demand.phasePlans}
                       totalSp={demand.confirmedSp ?? demand.estimatedSp}
+                      estimatedSp={demand.estimatedSp}
                     />
                   </CardContent>
                 </Card>

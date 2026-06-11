@@ -704,8 +704,18 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <div className="text-right">
-                <span className="text-xl sm:text-2xl font-bold text-primary">{sp}</span>
-                <span className="text-xs text-muted-foreground ml-1">SP</span>
+                {demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp ? (
+                  <>
+                    <span className="text-sm text-muted-foreground line-through mr-1">{demand.estimatedSp}</span>
+                    <span className="text-xl sm:text-2xl font-bold text-primary">{sp}</span>
+                    <span className="text-xs text-muted-foreground ml-1">SP</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xl sm:text-2xl font-bold text-primary">{sp}</span>
+                    <span className="text-xs text-muted-foreground ml-1">SP</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1094,6 +1104,18 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               <span className="font-medium">{entry.value} SP</span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    ) : demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp ? (
+                      <div className="text-center py-4 space-y-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">原始 SP</p>
+                          <p className="text-2xl font-bold text-muted-foreground/60 line-through">{demand.estimatedSp}</p>
+                        </div>
+                        <div className="text-muted-foreground">↓</div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">結算 SP</p>
+                          <p className="text-3xl font-bold text-primary">{demand.confirmedSp}</p>
                         </div>
                       </div>
                     ) : (

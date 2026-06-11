@@ -46,6 +46,11 @@ export async function GET(request: NextRequest) {
           heldFromStatus: true,
           createdAt: true,
           updatedAt: true,
+          phaseSignoffs: {
+            where: { targetRole: "BOARD_OVERRIDE", status: "APPROVED" },
+            select: { id: true },
+            take: 1,
+          },
         },
         orderBy: { updatedAt: "desc" },
       }),
@@ -55,7 +60,7 @@ export async function GET(request: NextRequest) {
     const walletMap = new Map(wallets.map((w) => [w.vendor, w.totalQuota]))
     const vendorMap = new Map<string, {
       totalQuota: number; usedSp: number
-      demands: { id: string; demandNumber: string; title: string; status: string; vendor: string; sp: number; spUsed: number; updatedAt: Date }[]
+      demands: { id: string; demandNumber: string; title: string; status: string; vendor: string; sp: number; estimatedSp: number; spUsed: number; settlementType: string | null; updatedAt: Date }[]
     }>()
 
     // Initialize with wallets
@@ -71,9 +76,13 @@ export async function GET(request: NextRequest) {
       }
       const entry = vendorMap.get(d.vendor)!
       entry.usedSp += spUsed
+      const isAdjusted = d.confirmedSp != null && d.confirmedSp !== d.estimatedSp
+      const settlementType = isAdjusted
+        ? (d.phaseSignoffs.length > 0 ? "override" : "adjustment")
+        : null
       entry.demands.push({
         id: d.id, demandNumber: d.demandNumber, title: d.title,
-        status: d.status, vendor: d.vendor, sp, spUsed, updatedAt: d.updatedAt,
+        status: d.status, vendor: d.vendor, sp, estimatedSp: d.estimatedSp, spUsed, settlementType, updatedAt: d.updatedAt,
       })
     }
 

@@ -232,8 +232,8 @@ model Demand {
   expectedBenefit String?        @db.Text /// 預期效益
   status          DemandStatus   @default(SUBMITTED)
   priority        DemandPriority @default(medium)
-  estimatedSp     Int /// 初步 SP 估點
-  confirmedSp     Int? /// CEO 確認 SP
+  estimatedSp     Float /// 初步 SP 估點
+  confirmedSp     Float? /// CEO 確認 SP
   desiredDate     DateTime? /// 希望完成時間
   expectedDate    DateTime? /// 預計完成時間
   completedDate   DateTime? /// 實際完成時間

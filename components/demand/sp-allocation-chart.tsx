@@ -17,9 +17,10 @@ interface PhasePlan {
 interface SpAllocationChartProps {
   phasePlans: PhasePlan[]
   totalSp: number
+  estimatedSp?: number
 }
 
-export function SpAllocationChart({ phasePlans, totalSp }: SpAllocationChartProps) {
+export function SpAllocationChart({ phasePlans, totalSp, estimatedSp }: SpAllocationChartProps) {
   const data = PIPELINE_STEPS
     .map((phase) => {
       const plan = phasePlans.find((p) => p.phase === phase)
@@ -35,9 +36,24 @@ export function SpAllocationChart({ phasePlans, totalSp }: SpAllocationChartProp
   const allocatedSp = data.reduce((sum, d) => sum + d.sp, 0)
 
   if (data.length === 0) {
+    const hasAdjustment = estimatedSp != null && estimatedSp !== totalSp
     return (
-      <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
-        尚未分配 SP
+      <div className="flex flex-col items-center justify-center h-[200px] gap-2">
+        {hasAdjustment ? (
+          <>
+            <div className="text-center space-y-1">
+              <p className="text-xs text-muted-foreground">原始 SP</p>
+              <p className="text-2xl font-bold text-muted-foreground/60 line-through">{estimatedSp}</p>
+            </div>
+            <span className="text-muted-foreground">↓</span>
+            <div className="text-center space-y-1">
+              <p className="text-xs text-muted-foreground">結算 SP</p>
+              <p className="text-3xl font-bold text-primary">{totalSp}</p>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">尚未分配 SP</p>
+        )}
       </div>
     )
   }

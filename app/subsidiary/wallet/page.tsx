@@ -28,14 +28,16 @@ interface WalletData {
   totalQuota: number
   usedSp: number
   availableSp: number
-  byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demands: { id: string; demandNumber: string; title: string; status: string; sp: number; spUsed: number; vendor: string; updatedAt: string }[] }[]
+  byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demands: { id: string; demandNumber: string; title: string; status: string; sp: number; estimatedSp?: number; spUsed: number; settlementType?: string | null; vendor: string; updatedAt: string }[] }[]
   demands: {
     id: string
     demandNumber: string
     title: string
     status: string
     sp: number
+    estimatedSp?: number
     spUsed: number
+    settlementType?: string | null
     vendor?: string
     updatedAt: string
   }[]
@@ -192,8 +194,18 @@ export default function WalletPage() {
                           </div>
                         </div>
                         <div className="text-right shrink-0 ml-3">
-                          <div className="text-xs font-semibold tabular-nums">{d.sp} SP</div>
-                          <div className="text-[10px] text-muted-foreground">消耗 {d.spUsed} ({si?.rate})</div>
+                          <div className="text-xs font-semibold tabular-nums">
+                            {d.estimatedSp != null && d.estimatedSp !== d.sp
+                              ? <>{d.estimatedSp} <span className="text-muted-foreground">→</span> {d.sp} SP</>
+                              : <>{d.sp} SP</>}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {d.settlementType === "override"
+                              ? <>提前結算 {Math.round((d.sp / d.estimatedSp!) * 100)}%</>
+                              : d.settlementType === "adjustment"
+                              ? <>SP 調整</>
+                              : <>消耗 {d.spUsed} ({si?.rate})</>}
+                          </div>
                         </div>
                       </Link>
                     )
@@ -208,6 +220,7 @@ export default function WalletPage() {
                         <TableHead className="text-center">需求名稱</TableHead>
                         <TableHead className="text-center">狀態</TableHead>
                         <TableHead className="text-center">SP</TableHead>
+                        <TableHead className="text-center">結算</TableHead>
                         <TableHead className="text-center">已消耗</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -230,7 +243,22 @@ export default function WalletPage() {
                                 {si?.label ?? d.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center font-semibold tabular-nums">{d.sp}</TableCell>
+                            <TableCell className="text-center tabular-nums">
+                              {d.estimatedSp != null && d.estimatedSp !== d.sp ? (
+                                <><span className="text-muted-foreground line-through text-xs">{d.estimatedSp}</span> <span className="font-semibold">{d.sp}</span></>
+                              ) : (
+                                <span className="font-semibold">{d.sp}</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center text-xs">
+                              {d.settlementType === "override" ? (
+                                <span className="text-orange-600">提前結算 {Math.round((d.sp / d.estimatedSp!) * 100)}%</span>
+                              ) : d.settlementType === "adjustment" ? (
+                                <span className="text-blue-600">SP 調整</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-center">
                               <span className="text-sm font-medium tabular-nums">{d.spUsed}</span>
                               <span className="text-xs text-muted-foreground ml-1">({si?.rate})</span>
