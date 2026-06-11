@@ -72,6 +72,9 @@ function SpReviewCard({ item, token, onComplete }: {
   const sp = item.demand.confirmedSp ?? item.demand.estimatedSp
   const docs = item.signoff.documents?.filter((d) => d.fileUrl) || []
   const hasDetail = !!item.signoff.requestComment || docs.length > 0
+  const isSettlement = item.signoff.targetRole === "BOARD_OVERRIDE" && !!item.signoff.overrideTargetStatus
+  const approveLabel = isSettlement ? "確認結算" : "確認通過"
+  const rejectLabel = isSettlement ? "需求繼續" : "退回修改"
 
   // ── Action state ──
   const [actionLoading, setActionLoading] = useState(false)
@@ -222,17 +225,17 @@ function SpReviewCard({ item, token, onComplete }: {
               disabled={actionLoading}
             >
               {actionLoading && !showRejectDialog ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-              確認通過
+              {approveLabel}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="border-red-300 text-red-600 hover:bg-red-50 h-10 sm:h-9 flex-1 sm:flex-none"
+              className={isSettlement ? "border-blue-300 text-blue-600 hover:bg-blue-50 h-10 sm:h-9 flex-1 sm:flex-none" : "border-red-300 text-red-600 hover:bg-red-50 h-10 sm:h-9 flex-1 sm:flex-none"}
               onClick={() => setShowRejectDialog(true)}
               disabled={actionLoading}
             >
               <X className="h-4 w-4 mr-1" />
-              退回修改
+              {rejectLabel}
             </Button>
           </div>
         </div>
@@ -353,17 +356,17 @@ function SpReviewCard({ item, token, onComplete }: {
                   disabled={actionLoading}
                 >
                   {actionLoading && !showRejectDialog ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                  確認通過
+                  {approveLabel}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-red-300 text-red-600 hover:bg-red-50 h-10 sm:h-9 flex-1 sm:flex-none"
+                  className={isSettlement ? "border-blue-300 text-blue-600 hover:bg-blue-50 h-10 sm:h-9 flex-1 sm:flex-none" : "border-red-300 text-red-600 hover:bg-red-50 h-10 sm:h-9 flex-1 sm:flex-none"}
                   onClick={() => { setShowDetailDialog(false); setShowRejectDialog(true) }}
                   disabled={actionLoading}
                 >
                   <X className="h-4 w-4 mr-1" />
-                  退回修改
+                  {rejectLabel}
                 </Button>
               </div>
               <Button variant="outline" size="sm" className="h-10 sm:h-9 w-full sm:w-auto" asChild>
@@ -380,22 +383,24 @@ function SpReviewCard({ item, token, onComplete }: {
         <Dialog open={showRejectDialog} onOpenChange={(open) => { if (!open) closeRejectDialog() }}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-700">
+              <DialogTitle className={`flex items-center gap-2 ${isSettlement ? "text-blue-700" : "text-red-700"}`}>
                 <AlertTriangle className="h-5 w-5" />
-                退回修改
+                {isSettlement ? "需求繼續" : "退回修改"}
               </DialogTitle>
               <DialogDescription>
-                退回「{item.demand.title}」的開案申請，發起者將收到通知並進行修改。
+                {isSettlement
+                  ? `不同意結算「${item.demand.title}」，需求將維持原流程繼續進行。`
+                  : `退回「${item.demand.title}」的開案申請，發起者將收到通知並進行修改。`}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">
-                  退回原因 <span className="text-red-500">*</span>
+                  {isSettlement ? "繼續原因" : "退回原因"} <span className="text-red-500">*</span>
                 </label>
                 <Textarea
-                  placeholder="請說明退回原因（必填）..."
+                  placeholder={isSettlement ? "請說明需求繼續的原因（必填）..." : "請說明退回原因（必填）..."}
                   value={rejectReason}
                   onChange={(e) => { setRejectReason(e.target.value); setActionError("") }}
                   rows={4}
@@ -455,12 +460,13 @@ function SpReviewCard({ item, token, onComplete }: {
                 取消
               </Button>
               <Button
-                variant="destructive"
+                variant={isSettlement ? "default" : "destructive"}
+                className={isSettlement ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
                 onClick={() => handleAction("reject")}
                 disabled={actionLoading}
               >
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <X className="h-4 w-4 mr-1.5" />}
-                確認退回
+                {isSettlement ? "確認繼續" : "確認退回"}
               </Button>
             </DialogFooter>
           </DialogContent>

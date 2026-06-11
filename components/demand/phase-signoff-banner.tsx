@@ -53,6 +53,7 @@ export function PhaseSignoffBanner({
   const phaseLabel = STATUS_MAP[signoff.phase]?.label || signoff.phase
   const isDesignChange = kind === "DESIGN_CHANGE"
   const isBoardOverride = signoff.targetRole === "BOARD_OVERRIDE"
+  const isSettlement = isBoardOverride && !!signoff.overrideTargetStatus
 
   const titleText = isBoardOverride
     ? `專案 Master 代簽 —「${phaseLabel}」階段等待您的確認`
@@ -220,23 +221,26 @@ export function PhaseSignoffBanner({
                 disabled={loading}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                確認通過
+                {isSettlement ? "確認結算" : "確認通過"}
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-red-300 text-red-600 hover:bg-red-50 bg-white flex-1 sm:flex-none h-10 sm:h-9"
+                className={cn(
+                  "bg-white flex-1 sm:flex-none h-10 sm:h-9",
+                  isSettlement ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-red-300 text-red-600 hover:bg-red-50"
+                )}
                 onClick={() => setShowForm(true)}
                 disabled={loading}
               >
                 <X className="h-4 w-4 mr-1" />
-                退回修改
+                {isSettlement ? "需求繼續" : "退回修改"}
               </Button>
             </div>
           ) : (
             <div className={cn("space-y-2", !inline && "mt-3")}>
               <Textarea
-                placeholder="請說明退回原因（必填）..."
+                placeholder={isSettlement ? "請說明需求繼續的原因（必填）..." : "請說明退回原因（必填）..."}
                 value={comment}
                 onChange={(e) => { setComment(e.target.value); setError("") }}
                 rows={3}
@@ -296,13 +300,13 @@ export function PhaseSignoffBanner({
                   </Button>
                   <Button
                     size="sm"
-                    variant="destructive"
+                    variant={isSettlement ? "default" : "destructive"}
                     onClick={() => handleAction("reject")}
                     disabled={loading}
-                    className="flex-1 sm:flex-none h-10 sm:h-9"
+                    className={cn("flex-1 sm:flex-none h-10 sm:h-9", isSettlement && "bg-blue-600 hover:bg-blue-700 text-white")}
                   >
                     {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                    確認退回
+                    {isSettlement ? "確認繼續" : "確認退回"}
                   </Button>
                 </div>
               </div>
