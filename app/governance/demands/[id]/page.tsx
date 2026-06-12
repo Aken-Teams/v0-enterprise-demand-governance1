@@ -1807,13 +1807,24 @@ export default function DemandDetailPage() {
                 {/* SP 分配 */}
                 <Card>
                   <CardHeader className="px-4 sm:px-6 pb-3">
-                    <CardTitle className="text-sm sm:text-base">SP 分配</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm sm:text-base">SP 分配</CardTitle>
+                      {isAdminWithWrite && (
+                        <Button variant="outline" size="sm" className="h-7 sm:h-8 text-xs" onClick={() => setSpPlanDialogOpen(true)}>
+                          <Pencil className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
+                          編輯
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="px-4 sm:px-6">
                     <SpAllocationChart
                       phasePlans={demand.phasePlans}
                       totalSp={demand.confirmedSp ?? demand.estimatedSp}
                       estimatedSp={demand.estimatedSp}
+                      settlementType={demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp
+                        ? (demand.phaseSignoffs?.some(s => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED") ? "override" : "adjustment")
+                        : null}
                     />
                   </CardContent>
                 </Card>
@@ -1831,7 +1842,7 @@ export default function DemandDetailPage() {
                     <GanttChart className="h-4 w-4" />
                     甘特圖
                   </CardTitle>
-                  {isAdminWithWrite && !isClosed && (
+                  {isAdminWithWrite && (
                     <Button variant="outline" size="sm" className="h-7 sm:h-8 text-xs" onClick={() => setSpPlanDialogOpen(true)}>
                       <Pencil className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                       編輯時程
@@ -1852,31 +1863,6 @@ export default function DemandDetailPage() {
               </CardContent>
             </Card>
 
-            {/* SP 時程編輯 Dialog */}
-            <Dialog open={spPlanDialogOpen} onOpenChange={setSpPlanDialogOpen}>
-              <DialogContent className="sm:max-w-4xl w-[calc(100%-1rem)] sm:w-[95vw] p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4 text-orange-600" />
-                    SP 與時程規劃
-                  </DialogTitle>
-                </DialogHeader>
-                <PhasePlanInlineEditor
-                  phasePlans={demand.phasePlans}
-                  totalSp={demand.confirmedSp ?? demand.estimatedSp}
-                  demandId={demand.id}
-                  token={token}
-                  staffUsers={staffUsers}
-                  demandContext={{
-                    developerId: demand.developer?.id,
-                    contactPersonId: demand.contactPerson?.id,
-                    organizationId: demand.organization.id,
-                    organizationName: demand.organization.name,
-                  }}
-                  onSaved={() => { setSpPlanDialogOpen(false); fetchDemand() }}
-                />
-              </DialogContent>
-            </Dialog>
           </TabsContent>
 
           {/* 交付成果 Tab */}
@@ -2251,6 +2237,32 @@ export default function DemandDetailPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* SP 時程編輯 Dialog */}
+        <Dialog open={spPlanDialogOpen} onOpenChange={setSpPlanDialogOpen}>
+          <DialogContent className="sm:max-w-4xl w-[calc(100%-1rem)] sm:w-[95vw] p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-orange-600" />
+                SP 與時程規劃
+              </DialogTitle>
+            </DialogHeader>
+            <PhasePlanInlineEditor
+              phasePlans={demand.phasePlans}
+              totalSp={demand.estimatedSp}
+              demandId={demand.id}
+              token={token}
+              staffUsers={staffUsers}
+              demandContext={{
+                developerId: demand.developer?.id,
+                contactPersonId: demand.contactPerson?.id,
+                organizationId: demand.organization.id,
+                organizationName: demand.organization.name,
+              }}
+              onSaved={() => { setSpPlanDialogOpen(false); fetchDemand() }}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Image zoom overlay */}

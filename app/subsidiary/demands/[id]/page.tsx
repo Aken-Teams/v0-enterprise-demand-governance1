@@ -1085,12 +1085,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                   boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
                                 }}
                               />
-                              <text x="50%" y="48%" textAnchor="middle" dominantBaseline="central" className="fill-foreground text-lg font-bold">
-                                {sp}
-                              </text>
-                              <text x="50%" y="62%" textAnchor="middle" dominantBaseline="central" className="fill-muted-foreground text-[10px]">
-                                SP
-                              </text>
+                              <text x="50%" y="48%" textAnchor="middle" dominantBaseline="central" className="fill-foreground text-lg font-bold">{sp}</text>
+                              <text x="50%" y="62%" textAnchor="middle" dominantBaseline="central" className="fill-muted-foreground text-[10px]">SP</text>
                             </PieChart>
                           </ResponsiveContainer>
                         </div>
@@ -1101,10 +1097,32 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[entry.phase] || "#94a3b8" }} />
                                 <span className="text-muted-foreground">{entry.name}</span>
                               </div>
-                              <span className="font-medium">{entry.value} SP</span>
+                              <span className="font-medium">
+                                {demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && entry.value > 0 && demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")
+                                  ? <>{entry.value} → {Math.round((entry.value * demand.confirmedSp / demand.estimatedSp) * 10) / 10} SP</>
+                                  : <>{entry.value} SP</>}
+                              </span>
                             </div>
                           ))}
                         </div>
+                        {demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && (
+                          demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED") ? (
+                            <div className="rounded-lg border border-orange-200 bg-orange-50/50 px-4 py-2.5 mt-3 flex items-center justify-center gap-2 text-sm">
+                              <span className="text-muted-foreground line-through">{demand.estimatedSp} SP</span>
+                              <span className="text-muted-foreground">×</span>
+                              <span className="font-semibold text-orange-600">{Math.round((demand.confirmedSp / demand.estimatedSp) * 100)}%</span>
+                              <span className="text-muted-foreground">=</span>
+                              <span className="font-semibold text-primary">{demand.confirmedSp} SP</span>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 mt-3 flex items-center justify-center gap-2 text-sm">
+                              <span className="text-blue-600 font-medium">SP 調整</span>
+                              <span className="text-muted-foreground">{demand.estimatedSp}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span className="font-semibold text-primary">{demand.confirmedSp} SP</span>
+                            </div>
+                          )
+                        )}
                       </div>
                     ) : demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp ? (
                       <div className="text-center py-4 space-y-2">
@@ -1189,12 +1207,18 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               </span>
                             )}
 
-                            <Badge variant="secondary" className={cn(
-                              "text-[10px] h-5 px-1.5 rounded shrink-0",
-                              isFuture && "opacity-50",
-                            )}>
-                              {plan?.plannedSp ?? 0}
-                            </Badge>
+                            {demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && (plan?.plannedSp ?? 0) > 0 && demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED") ? (
+                              <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 rounded shrink-0", isFuture && "opacity-50")}>
+                                {plan?.plannedSp ?? 0} → {Math.round(((plan?.plannedSp ?? 0) * demand.confirmedSp / demand.estimatedSp) * 10) / 10}
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className={cn(
+                                "text-[10px] h-5 px-1.5 rounded shrink-0",
+                                isFuture && "opacity-50",
+                              )}>
+                                {plan?.plannedSp ?? 0}
+                              </Badge>
+                            )}
                           </div>
                         )
                       })}
