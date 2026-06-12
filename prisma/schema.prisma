@@ -393,7 +393,8 @@ model DemandPhasePlan {
   demandId     String
   demand       Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   phase        DemandStatus
-  plannedSp    Float? /// 該階段規劃 SP
+  plannedSp    Float? /// 該階段規劃 SP (調整後)
+  originalPlannedSp Float? /// 調整前原始 SP 分配
   plannedStart DateTime? /// 計畫開始
   plannedEnd   DateTime? /// 計畫結束
   actualStart  DateTime? /// 實際開始

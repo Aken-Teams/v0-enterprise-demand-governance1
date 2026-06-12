@@ -632,6 +632,15 @@ export async function PATCH(
         },
       })
 
+      // Fetch existing phase plans for history and backfill
+      const existingPlans = spAdjustment?.phaseAllocations
+        ? await tx.demandPhasePlan.findMany({
+            where: { demandId: id },
+            select: { phase: true, plannedSp: true, originalPlannedSp: true },
+          })
+        : []
+      const existingMap = Object.fromEntries(existingPlans.map((p) => [p.phase, p]))
+
       // Build status history comment
       const historyComment = spAdjustment
         ? JSON.stringify({
@@ -639,6 +648,9 @@ export async function PATCH(
             oldSp: demand.confirmedSp ?? demand.estimatedSp,
             newSp: spAdjustment.newSp,
             reason: spAdjustment.reason,
+            originalPhaseAllocations: Object.fromEntries(
+              existingPlans.filter((p) => p.plannedSp != null).map((p) => [p.phase, p.plannedSp])
+            ),
             phaseAllocations: spAdjustment.phaseAllocations,
           })
         : "狀態變更"
@@ -655,14 +667,16 @@ export async function PATCH(
 
       // Update phase plan SP allocations
       if (spAdjustment?.phaseAllocations) {
-        // User provided explicit phase allocations — update all phases
+
         for (const step of PIPELINE_STEPS) {
           if (step === "CLOSED") continue
           const plannedSp = spAdjustment.phaseAllocations[step] ?? 0
+          const existing = existingMap[step]
+          const originalSp = existing?.originalPlannedSp ?? existing?.plannedSp ?? null
           await tx.demandPhasePlan.upsert({
             where: { demandId_phase: { demandId: id, phase: step as DemandStatus } },
-            create: { demandId: id, phase: step as DemandStatus, plannedSp },
-            update: { plannedSp },
+            create: { demandId: id, phase: step as DemandStatus, plannedSp, originalPlannedSp: originalSp },
+            update: { plannedSp, ...(existing?.originalPlannedSp == null ? { originalPlannedSp: existing?.plannedSp ?? null } : {}) },
           })
         }
       }

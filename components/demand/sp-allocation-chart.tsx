@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 interface PhasePlan {
   phase: string
   plannedSp: number | null
+  originalPlannedSp?: number | null
 }
 
 interface SpAllocationChartProps {
@@ -20,19 +21,26 @@ interface SpAllocationChartProps {
   totalSp: number
   estimatedSp?: number
   settlementType?: "override" | "adjustment" | null
+  settlementReason?: string | null
 }
 
-export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlementType }: SpAllocationChartProps) {
+export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlementType, settlementReason }: SpAllocationChartProps) {
   const hasSettlement = estimatedSp != null && estimatedSp !== totalSp
   const isOverride = hasSettlement && settlementType === "override"
   const ratio = isOverride && estimatedSp ? totalSp / estimatedSp : 1
   const settlementRate = hasSettlement && estimatedSp ? Math.round((totalSp / estimatedSp) * 100) : null
 
+  const isAdjustment = hasSettlement && settlementType === "adjustment"
+  const hasOriginalData = isAdjustment && phasePlans.some((p) => p.originalPlannedSp != null)
+
   const rawData = PIPELINE_STEPS
     .map((phase) => {
       const plan = phasePlans.find((p) => p.phase === phase)
-      const originalSp = plan?.plannedSp || 0
-      const displaySp = isOverride ? Math.round(originalSp * ratio * 10) / 10 : originalSp
+      const currentSp = plan?.plannedSp || 0
+      const displaySp = isOverride ? Math.round(currentSp * ratio * 10) / 10 : currentSp
+      const originalSp = isOverride ? currentSp
+        : (hasOriginalData && plan?.originalPlannedSp != null) ? plan.originalPlannedSp
+        : currentSp
       return {
         phase,
         label: STATUS_MAP[phase]?.label || phase,
@@ -42,7 +50,8 @@ export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlement
       }
     })
 
-  const data = rawData.filter((d) => d.sp > 0)
+  const data = rawData.filter((d) => d.sp > 0 || d.originalSp > 0)
+  const pieData = data.filter((d) => d.sp > 0)
   const allocatedSp = data.reduce((sum, d) => sum + d.sp, 0)
 
   if (data.length === 0) {
@@ -95,7 +104,7 @@ export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlement
               }
             />
             <Pie
-              data={data}
+              data={pieData}
               dataKey="sp"
               nameKey="phase"
               innerRadius={50}
@@ -103,7 +112,7 @@ export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlement
               strokeWidth={2}
               stroke="var(--background)"
             >
-              {data.map((d) => (
+              {pieData.map((d) => (
                 <Cell key={d.phase} fill={d.fill} />
               ))}
               <Label
@@ -133,7 +142,7 @@ export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlement
               <div className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.fill }} />
               <span className="text-muted-foreground truncate">{d.label}</span>
               <span className="font-medium shrink-0">
-                {isOverride && d.originalSp > 0
+                {(isOverride || hasOriginalData) && d.originalSp !== d.sp && d.originalSp > 0
                   ? <>{d.originalSp} → {d.sp} SP</>
                   : <>{d.sp} SP</>}
               </span>
@@ -145,26 +154,31 @@ export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlement
       {/* Settlement calculation */}
       {hasSettlement && (
         <div className={cn(
-          "rounded-lg px-4 py-2.5 flex items-center justify-center gap-2 text-sm",
+          "rounded-lg px-4 py-2.5 text-sm",
           settlementType === "adjustment"
             ? "border border-blue-200 bg-blue-50/50"
             : "border border-orange-200 bg-orange-50/50"
         )}>
-          {settlementType === "adjustment" ? (
-            <>
-              <span className="text-blue-600 font-medium">SP 調整</span>
-              <span className="text-muted-foreground">{estimatedSp}</span>
-              <span className="text-muted-foreground">→</span>
-              <span className="font-semibold text-primary">{totalSp} SP</span>
-            </>
-          ) : (
-            <>
-              <span className="text-muted-foreground line-through">{estimatedSp} SP</span>
-              <span className="text-muted-foreground">×</span>
-              <span className="font-semibold text-orange-600">{settlementRate}%</span>
-              <span className="text-muted-foreground">=</span>
-              <span className="font-semibold text-primary">{totalSp} SP</span>
-            </>
+          <div className="flex items-center justify-center gap-2">
+            {settlementType === "adjustment" ? (
+              <>
+                <span className="text-blue-600 font-medium">SP 調整</span>
+                <span className="text-muted-foreground">{estimatedSp}</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="font-semibold text-primary">{totalSp} SP</span>
+              </>
+            ) : (
+              <>
+                <span className="text-muted-foreground line-through">{estimatedSp} SP</span>
+                <span className="text-muted-foreground">×</span>
+                <span className="font-semibold text-orange-600">{settlementRate}%</span>
+                <span className="text-muted-foreground">=</span>
+                <span className="font-semibold text-primary">{totalSp} SP</span>
+              </>
+            )}
+          </div>
+          {settlementReason && (
+            <p className="text-xs text-muted-foreground mt-1.5 text-center">{settlementReason}</p>
           )}
         </div>
       )}

@@ -599,13 +599,32 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   }, null)
 
   // Pie chart data
+  const isOverride = demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp
+    && demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")
+  const isAdjustment = demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && !isOverride
+  const ratio = isOverride && demand.estimatedSp && demand.confirmedSp != null ? demand.confirmedSp / demand.estimatedSp : 1
+
+  const hasOriginalData = isAdjustment && demand.phasePlans.some((p: any) => p.originalPlannedSp != null)
+
+  const settlementReason = (() => {
+    if (!isOverride && !isAdjustment) return null
+    const h = demand.statusHistory?.find(
+      (h: any) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT")
+    )
+    if (!h?.comment) return null
+    try { return JSON.parse(h.comment).reason || null } catch { return null }
+  })()
+
   const spPieData = demand.phasePlans
-    .filter((p) => p.plannedSp && p.plannedSp > 0)
-    .map((p) => ({
-      name: STATUS_MAP[p.phase]?.label || p.phase,
-      value: p.plannedSp!,
-      phase: p.phase,
-    }))
+    .map((p: any) => {
+      const currentSp = p.plannedSp || 0
+      const displaySp = isOverride ? Math.round(currentSp * ratio * 10) / 10 : currentSp
+      const originalSp = isOverride ? currentSp
+        : (isAdjustment && p.originalPlannedSp != null) ? p.originalPlannedSp
+        : currentSp
+      return { name: STATUS_MAP[p.phase]?.label || p.phase, value: displaySp, originalSp, phase: p.phase }
+    })
+    .filter((p) => p.value > 0 || p.originalSp > 0)
 
   return (
     <AppLayout userRole="subsidiary">
@@ -1063,7 +1082,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                               <Pie
-                                data={spPieData}
+                                data={spPieData.filter(e => e.value > 0)}
                                 cx="50%"
                                 cy="50%"
                                 innerRadius={40}
@@ -1072,7 +1091,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 dataKey="value"
                                 stroke="none"
                               >
-                                {spPieData.map((entry) => (
+                                {spPieData.filter(e => e.value > 0).map((entry) => (
                                   <Cell key={entry.phase} fill={PIE_COLORS[entry.phase] || "#94a3b8"} />
                                 ))}
                               </Pie>
@@ -1098,30 +1117,39 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 <span className="text-muted-foreground">{entry.name}</span>
                               </div>
                               <span className="font-medium">
-                                {demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && entry.value > 0 && demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")
-                                  ? <>{entry.value} → {Math.round((entry.value * demand.confirmedSp / demand.estimatedSp) * 10) / 10} SP</>
+                                {(isOverride || hasOriginalData) && entry.originalSp !== entry.value && entry.originalSp > 0
+                                  ? <>{entry.originalSp} → {entry.value} SP</>
                                   : <>{entry.value} SP</>}
                               </span>
                             </div>
                           ))}
                         </div>
-                        {demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && (
-                          demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED") ? (
-                            <div className="rounded-lg border border-orange-200 bg-orange-50/50 px-4 py-2.5 mt-3 flex items-center justify-center gap-2 text-sm">
+                        {isOverride && (
+                          <div className="rounded-lg border border-orange-200 bg-orange-50/50 px-4 py-2.5 mt-3 text-sm">
+                            <div className="flex items-center justify-center gap-2">
                               <span className="text-muted-foreground line-through">{demand.estimatedSp} SP</span>
                               <span className="text-muted-foreground">×</span>
-                              <span className="font-semibold text-orange-600">{Math.round((demand.confirmedSp / demand.estimatedSp) * 100)}%</span>
+                              <span className="font-semibold text-orange-600">{Math.round((demand.confirmedSp! / demand.estimatedSp) * 100)}%</span>
                               <span className="text-muted-foreground">=</span>
                               <span className="font-semibold text-primary">{demand.confirmedSp} SP</span>
                             </div>
-                          ) : (
-                            <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 mt-3 flex items-center justify-center gap-2 text-sm">
+                            {settlementReason && (
+                              <p className="text-xs text-muted-foreground mt-1.5 text-center">{settlementReason}</p>
+                            )}
+                          </div>
+                        )}
+                        {isAdjustment && (
+                          <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 mt-3 text-sm">
+                            <div className="flex items-center justify-center gap-2">
                               <span className="text-blue-600 font-medium">SP 調整</span>
                               <span className="text-muted-foreground">{demand.estimatedSp}</span>
                               <span className="text-muted-foreground">→</span>
                               <span className="font-semibold text-primary">{demand.confirmedSp} SP</span>
                             </div>
-                          )
+                            {settlementReason && (
+                              <p className="text-xs text-muted-foreground mt-1.5 text-center">{settlementReason}</p>
+                            )}
+                          </div>
                         )}
                       </div>
                     ) : demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp ? (
@@ -1207,18 +1235,19 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               </span>
                             )}
 
-                            {demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && (plan?.plannedSp ?? 0) > 0 && demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED") ? (
-                              <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 rounded shrink-0", isFuture && "opacity-50")}>
-                                {plan?.plannedSp ?? 0} → {Math.round(((plan?.plannedSp ?? 0) * demand.confirmedSp / demand.estimatedSp) * 10) / 10}
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className={cn(
-                                "text-[10px] h-5 px-1.5 rounded shrink-0",
-                                isFuture && "opacity-50",
-                              )}>
-                                {plan?.plannedSp ?? 0}
-                              </Badge>
-                            )}
+                            {(() => {
+                              const currentSp = plan?.plannedSp ?? 0
+                              const adjustedSp = isOverride ? Math.round(currentSp * ratio * 10) / 10 : currentSp
+                              const origSp = isOverride ? currentSp
+                                : (hasOriginalData && (plan as any)?.originalPlannedSp != null) ? (plan as any).originalPlannedSp
+                                : null
+                              const showArrow = origSp != null && origSp !== adjustedSp && origSp > 0
+                              return (
+                                <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 rounded shrink-0", isFuture && "opacity-50")}>
+                                  {showArrow ? <>{origSp} → {adjustedSp}</> : adjustedSp}
+                                </Badge>
+                              )
+                            })()}
                           </div>
                         )
                       })}

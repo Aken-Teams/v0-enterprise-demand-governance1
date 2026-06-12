@@ -1825,6 +1825,14 @@ export default function DemandDetailPage() {
                       settlementType={demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp
                         ? (demand.phaseSignoffs?.some(s => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED") ? "override" : "adjustment")
                         : null}
+                      settlementReason={(() => {
+                        if (demand.confirmedSp == null || demand.confirmedSp === demand.estimatedSp) return null
+                        const h = demand.statusHistory?.find(
+                          (h: any) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT")
+                        )
+                        if (!h?.comment) return null
+                        try { return JSON.parse(h.comment).reason || null } catch { return null }
+                      })()}
                     />
                   </CardContent>
                 </Card>
