@@ -164,6 +164,23 @@ export async function GET(
           }
         }
 
+        // Retire generic placeholder signoffs (no specific target) once specific
+        // reviewers exist for this phase. A placeholder is auto-created when a demand
+        // is advanced into a signoff phase before its 需求窗口/需求主管 are assigned;
+        // assigning them later adds the real signoff, so the placeholder must be
+        // removed or it lingers as a phantom "待確認" reviewer that blocks the phase.
+        if (requiredTargets.length > 0) {
+          const orphanPlaceholders = currentPhaseSignoffs.filter(
+            (s) => !s.targetUserId && s.status === "PENDING"
+          )
+          if (orphanPlaceholders.length > 0) {
+            await prisma.phaseSignoff.deleteMany({
+              where: { id: { in: orphanPlaceholders.map((s) => s.id) }, status: "PENDING" },
+            })
+            needRefetch = true
+          }
+        }
+
         // Re-fetch phaseSignoffs if we created any
         if (needRefetch) {
           const refreshed = await prisma.phaseSignoff.findMany({

@@ -387,7 +387,8 @@ export async function GET(request: NextRequest) {
       // Org summary — include wallet quota for budget context, with per-vendor breakdown
       const orgSummary = allOrgs.map((org) => {
         const orgWallets = wallets.filter((w) => w.organizationId === org.id)
-        const orgDemands = demands.filter((d) => d.organizationId === org.id && d.status !== "REJECTED")
+        // 已駁回與已取消都不佔用預算（取消會釋放 SP），故排除於「已提出」之外
+        const orgDemands = demands.filter((d) => d.organizationId === org.id && d.status !== "REJECTED" && d.status !== "CANCELLED")
 
         // Per-vendor breakdown
         const vendorSet = new Set([...orgWallets.map(w => w.vendor), ...orgDemands.map(d => d.vendor)])
@@ -427,9 +428,9 @@ export async function GET(request: NextRequest) {
       const totalQuotaSp = orgSummary.reduce((s, o) => s + o.quotaSp, 0)
       const totalQuotaAmount = totalQuotaSp * SP_RATE
 
-      // Demand detail (grouped by org)
+      // Demand detail (grouped by org) — exclude 已駁回 / 已取消 (不佔用預算)
       const demandDetail = demands
-        .filter((d) => d.status !== "REJECTED")
+        .filter((d) => d.status !== "REJECTED" && d.status !== "CANCELLED")
         .map((d) => {
           const sp = d.confirmedSp ?? d.estimatedSp ?? 0
           const used = calcUsedSp(d.status, sp, d.heldFromStatus)

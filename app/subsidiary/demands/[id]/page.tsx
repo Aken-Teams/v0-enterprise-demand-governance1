@@ -35,6 +35,7 @@ import {
   Share2,
   Trash2,
   Copy,
+  XCircle,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -277,6 +278,7 @@ interface DemandDetail {
   expectedDate: string | null
   completedDate: string | null
   rejectReason: string | null
+  holdReason: string | null
   adminNotes: string | null
   contactPersonId: string | null
   contactPerson: { id: string; name: string } | null
@@ -548,6 +550,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
   const sp = demand.confirmedSp ?? demand.estimatedSp
   const isRejected = demand.status === "REJECTED"
+  const isCancelled = demand.status === "CANCELLED"
   const isClosed = demand.status === "CLOSED"
   const currentStepIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const phasePlanMap = Object.fromEntries(demand.phasePlans.map((p) => [p.phase, p]))
@@ -943,6 +946,20 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                     <CardTitle className="text-base">基本資訊</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
+                    {isCancelled && (
+                      <>
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                          <div className="flex items-center gap-1.5 text-slate-600 mb-0.5">
+                            <XCircle className="h-3.5 w-3.5 shrink-0" />
+                            <span className="text-xs font-medium">已取消原因</span>
+                          </div>
+                          <p className="text-xs leading-snug text-slate-600 whitespace-pre-line">
+                            {demand.holdReason || "此需求已由管理者取消，後續如有需要可重新啟動。"}
+                          </p>
+                        </div>
+                        <Separator />
+                      </>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground flex items-center gap-1.5">
                         <Hash className="h-3.5 w-3.5" />
