@@ -89,8 +89,8 @@ export async function GET(request: NextRequest) {
     const usedSp = spByVendor.reduce((s, v) => s + v.usedSp, 0)
     const availableSp = totalQuota - usedSp
 
-    // Completion rate (completed / total excluding rejected)
-    const nonRejected = demands.filter((d) => d.status !== "REJECTED").length
+    // Completion rate (completed / total excluding rejected & cancelled)
+    const nonRejected = demands.filter((d) => d.status !== "REJECTED" && d.status !== "CANCELLED").length
     const completionRate = nonRejected > 0 ? Math.round((completed / nonRejected) * 100) : 0
 
     // --- 交付率: ACCEPTANCE/CLOSED demands delivered on time ---

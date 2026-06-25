@@ -32,6 +32,7 @@ enum DemandStatus {
   CLOSED      // 已結案
   REJECTED    // 已駁回
   ON_HOLD     // 暫緩
+  CANCELLED   // 已取消（軟取消，保留記錄、釋放 SP，可重新啟動）
 }
 
 enum DemandPriority {

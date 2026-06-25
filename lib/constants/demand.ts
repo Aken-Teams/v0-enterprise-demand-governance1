@@ -7,6 +7,7 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700" },
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
+  CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
 }
 
 export const PIPELINE_STEPS = [
@@ -150,10 +151,13 @@ export const SP_PROGRESS_RATE: Record<string, number> = {
   ACCEPTANCE: 0.75,
   CLOSED: 1.0,
   ON_HOLD: 0,
+  CANCELLED: 0,
 }
 
 /** 依據狀態計算漸進已使用 SP（精確數值，不四捨五入） */
 export function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
+  // 已取消：完全釋放 SP，不論取消前進行到哪個階段
+  if (status === "CANCELLED") return 0
   let effectiveStatus = status
   if (status === "ON_HOLD" || status === "REJECTED") {
     effectiveStatus = heldFromStatus || status

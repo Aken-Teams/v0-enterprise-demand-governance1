@@ -28,7 +28,7 @@ import {
   Paperclip, User, MoreHorizontal, Eye, Trash2,
   ClipboardList, Code2, CircleCheckBig, ChevronLeft, ChevronRight,
   ChevronsUpDown, Check, PauseCircle, PlayCircle, AlertTriangle,
-  SlidersHorizontal, X,
+  SlidersHorizontal, X, XCircle,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -88,6 +88,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700" },
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
+  CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
 }
 
 export default function InboxPage() {
@@ -130,6 +131,9 @@ function InboxContent() {
   const [holdTarget, setHoldTarget] = useState<Demand | null>(null)
   const [holdReason, setHoldReason] = useState("")
   const [holdLoading, setHoldLoading] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<Demand | null>(null)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelLoading, setCancelLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(() => {
     const p = parseInt(searchParams.get("page") || "", 10)
     return p > 0 ? p : 1
@@ -236,6 +240,25 @@ function InboxContent() {
       }
     } catch { /* ignore */ } finally {
       setHoldLoading(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!token || !cancelTarget) return
+    setCancelLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${cancelTarget.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED", cancelReason: cancelReason.trim() || null }),
+      })
+      if (res.ok) {
+        setCancelTarget(null)
+        setCancelReason("")
+        fetchDemands()
+      }
+    } catch { /* ignore */ } finally {
+      setCancelLoading(false)
     }
   }
 
@@ -723,6 +746,14 @@ function InboxContent() {
                         </div>
                       )}
 
+                      {/* Cancel reason */}
+                      {demand.status === "CANCELLED" && demand.holdReason && (
+                        <div className="flex items-start gap-1.5 text-xs text-slate-600 bg-slate-100 rounded px-2 py-1">
+                          <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          <span className="line-clamp-2">{demand.holdReason}</span>
+                        </div>
+                      )}
+
                       {/* Phase status: missing docs / pending signoffs (admin only) */}
                       {isAdmin && pc && (pc.missingDocs.length > 0 || pc.pendingSignoffs > 0) && (
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
@@ -780,11 +811,22 @@ function InboxContent() {
                                   <PlayCircle className="h-3.5 w-3.5 mr-2 text-emerald-600" />
                                   恢復進行
                                 </DropdownMenuItem>
-                              ) : demand.status !== "CLOSED" && demand.status !== "REJECTED" ? (
-                                <DropdownMenuItem onClick={() => { setHoldTarget(demand); setHoldReason("") }}>
-                                  <PauseCircle className="h-3.5 w-3.5 mr-2 text-yellow-600" />
-                                  設為暫緩
+                              ) : demand.status === "CANCELLED" ? (
+                                <DropdownMenuItem onClick={() => handleResume(demand)}>
+                                  <PlayCircle className="h-3.5 w-3.5 mr-2 text-emerald-600" />
+                                  重新啟動
                                 </DropdownMenuItem>
+                              ) : demand.status !== "CLOSED" && demand.status !== "REJECTED" ? (
+                                <>
+                                  <DropdownMenuItem onClick={() => { setHoldTarget(demand); setHoldReason("") }}>
+                                    <PauseCircle className="h-3.5 w-3.5 mr-2 text-yellow-600" />
+                                    設為暫緩
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setCancelTarget(demand); setCancelReason("") }}>
+                                    <XCircle className="h-3.5 w-3.5 mr-2 text-slate-500" />
+                                    設為取消
+                                  </DropdownMenuItem>
+                                </>
                               ) : null}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -901,6 +943,37 @@ function InboxContent() {
             <Button onClick={handleHold} disabled={holdLoading} className="bg-yellow-600 hover:bg-yellow-700 text-white">
               {holdLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PauseCircle className="h-4 w-4 mr-2" />}
               確定暫緩
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel reason dialog */}
+      <Dialog open={!!cancelTarget} onOpenChange={(open) => { if (!open) { setCancelTarget(null); setCancelReason("") } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>設為取消</DialogTitle>
+            <DialogDescription>
+              將需求「{cancelTarget?.title}」（{cancelTarget?.demandNumber}）設為已取消。需求記錄會保留以供查證，佔用的 SP 將釋放回額度，後續可隨時重新啟動。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="cancelReason">取消原因</Label>
+            <Textarea
+              id="cancelReason"
+              placeholder="請輸入取消原因（例如：需求方暫不導入，後續視情況重啟）"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCancelTarget(null); setCancelReason("") }}>
+              取消
+            </Button>
+            <Button onClick={handleCancel} disabled={cancelLoading} className="bg-slate-600 hover:bg-slate-700 text-white">
+              {cancelLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
+              確定取消需求
             </Button>
           </DialogFooter>
         </DialogContent>

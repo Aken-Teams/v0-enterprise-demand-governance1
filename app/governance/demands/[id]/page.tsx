@@ -727,6 +727,7 @@ export default function DemandDetailPage() {
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
   const isOnHold = demand.status === "ON_HOLD"
+  const isCancelled = demand.status === "CANCELLED"
   const isClosed = demand.status === "CLOSED"
   // When CLOSED, only admin with write retains modification rights
   const effectiveCanManage = canManage && (!isClosed || isAdminWithWrite)
@@ -1333,8 +1334,16 @@ export default function DemandDetailPage() {
                 )}
               </div>
             )}
+            {isCancelled && (
+              <div className="mt-3 text-center">
+                <Badge variant="secondary" className="bg-slate-200 text-slate-600 text-xs">已取消</Badge>
+                {demand.holdReason && (
+                  <p className="text-xs text-muted-foreground mt-1">取消原因：{demand.holdReason}</p>
+                )}
+              </div>
+            )}
             {/* Step Navigation */}
-            {canManage && !isRejected && !isOnHold && (
+            {canManage && !isRejected && !isOnHold && !isCancelled && (
               <div className="mt-3">
               <StepNavigation
                 currentStatus={demand.status}

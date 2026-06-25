@@ -35,6 +35,8 @@ const STATUS_MAP: Record<string, { label: string; color: string; badge: string }
   ACCEPTANCE: { label: "驗收中", color: "bg-purple-500 text-white", badge: "bg-purple-50 text-purple-700 ring-purple-200" },
   CLOSED: { label: "已結案", color: "bg-gray-400 text-white", badge: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
   REJECTED: { label: "已駁回", color: "bg-red-500 text-white", badge: "bg-red-50 text-red-700 ring-red-200" },
+  ON_HOLD: { label: "暫緩", color: "bg-yellow-500 text-white", badge: "bg-yellow-50 text-yellow-700 ring-yellow-200" },
+  CANCELLED: { label: "已取消", color: "bg-slate-500 text-white", badge: "bg-slate-100 text-slate-600 ring-slate-200" },
 }
 
 const STATUS_KEYS = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED", "REJECTED"]

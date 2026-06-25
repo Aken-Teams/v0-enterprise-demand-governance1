@@ -458,17 +458,77 @@ export async function PATCH(
       return NextResponse.json({ demand: { id: updated.id, status: updated.status } })
     }
 
-    // Handle resume from ON_HOLD: restore to previous status
-    if (demand.status === "ON_HOLD" && (body.resume === true || (body.status && body.status !== "ON_HOLD"))) {
-      // Look up the status before ON_HOLD from history
+    // Handle CANCELLED: soft-cancel — keep record, release SP, can be restarted later
+    if (body.status === "CANCELLED") {
+      if (demand.status === "CANCELLED") {
+        return NextResponse.json({ error: "此需求已是取消狀態" }, { status: 400 })
+      }
+      if (demand.status === "CLOSED") {
+        return NextResponse.json({ error: "已結案的需求無法取消" }, { status: 400 })
+      }
+      const cancelReason = body.cancelReason || body.holdReason || null
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const d = await tx.demand.update({
+          where: { id },
+          data: {
+            status: "CANCELLED",
+            holdReason: cancelReason,
+            heldFromStatus: demand.status,
+          },
+        })
+        await tx.demandStatusHistory.create({
+          data: {
+            demandId: id,
+            fromStatus: demand.status,
+            toStatus: "CANCELLED",
+            comment: cancelReason || "已取消",
+            changedBy: auth.userId,
+          },
+        })
+        return d
+      })
+
+      const fromLabel = STATUS_MAP[demand.status]?.label ?? demand.status
+      const stakeholderIds = getDemandStakeholderIds(id)
+      const orgUserIds = getOrgSubsidiaryUserIds(demand.organizationId)
+      Promise.all([stakeholderIds, orgUserIds]).then(([sIds, oIds]) => {
+        const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
+        notifyUsers(recipients, {
+          type: "DEMAND_STATUS",
+          title: "需求已取消",
+          message: `需求 ${demand.demandNumber}「${demand.title}」已從「${fromLabel}」取消。${cancelReason ? `原因：${cancelReason}` : ""}`,
+          linkUrl: `/demands/${id}`,
+        })
+      })
+      logAudit({
+        userId: auth.userId,
+        action: "STATUS_CHANGE",
+        entity: "DEMAND",
+        entityId: id,
+        demandId: id,
+        details: { fromStatus: demand.status, toStatus: "CANCELLED", cancelReason },
+        request,
+      })
+
+      return NextResponse.json({ demand: { id: updated.id, status: updated.status } })
+    }
+
+    // Handle resume from ON_HOLD / CANCELLED: restore to previous status
+    if (
+      (demand.status === "ON_HOLD" || demand.status === "CANCELLED") &&
+      (body.resume === true || (body.status && body.status !== demand.status))
+    ) {
+      const fromHoldStatus = demand.status
+      // Look up the status before hold/cancel from history
       const prevHistory = await prisma.demandStatusHistory.findFirst({
-        where: { demandId: id, toStatus: "ON_HOLD" },
+        where: { demandId: id, toStatus: fromHoldStatus },
         orderBy: { createdAt: "desc" },
         select: { fromStatus: true },
       })
       let targetStatus = prevHistory?.fromStatus || "SUBMITTED"
       // Allow explicit override if a valid status is provided
-      if (body.status && VALID_STATUSES.has(body.status) && body.status !== "ON_HOLD") {
+      if (body.status && VALID_STATUSES.has(body.status) && body.status !== fromHoldStatus) {
         targetStatus = body.status as string
       }
 
@@ -484,9 +544,9 @@ export async function PATCH(
         await tx.demandStatusHistory.create({
           data: {
             demandId: id,
-            fromStatus: "ON_HOLD",
+            fromStatus: fromHoldStatus,
             toStatus: targetStatus as DemandStatus,
-            comment: "恢復進行",
+            comment: fromHoldStatus === "CANCELLED" ? "重新啟動" : "恢復進行",
             changedBy: auth.userId,
           },
         })
@@ -494,14 +554,15 @@ export async function PATCH(
       })
 
       const toLabel = STATUS_MAP[targetStatus]?.label ?? targetStatus
+      const fromHoldLabel = STATUS_MAP[fromHoldStatus]?.label ?? fromHoldStatus
       const stakeholderIds = getDemandStakeholderIds(id)
       const orgUserIds = getOrgSubsidiaryUserIds(demand.organizationId)
       Promise.all([stakeholderIds, orgUserIds]).then(([sIds, oIds]) => {
         const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
         notifyUsers(recipients, {
           type: "DEMAND_STATUS",
-          title: "需求恢復進行",
-          message: `需求 ${demand.demandNumber}「${demand.title}」已從暫緩恢復為「${toLabel}」。`,
+          title: fromHoldStatus === "CANCELLED" ? "需求重新啟動" : "需求恢復進行",
+          message: `需求 ${demand.demandNumber}「${demand.title}」已從${fromHoldLabel}恢復為「${toLabel}」。`,
           linkUrl: `/demands/${id}`,
         })
       })
@@ -511,7 +572,7 @@ export async function PATCH(
         entity: "DEMAND",
         entityId: id,
         demandId: id,
-        details: { fromStatus: "ON_HOLD", toStatus: targetStatus },
+        details: { fromStatus: fromHoldStatus, toStatus: targetStatus },
         request,
       })
 
