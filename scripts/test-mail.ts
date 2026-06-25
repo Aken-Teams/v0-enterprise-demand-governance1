@@ -57,7 +57,7 @@ async function main() {
         to: [user.email],
         subject,
         body,
-        is_html: true,
+        body_type: "html",
       }),
     })
 

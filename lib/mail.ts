@@ -41,9 +41,8 @@ export async function sendMail(options: SendMailOptions): Promise<MailResponse> 
     payload.cc = options.cc
   }
 
-  if (options.bodyType === "html") {
-    payload.is_html = true
-  }
+  // Mail API expects body_type: 'text' | 'html' (defaults to text on the server).
+  payload.body_type = options.bodyType === "html" ? "html" : "text"
 
   if (options.attachments && options.attachments.length > 0) {
     payload.attachments = options.attachments
