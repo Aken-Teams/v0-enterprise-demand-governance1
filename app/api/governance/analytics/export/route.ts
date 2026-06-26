@@ -10,9 +10,10 @@ export async function GET(request: NextRequest) {
 
     const currentYear = new Date().getFullYear()
 
-    const [demands, wallets] = await Promise.all([
+    const [demands, wallets, spAdjustments] = await Promise.all([
       prisma.demand.findMany({
         select: {
+          id: true,
           demandNumber: true,
           title: true,
           status: true,
@@ -20,10 +21,6 @@ export async function GET(request: NextRequest) {
           confirmedSp: true,
           heldFromStatus: true,
           vendor: true,
-          desiredDate: true,
-          expectedDate: true,
-          completedDate: true,
-          createdAt: true,
           organization: { select: { name: true } },
           contactPerson_: { select: { name: true } },
           manager: { select: { name: true } },
@@ -40,7 +37,40 @@ export async function GET(request: NextRequest) {
           organization: { select: { name: true } },
         },
       }),
+      // SP 調整紀錄（結案時調整），用於「備註」欄
+      prisma.demandStatusHistory.findMany({
+        where: { comment: { contains: "SP_ADJUSTMENT" } },
+        select: { demandId: true, comment: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
     ])
+
+    // demandId → 結案 SP 調整列表
+    const adjByDemand = new Map<string, { oldSp: number; newSp: number; reason: string | null }[]>()
+    for (const h of spAdjustments) {
+      if (!h.comment) continue
+      try {
+        const p = JSON.parse(h.comment)
+        if (p?.type !== "SP_ADJUSTMENT") continue
+        const arr = adjByDemand.get(h.demandId) ?? []
+        arr.push({ oldSp: Number(p.oldSp), newSp: Number(p.newSp), reason: p.reason ?? null })
+        adjByDemand.set(h.demandId, arr)
+      } catch { /* comment 非 JSON，略過 */ }
+    }
+
+    // 產生「備註」文字：優先顯示結案調整，其次顯示開案確認與初估的差異
+    const buildRemark = (d: { id: string; estimatedSp: number; confirmedSp: number | null }): string => {
+      const adjustments = adjByDemand.get(d.id) ?? []
+      if (adjustments.length > 0) {
+        return adjustments
+          .map((a) => `結案調整 SP：${a.oldSp} → ${a.newSp}${a.reason ? `，原因：${a.reason}` : ""}`)
+          .join("；")
+      }
+      if (d.confirmedSp != null && d.confirmedSp !== d.estimatedSp) {
+        return `開案確認 SP：估算 ${d.estimatedSp} → 確認 ${d.confirmedSp}`
+      }
+      return ""
+    }
 
     const workbook = new ExcelJS.Workbook()
     workbook.creator = "企業需求管理平台"
@@ -75,12 +105,10 @@ export async function GET(request: NextRequest) {
       { header: "開發商", key: "vendor", width: 14 },
       { header: "目前狀態", key: "status", width: 14 },
       { header: "總 SP", key: "estimatedSp", width: 8 },
+      { header: "調整後 SP", key: "adjustedSp", width: 10 },
       { header: "已消耗 SP", key: "usedSp", width: 12 },
       { header: "消耗比例", key: "rate", width: 10 },
-      { header: "希望完成日", key: "desiredDate", width: 14 },
-      { header: "預計完成日", key: "expectedDate", width: 14 },
-      { header: "實際完成日", key: "completedDate", width: 14 },
-      { header: "建立日期", key: "createdAt", width: 14 },
+      { header: "備註", key: "remark", width: 48 },
     ]
 
     const headerRow = sheet.getRow(1)
@@ -106,8 +134,6 @@ export async function GET(request: NextRequest) {
       ON_HOLD: 0, REJECTED: 0,
     }
 
-    const fmtDate = (d: Date | null) => d ? new Date(d).toLocaleDateString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "/") : "—"
-
     const fmtRate = (rate: number) => {
       if (rate === 0) return "0%"
       if (rate === 0.5) return "50%"
@@ -117,6 +143,7 @@ export async function GET(request: NextRequest) {
     }
 
     let totalSp = 0
+    let totalAdjusted = 0
     let totalUsed = 0
 
     for (const d of demands) {
@@ -130,6 +157,7 @@ export async function GET(request: NextRequest) {
       const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
 
       totalSp += d.estimatedSp
+      totalAdjusted += effectiveSp
       totalUsed += usedSp
 
       const row = sheet.addRow({
@@ -142,19 +170,20 @@ export async function GET(request: NextRequest) {
         vendor: d.vendor || "",
         status: STATUS_MAP[d.status]?.label || d.status,
         estimatedSp: d.estimatedSp,
+        adjustedSp: effectiveSp,
         usedSp,
         rate: fmtRate(rate),
-        desiredDate: fmtDate(d.desiredDate),
-        expectedDate: fmtDate(d.expectedDate),
-        completedDate: fmtDate(d.completedDate),
-        createdAt: fmtDate(d.createdAt),
+        remark: buildRemark(d),
       })
 
       row.eachCell((cell, colNumber) => {
         cell.border = thinBorder
+        // 專案名稱(2) 與 備註(13) 靠左，備註自動換行
+        const isText = colNumber === 2 || colNumber === 13
         cell.alignment = {
           vertical: "middle",
-          horizontal: colNumber === 2 ? "left" : "center",
+          horizontal: isText ? "left" : "center",
+          wrapText: colNumber === 13,
         }
       })
 
@@ -168,10 +197,11 @@ export async function GET(request: NextRequest) {
     sheet.addRow({})
 
     // Summary row
-    const totalRate = totalSp > 0 ? `${Math.round((totalUsed / totalSp) * 100)}%` : "0%"
+    const totalRate = totalAdjusted > 0 ? `${Math.round((totalUsed / totalAdjusted) * 100)}%` : "0%"
     const summaryRow = sheet.addRow({
       demandNumber: "合計",
       estimatedSp: totalSp,
+      adjustedSp: totalAdjusted,
       usedSp: totalUsed,
       rate: totalRate,
     })
@@ -187,7 +217,7 @@ export async function GET(request: NextRequest) {
       cell.fill = summaryFill
     })
 
-    sheet.autoFilter = { from: "A1", to: `O${demands.length + 1}` }
+    sheet.autoFilter = { from: "A1", to: `M${demands.length + 1}` }
     sheet.views = [{ state: "frozen", ySplit: 1 }]
 
     const buffer = await workbook.xlsx.writeBuffer()
