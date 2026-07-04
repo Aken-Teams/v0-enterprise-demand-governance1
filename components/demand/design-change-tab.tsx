@@ -233,11 +233,14 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           const stage1Reviews = rev.reviews.filter((r) => r.role === "REQUESTER" || r.role === "MANAGER")
           const boardReviews = rev.reviews.filter((r) => r.role === "BOARD")
           const boardUpcoming = rev.affectsSp && boardReviews.length === 0
+          const boardAgg = boardReviews.length === 0 ? undefined
+            : boardReviews.some((r) => r.decision === "REJECTED") ? "REJECTED"
+            : boardReviews.every((r) => r.decision === "APPROVED") ? "APPROVED" : "PENDING"
           const flowItems: { key: string; roleLabel: string; name: string; decision?: string; upcoming?: boolean }[] = [
             ...stage1Reviews.map((r) => ({ key: r.reviewerId, roleLabel: ROLE_LABELS[r.role] ?? r.role, name: r.reviewer.name, decision: r.decision })),
             ...(boardReviews.length > 0
-              ? boardReviews.map((r) => ({ key: r.reviewerId, roleLabel: "董事會", name: r.reviewer.name, decision: r.decision }))
-              : boardUpcoming ? [{ key: "board-upcoming", roleLabel: "董事會", name: "因影響 SP", upcoming: true }] : []),
+              ? [{ key: "board", roleLabel: "董事會", name: boardReviews.length > 1 ? `${boardReviews.filter((r) => r.decision === "APPROVED").length}/${boardReviews.length}` : boardReviews[0].reviewer.name, decision: boardAgg }]
+              : boardUpcoming ? [{ key: "board-upcoming", roleLabel: "董事會", name: "", upcoming: true }] : []),
           ]
           const pendingStage1 = stage1Reviews.filter((r) => r.decision === "PENDING")
           const currentTurn = rev.status !== "PENDING" ? null
@@ -292,21 +295,20 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     <p className="text-[11px] font-semibold text-indigo-600 mb-1">變更摘要</p>
                     <div className="prose prose-sm prose-neutral max-w-none text-sm"><ReactMarkdown remarkPlugins={[remarkGfm]}>{rev.summary}</ReactMarkdown></div>
                     {rev.affectsSp && (
-                      <div className="flex items-start gap-2 mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
-                        <CircleDollarSign className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        <div className="min-w-0">
-                          <span className="font-medium">影響 SP（需求方通過後將送董事會審核）</span>
-                          {rev.spDelta != null && rev.spCurrent != null && (
-                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                              <span>目前 <strong>{rev.spCurrent}</strong></span>
-                              <span>→ 調整後 <strong className={rev.spDelta > 0 ? "text-emerald-700" : rev.spDelta < 0 ? "text-red-700" : ""}>{rev.spCurrent + rev.spDelta}</strong></span>
+                      <div className="mt-2 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs text-violet-900">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <CircleDollarSign className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+                          <span className="font-medium">SP 影響</span>
+                          {rev.spDelta != null && rev.spCurrent != null ? (
+                            <>
+                              <span>目前 <strong>{rev.spCurrent}</strong> → 調整後 <strong>{rev.spCurrent + rev.spDelta}</strong></span>
                               <Badge className={cn("text-[10px]", rev.spDelta > 0 ? "bg-emerald-100 text-emerald-700" : rev.spDelta < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600")}>
                                 {rev.spDelta > 0 ? `上調 +${rev.spDelta}` : rev.spDelta < 0 ? `下降 ${rev.spDelta}` : "±0"} SP
                               </Badge>
-                            </div>
-                          )}
-                          {rev.spNote ? <p className="mt-1 text-amber-700 whitespace-pre-line">{rev.spNote}</p> : null}
+                            </>
+                          ) : <span className="text-muted-foreground">未填數值</span>}
                         </div>
+                        {rev.spNote && <p className="mt-1 text-violet-700/80 whitespace-pre-line">{rev.spNote}</p>}
                       </div>
                     )}
                   </div>
@@ -314,7 +316,10 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                   {/* 簽核流程（依版本而異：需求方 →（影響 SP 才有）董事會） */}
                   {flowItems.length > 0 && (
                     <div className="px-3 sm:px-4 py-2.5 border-b">
-                      <p className="text-[11px] font-semibold text-muted-foreground mb-2">簽核流程</p>
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <p className="text-[11px] font-semibold text-muted-foreground">簽核流程</p>
+                        {currentTurn && <span className="text-[11px] text-muted-foreground">目前待簽：<strong className="text-amber-700">{currentTurn}</strong></span>}
+                      </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {flowItems.map((it, i) => (
                           <div key={it.key} className="flex items-center gap-1.5">
@@ -323,7 +328,6 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                           </div>
                         ))}
                       </div>
-                      {currentTurn && <p className="text-[11px] text-muted-foreground mt-2">目前待簽：<strong className="text-amber-700">{currentTurn}</strong></p>}
                     </div>
                   )}
 
@@ -653,18 +657,18 @@ function Empty({ text }: { text: string }) {
 }
 
 function FlowNode({ roleLabel, name, decision, upcoming }: { roleLabel: string; name: string; decision?: string; upcoming?: boolean }) {
-  let cls = "border-slate-200 bg-slate-50 text-slate-500"
-  let status = "待前段通過"
+  let cls = "border-slate-200 bg-slate-50 text-slate-400"
+  let icon = "○"
   if (!upcoming) {
-    if (decision === "APPROVED") { cls = "border-emerald-200 bg-emerald-50 text-emerald-700"; status = "✓ 已通過" }
-    else if (decision === "REJECTED") { cls = "border-red-200 bg-red-50 text-red-700"; status = "✕ 已駁回" }
-    else { cls = "border-amber-200 bg-amber-50 text-amber-700"; status = "⏱ 待確認" }
+    if (decision === "APPROVED") { cls = "border-emerald-200 bg-emerald-50 text-emerald-700"; icon = "✓" }
+    else if (decision === "REJECTED") { cls = "border-red-200 bg-red-50 text-red-700"; icon = "✕" }
+    else { cls = "border-amber-200 bg-amber-50 text-amber-700"; icon = "⏱" }
   }
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]", cls)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]", cls)} title={name}>
+      <span className="font-bold">{icon}</span>
       <span className="font-medium">{roleLabel}</span>
-      <span className="opacity-70">{name}</span>
-      <span className="font-medium">{status}</span>
+      {name && <span className="opacity-60">{name}</span>}
     </span>
   )
 }
