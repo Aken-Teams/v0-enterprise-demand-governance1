@@ -6,6 +6,7 @@ import { DemandStatus } from "@/lib/generated/prisma/client"
 import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import { updateDemandSchema } from "@/lib/validations/demand"
 import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
+import { resolveBoardReviewers } from "@/lib/board"
 import { logAudit } from "@/lib/audit"
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
@@ -126,15 +127,8 @@ export async function GET(
           if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
           if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
         } else if (phase === "SP_REVIEW") {
-          // Board members: filter by restrictBoardToOrg
-          const boardMembers = await prisma.user.findMany({
-            where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
-            select: { id: true, restrictBoardToOrg: true, organizationId: true },
-          })
-          for (const u of boardMembers) {
-            if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) continue
-            requiredTargets.push({ userId: u.id, role: "BOARD" })
-          }
+          // 董事：一間公司一位（優先序，見 lib/board.ts）
+          requiredTargets.push(...(await resolveBoardReviewers(demand.organizationId)))
         }
 
         // Find latest round timestamp
@@ -227,8 +221,20 @@ export async function GET(
       })
     }
 
+    // 目前使用者是否有「待審的設計變更」→ 供頁面引導他去審核
+    const myDcReview = await prisma.designChangeReview.findFirst({
+      where: { reviewerId: auth.userId, decision: "PENDING", revision: { status: "PENDING", designChange: { demandId: id } } },
+      select: {
+        role: true,
+        revision: { select: { version: true, affectsSp: true, designChange: { select: { seq: true, title: true, currentVersion: true } } } },
+      },
+    })
+    const myDesignChangeReview = (myDcReview && myDcReview.revision.version === myDcReview.revision.designChange.currentVersion)
+      ? { seq: myDcReview.revision.designChange.seq, title: myDcReview.revision.designChange.title, role: myDcReview.role, affectsSp: myDcReview.revision.affectsSp }
+      : null
+
     return NextResponse.json({
-      demand: { ...demandRest, contactPerson: contactPersonUser },
+      demand: { ...demandRest, contactPerson: contactPersonUser, myDesignChangeReview },
       mySignoffRole,
       accessUsers,
       adminCanWrite,
@@ -628,15 +634,8 @@ export async function PATCH(
         if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
         if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
       } else if (phase === "SP_REVIEW") {
-        // Board members: filter by restrictBoardToOrg
-        const boardMembers = await prisma.user.findMany({
-          where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
-          select: { id: true, restrictBoardToOrg: true, organizationId: true },
-        })
-        for (const u of boardMembers) {
-          if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) continue
-          requiredTargets.push({ userId: u.id, role: "BOARD" })
-        }
+        // 董事：一間公司一位（優先序，見 lib/board.ts）
+        requiredTargets.push(...(await resolveBoardReviewers(demand.organizationId)))
       }
 
       // Find existing signoffs for current phase (latest round only)
@@ -832,15 +831,8 @@ export async function PATCH(
           if (demand.contactPersonId) targets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
           if (demand.demandManagerId) targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
         } else if (status === "SP_REVIEW") {
-          // Board members: filter by restrictBoardToOrg
-          const boardMembers = await tx.user.findMany({
-            where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
-            select: { id: true, restrictBoardToOrg: true, organizationId: true },
-          })
-          for (const u of boardMembers) {
-            if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) continue
-            targets.push({ userId: u.id, role: "BOARD" })
-          }
+          // 董事：一間公司一位（優先序，見 lib/board.ts）
+          targets.push(...(await resolveBoardReviewers(demand.organizationId)))
         }
 
         // Fallback: create one generic signoff if no specific targets

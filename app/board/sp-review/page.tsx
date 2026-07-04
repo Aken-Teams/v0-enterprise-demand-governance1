@@ -14,13 +14,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useAuth } from "@/hooks/use-auth"
 import { STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import Link from "next/link"
 import {
   Building2, Coins, Loader2, Eye, Check, X, ExternalLink,
   FileIcon, Download, MessageSquare, CheckCircle2, Inbox,
-  AlertTriangle, Paperclip, Trash2, ShieldCheck,
+  AlertTriangle, Paperclip, Trash2, ShieldCheck, FileEdit, CircleDollarSign,
 } from "lucide-react"
 
 interface SignoffDoc {
@@ -56,10 +57,65 @@ interface SpReviewItem {
   }
 }
 
+interface DesignChangeSp {
+  reviewId: string
+  dcId: string
+  seq: number
+  dcTitle: string
+  version: number
+  spCurrent: number | null
+  spDelta: number | null
+  spNote: string | null
+  summary: string
+  demand: { id: string; demandNumber: string; title: string; organization: { id: string; name: string } | null }
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function DesignChangeSpCard({ dc }: { dc: DesignChangeSp }) {
+  const after = (dc.spCurrent ?? 0) + (dc.spDelta ?? 0)
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardContent className="p-3 sm:p-4 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-mono text-muted-foreground">{dc.demand.demandNumber} · DC-{String(dc.seq).padStart(2, "0")}</span>
+          <Badge className="bg-violet-100 text-violet-700 gap-1 shrink-0 text-[10px] sm:text-xs"><CircleDollarSign className="h-3 w-3" />SP 調整</Badge>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge variant="outline" className="text-[10px] sm:text-xs gap-1"><Building2 className="h-3 w-3" />{dc.demand.organization?.name}</Badge>
+          <Badge className="text-[10px] sm:text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 gap-0.5"><FileEdit className="h-3 w-3" />設計變更</Badge>
+        </div>
+        <p className="font-semibold leading-snug text-sm sm:text-base">{dc.demand.title}</p>
+        <p className="text-xs text-muted-foreground">變更：{dc.dcTitle}（v{dc.version}）</p>
+
+        {/* SP change */}
+        <div className="rounded-md border border-violet-200 bg-violet-50 px-2.5 py-2 text-xs text-violet-900">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <CircleDollarSign className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+            <span className="font-medium">SP 影響</span>
+            <span>目前 <strong>{dc.spCurrent}</strong> → 調整後 <strong>{after}</strong></span>
+            <Badge className={`text-[10px] ${(dc.spDelta ?? 0) > 0 ? "bg-emerald-100 text-emerald-700" : (dc.spDelta ?? 0) < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+              {(dc.spDelta ?? 0) > 0 ? `上調 +${dc.spDelta}` : (dc.spDelta ?? 0) < 0 ? `下降 ${dc.spDelta}` : "±0"} SP
+            </Badge>
+          </div>
+          {dc.spNote && <p className="mt-1 text-violet-700/80 whitespace-pre-line">{dc.spNote}</p>}
+        </div>
+
+        <hr className="border-border/60" />
+        <div className="flex justify-end">
+          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white h-9" asChild>
+            <Link href={`/governance/demands/${dc.demand.id}?tab=design-changes`}>
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />前往審核 SP 調整
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -479,6 +535,7 @@ function SpReviewCard({ item, token, onComplete }: {
 export default function SpReviewPage() {
   const { token } = useAuth()
   const [items, setItems] = useState<SpReviewItem[]>([])
+  const [designChanges, setDesignChanges] = useState<DesignChangeSp[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchItems = useCallback(async () => {
@@ -488,7 +545,7 @@ export default function SpReviewPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
-      if (res.ok) setItems(data.items || [])
+      if (res.ok) { setItems(data.items || []); setDesignChanges(data.designChanges || []) }
     } catch {
       // ignore
     } finally {
@@ -504,6 +561,8 @@ export default function SpReviewPage() {
     setItems((prev) => prev.filter((item) => item.signoff.id !== signoffId))
   }
 
+  const total = items.length + designChanges.length
+
   return (
     <AppLayout userRole="viewer">
       <div className="space-y-6">
@@ -511,11 +570,11 @@ export default function SpReviewPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">開案審核</h1>
-            {!loading && items.length > 0 && (
-              <Badge className="bg-amber-100 text-amber-700 text-sm">{items.length} 件待審</Badge>
+            {!loading && total > 0 && (
+              <Badge className="bg-amber-100 text-amber-700 text-sm">{total} 件待審</Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求與專案 Master 代簽請求</p>
+          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求、專案 Master 代簽，以及設計變更的 SP 調整</p>
         </div>
 
         {/* Content */}
@@ -523,31 +582,50 @@ export default function SpReviewPage() {
           <div className="flex items-center justify-center py-24">
             <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
           </div>
-        ) : items.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-20">
-              <CheckCircle2 className="h-12 w-12 text-emerald-300 mb-4" />
-              <p className="text-muted-foreground font-medium">目前沒有待審核的開案需求</p>
-              <p className="text-xs text-muted-foreground mt-1">所有開案申請已處理完畢</p>
-              <Button variant="outline" size="sm" className="mt-4" asChild>
-                <Link href="/governance/inbox">
-                  <Inbox className="h-3.5 w-3.5 mr-1.5" />
-                  前往需求列表
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {items.map((item) => (
-              <SpReviewCard
-                key={item.signoff.id}
-                item={item}
-                token={token}
-                onComplete={() => handleComplete(item.signoff.id)}
-              />
-            ))}
-          </div>
+          <Tabs defaultValue="sp-review" className="w-full">
+            <TabsList>
+              <TabsTrigger value="sp-review" className="gap-1.5">
+                <Coins className="h-3.5 w-3.5" />開案審核
+                {items.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{items.length}</Badge>}
+              </TabsTrigger>
+              <TabsTrigger value="design-changes" className="gap-1.5">
+                <CircleDollarSign className="h-3.5 w-3.5" />設計變更 SP 調整
+                {designChanges.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-violet-100 text-violet-700">{designChanges.length}</Badge>}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="sp-review" className="mt-4">
+              {items.length === 0 ? (
+                <Card><CardContent className="flex flex-col items-center justify-center py-20">
+                  <CheckCircle2 className="h-12 w-12 text-emerald-300 mb-4" />
+                  <p className="text-muted-foreground font-medium">目前沒有待審核的開案需求</p>
+                  <Button variant="outline" size="sm" className="mt-4" asChild>
+                    <Link href="/governance/inbox"><Inbox className="h-3.5 w-3.5 mr-1.5" />前往需求列表</Link>
+                  </Button>
+                </CardContent></Card>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {items.map((item) => (
+                    <SpReviewCard key={item.signoff.id} item={item} token={token} onComplete={() => handleComplete(item.signoff.id)} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="design-changes" className="mt-4">
+              {designChanges.length === 0 ? (
+                <Card><CardContent className="flex flex-col items-center justify-center py-20">
+                  <CheckCircle2 className="h-12 w-12 text-emerald-300 mb-4" />
+                  <p className="text-muted-foreground font-medium">目前沒有待審核的設計變更 SP 調整</p>
+                </CardContent></Card>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {designChanges.map((dc) => <DesignChangeSpCard key={dc.reviewId} dc={dc} />)}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </AppLayout>

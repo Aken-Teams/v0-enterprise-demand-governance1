@@ -7,6 +7,7 @@ import { canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { SIGNOFF_REQUIRED_PHASES, STATUS_MAP } from "@/lib/constants/demand"
 import { notifyUsers, getOrgSubsidiaryUserIds } from "@/lib/notify"
+import { resolveBoardReviewers } from "@/lib/board"
 import { logAudit } from "@/lib/audit"
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -131,16 +132,8 @@ export async function POST(
       if (demandFull?.contactPersonId) targets.push({ userId: demandFull.contactPersonId, role: "REQUESTER" })
       if (demandFull?.demandManagerId) targets.push({ userId: demandFull.demandManagerId, role: "MANAGER" })
     } else if (phase === "SP_REVIEW") {
-      // Board members are a global role (User.isBoardMember)
-      // restrictBoardToOrg = true → only add if their org matches demand's org
-      const boardMembers = await prisma.user.findMany({
-        where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
-        select: { id: true, restrictBoardToOrg: true, organizationId: true },
-      })
-      for (const u of boardMembers) {
-        if (u.restrictBoardToOrg && u.organizationId !== demandFull?.organizationId) continue
-        targets.push({ userId: u.id, role: "BOARD" })
-      }
+      // 董事：一間公司一位（優先序，見 lib/board.ts）
+      if (demandFull?.organizationId) targets.push(...(await resolveBoardReviewers(demandFull.organizationId)))
     }
 
     // Fallback: if no specific targets found, create one generic signoff (backward compat)

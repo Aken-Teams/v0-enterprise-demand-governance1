@@ -39,9 +39,42 @@ export async function GET(request: NextRequest) {
       ],
     }
 
+    // 設計變更 SP 審核：本董事有待審(PENDING)的 BOARD 裁決，且該版影響 SP、且為最新版本
+    const dcBoardReviews = await prisma.designChangeReview.findMany({
+      where: { reviewerId: auth.userId, role: "BOARD", decision: "PENDING", revision: { status: "PENDING", affectsSp: true } },
+      include: {
+        revision: {
+          select: {
+            id: true, version: true, spCurrent: true, spDelta: true, spNote: true, summary: true,
+            designChange: {
+              select: {
+                id: true, seq: true, title: true, currentVersion: true,
+                demand: { select: { id: true, demandNumber: true, title: true, organization: { select: { id: true, name: true } } } },
+              },
+            },
+          },
+        },
+      },
+    })
+    const designChanges = dcBoardReviews
+      .filter((r) => r.revision.version === r.revision.designChange.currentVersion)
+      .filter((r) => !user.restrictBoardToOrg || !user.organizationId || r.revision.designChange.demand.organization?.id === user.organizationId)
+      .map((r) => ({
+        reviewId: r.id,
+        dcId: r.revision.designChange.id,
+        seq: r.revision.designChange.seq,
+        dcTitle: r.revision.designChange.title,
+        version: r.revision.version,
+        spCurrent: r.revision.spCurrent,
+        spDelta: r.revision.spDelta,
+        spNote: r.revision.spNote,
+        summary: r.revision.summary,
+        demand: r.revision.designChange.demand,
+      }))
+
     if (countOnly) {
       const count = await prisma.phaseSignoff.count({ where: whereClause })
-      return NextResponse.json({ count })
+      return NextResponse.json({ count: count + designChanges.length })
     }
 
     const pendingSignoffs = await prisma.phaseSignoff.findMany({
@@ -93,7 +126,7 @@ export async function GET(request: NextRequest) {
       },
     }))
 
-    return NextResponse.json({ count: items.length, items })
+    return NextResponse.json({ count: items.length + designChanges.length, items, designChanges })
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })

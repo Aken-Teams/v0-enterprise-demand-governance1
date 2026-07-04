@@ -113,10 +113,10 @@ export async function POST(
       select: { id: true, name: true, restrictBoardToOrg: true, organizationId: true },
     })
 
-    const eligibleMembers = boardMembers.filter((u) => {
-      if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) return false
-      return true
-    })
+    // 董事：一間公司一位（優先序，與 lib/board.ts 一致）
+    const orgSpecific = boardMembers.filter((u) => u.restrictBoardToOrg && u.organizationId === demand.organizationId)
+    const defaults = boardMembers.filter((u) => !u.restrictBoardToOrg)
+    const eligibleMembers = orgSpecific.length > 0 ? orgSpecific : defaults.length > 0 ? defaults : boardMembers
 
     if (eligibleMembers.length === 0) {
       return NextResponse.json({ error: "找不到可代簽的專案 Master" }, { status: 404 })

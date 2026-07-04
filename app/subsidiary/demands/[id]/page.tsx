@@ -783,6 +783,27 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           />
         )}
 
+        {/* ── 設計變更待審引導（例如董事會審 SP，或需求方逐條確認） ── */}
+        {(() => {
+          const r = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; affectsSp: boolean } | null }).myDesignChangeReview
+          if (!r) return null
+          const roleLabel = r.role === "BOARD" ? "董事會" : r.role === "MANAGER" ? "需求主管" : "需求窗口"
+          return (
+            <div className="rounded-lg border-2 border-indigo-300 bg-indigo-50/80 p-3 sm:p-4">
+              <div className="flex items-start gap-2.5 sm:gap-3">
+                <FileEdit className="h-5 w-5 shrink-0 text-indigo-600 mt-px sm:mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-[15px] sm:text-sm text-indigo-900">您有一筆設計變更待您確認{r.affectsSp ? "（SP 調整）" : ""}</p>
+                  <p className="text-xs text-indigo-700/80 mt-1">DC-{String(r.seq).padStart(2, "0")}「{r.title}」，需您以「{roleLabel}」身分審核{r.affectsSp ? "此變更的 SP 調整" : ""}。</p>
+                </div>
+                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 h-9" onClick={() => setActiveTab("design-changes")}>
+                  <FileEdit className="h-3.5 w-3.5 mr-1" />前往審核
+                </Button>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* ── Approved info banner: user already signed, waiting for admin ── */}
         {!pendingSignoff && !isClosed && !isRejected && (() => {
           const approvedByMe = demand.phaseSignoffs?.find(

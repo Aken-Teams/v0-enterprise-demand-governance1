@@ -1,5 +1,3 @@
-import { prisma } from "@/lib/prisma"
-
 export interface ParsedChecklistItem {
   text: string
   checked: boolean
@@ -41,26 +39,8 @@ export function resolveDesignChangeReviewers(
   return targets
 }
 
-/**
- * 董事會審核人（第二階段，僅在需求方通過且該版影響 SP 時加入）。
- * 優先取「負責該組織」的董事；若無（例如該組織沒有指派董事），
- * 則退回全體有效董事——SP 是 JV 層級的預算決策，一定要有董事會把關，
- * 不可因無對應組織董事而自動放行。
- */
-export async function resolveBoardReviewers(organizationId: string): Promise<ReviewerTarget[]> {
-  const board = await prisma.user.findMany({
-    where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
-    select: { id: true, restrictBoardToOrg: true, organizationId: true },
-  })
-  // 1) 該公司專屬董事（限定到此組織）優先，例如 無錫→曹杰、徐州→陳英聖
-  const orgSpecific = board.filter((u) => u.restrictBoardToOrg && u.organizationId === organizationId)
-  if (orgSpecific.length > 0) return orgSpecific.map((u) => ({ userId: u.id, role: "BOARD" as const }))
-  // 2) 其他公司 → 預設董事（未限定組織者），例如方士碩
-  const defaults = board.filter((u) => !u.restrictBoardToOrg)
-  if (defaults.length > 0) return defaults.map((u) => ({ userId: u.id, role: "BOARD" as const }))
-  // 3) 保底：全體有效董事（避免「影響 SP 卻無董事把關」而自動放行）
-  return board.map((u) => ({ userId: u.id, role: "BOARD" as const }))
-}
+// resolveBoardReviewers 已移至 lib/board.ts（開案確認與設計變更共用同一套優先序）
+export { resolveBoardReviewers } from "@/lib/board"
 
 /**
  * 依所有審核裁決計算版本整體狀態。
