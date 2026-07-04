@@ -40,11 +40,13 @@ import {
   Package,
   Check,
   Maximize2,
+  FileEdit,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
+import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
@@ -570,6 +572,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
+  const [activeTab, setActiveTab] = useState("overview")
   // Document preview states
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
@@ -901,6 +904,9 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
             kind={pendingSignoffKind}
             demandId={demand.id}
             token={authToken}
+            blocked={pendingSignoffKind !== "DESIGN_CHANGE" && ((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
+            blockedMessage={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? "有待確認的設計變更，需通過後才能進行此階段確認。" : "設計變更已駁回，等待開發端修訂後重新送出，目前無法進行此階段確認。"}
+            onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
             onComplete={fetchDemand}
           />
         )}
@@ -921,7 +927,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
         })()}
 
         {/* Tabs */}
-        <Tabs defaultValue="overview" className="w-full min-w-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
           <div className="overflow-x-auto">
             <TabsList className="inline-flex w-max sm:w-full justify-start bg-muted/50 h-9 sm:h-10">
               <TabsTrigger value="overview" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
@@ -963,6 +969,10 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                     {demand.phaseSignoffs.length}
                   </Badge>
                 )}
+              </TabsTrigger>
+              <TabsTrigger value="design-changes" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
+                <FileEdit className="h-3.5 w-3.5 hidden sm:block" />
+                設計變更
               </TabsTrigger>
             </TabsList>
           </div>
@@ -1578,6 +1588,29 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ══════ Tab: 設計變更 ══════ */}
+          <TabsContent value="design-changes" className="mt-5">
+            {isLoggedIn ? (
+              <DesignChangeTab
+                demandId={demand.id}
+                demandNumber={demand.demandNumber}
+                phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
+                token={authToken}
+                currentUserId={authUser?.id}
+                canManage={false}
+                currentSp={demand.confirmedSp ?? demand.estimatedSp}
+                watermarkBg={watermarkBg}
+                onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  請登入後檢視設計變更審核。
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </main>

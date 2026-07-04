@@ -550,7 +550,9 @@ model DesignChangeRevision {
   summary        String             @db.Text /// 變更摘要說明 (Markdown)
   checklistMd    String?            @db.Text /// checklist 原始 Markdown
   affectsSp      Boolean            @default(false) /// 是否影響 SP → 需董事會加入審核
-  spNote         String?            @db.Text /// SP 影響說明
+  spCurrent      Float?             /// 提出當下的 SP（快照，供董事會評估）
+  spDelta        Float?             /// 預計增減 SP（正=上調，負=下降）
+  spNote         String?            @db.Text /// SP 影響補充說明
   status         DesignChangeStatus @default(PENDING)
   submittedById  String
   submittedBy    User               @relation("DCRevSubmitter", fields: [submittedById], references: [id])

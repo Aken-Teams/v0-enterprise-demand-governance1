@@ -10,10 +10,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   FileEdit, Plus, ChevronDown, ChevronRight, Check, X, Paperclip, Loader2,
-  History, CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload,
+  History, CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban,
 } from "lucide-react"
 import { DESIGN_CHANGE_STATUS_MAP, CHECKLIST_MARK_MAP, STATUS_MAP } from "@/lib/constants/demand"
 import { DesignChangeEditorDialog } from "@/components/demand/design-change-editor-dialog"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type Mark = "PENDING" | "CONFIRMED" | "CROSS" | "WARN"
 
@@ -29,7 +33,7 @@ const SEG: { m: Mark; label: string; icon: string; active: string }[] = [
 ]
 interface Revision {
   id: string; version: number; summary: string; checklistMd: string | null
-  affectsSp: boolean; spNote: string | null; status: string
+  affectsSp: boolean; spCurrent: number | null; spDelta: number | null; spNote: string | null; status: string
   submittedBy: { name: string }; submittedAt: string; decidedAt: string | null
   items: Item[]; reviews: Review[]; documents: DcDocument[]
 }
@@ -67,11 +71,13 @@ interface Props {
   token: string | null
   currentUserId: string | undefined
   canManage: boolean
+  /** 需求目前 SP，供設計變更的 SP 影響評估 */
+  currentSp?: number
   watermarkBg?: string
   onPreviewDoc?: (doc: PreviewableDoc) => void
 }
 
-export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, currentUserId, canManage, watermarkBg, onPreviewDoc }: Props) {
+export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, currentUserId, canManage, currentSp = 0, watermarkBg, onPreviewDoc }: Props) {
   const [changes, setChanges] = useState<DesignChange[]>([])
   const [canPropose, setCanPropose] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -81,13 +87,14 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<"create" | "revise">("create")
   const [reviseTarget, setReviseTarget] = useState<DesignChange | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<DesignChange | null>(null)
   const [draft, setDraft] = useState<Record<string, DraftState>>({})
   const [submitting, setSubmitting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadTargetRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!token) return
+    if (!token) { setLoading(false); return }
     try {
       const res = await fetch(`/api/demands/${demandId}/design-changes`, { headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) {
@@ -172,6 +179,17 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
 
   const openFilePicker = (target: string) => { uploadTargetRef.current = target; fileInputRef.current?.click() }
 
+  const doCancelDesignChange = async () => {
+    const dc = cancelTarget
+    if (!token || !dc) return
+    setSubmitting(dc.id)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/design-changes/${dc.id}/cancel`, { method: "POST", headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) { setCancelTarget(null); await load() }
+      else { const e = await res.json().catch(() => ({})); alert(e.error || "撤銷失敗") }
+    } finally { setSubmitting(null) }
+  }
+
   if (loading) return <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" />載入中…</div>
 
   return (
@@ -246,9 +264,21 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     <p className="text-[11px] font-semibold text-indigo-600 mb-1">變更摘要</p>
                     <div className="prose prose-sm prose-neutral max-w-none text-sm"><ReactMarkdown remarkPlugins={[remarkGfm]}>{rev.summary}</ReactMarkdown></div>
                     {rev.affectsSp && (
-                      <div className="flex items-start gap-2 mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                      <div className="flex items-start gap-2 mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
                         <CircleDollarSign className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        <div><span className="font-medium">影響 SP（已納入董事會審核）</span>{rev.spNote ? <p className="mt-0.5 text-amber-700 whitespace-pre-line">{rev.spNote}</p> : null}</div>
+                        <div className="min-w-0">
+                          <span className="font-medium">影響 SP（已納入董事會審核）</span>
+                          {rev.spDelta != null && rev.spCurrent != null && (
+                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span>目前 <strong>{rev.spCurrent}</strong></span>
+                              <span>→ 調整後 <strong className={rev.spDelta > 0 ? "text-emerald-700" : rev.spDelta < 0 ? "text-red-700" : ""}>{rev.spCurrent + rev.spDelta}</strong></span>
+                              <Badge className={cn("text-[10px]", rev.spDelta > 0 ? "bg-emerald-100 text-emerald-700" : rev.spDelta < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600")}>
+                                {rev.spDelta > 0 ? `上調 +${rev.spDelta}` : rev.spDelta < 0 ? `下降 ${rev.spDelta}` : "±0"} SP
+                              </Badge>
+                            </div>
+                          )}
+                          {rev.spNote ? <p className="mt-1 text-amber-700 whitespace-pre-line">{rev.spNote}</p> : null}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -378,7 +408,9 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5"><FileText className="h-4 w-4" />開發端文件</p>
                             {canManage && (
-                              <button className="text-xs text-indigo-600 hover:underline" onClick={() => openFilePicker(dc.id)}>+ 上傳</button>
+                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openFilePicker(dc.id)}>
+                                <Upload className="h-3.5 w-3.5 mr-1" />上傳
+                              </Button>
                             )}
                           </div>
                           {devDocs.length === 0 ? <p className="text-xs text-muted-foreground">無附件</p> : (
@@ -498,13 +530,18 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     </Card>
                   </div>
 
-                  {/* 版本歷程 + 修訂 */}
-                  {((canManage && dc.status === "REJECTED" && rev.version === dc.currentVersion) || dc.revisions.length > 1) && (
+                  {/* 版本歷程 + 動作（重送 / 撤銷） */}
+                  {((canManage && (dc.status === "REJECTED" || dc.status === "PENDING") && rev.version === dc.currentVersion) || dc.revisions.length > 1) && (
                     <div className="px-3 sm:px-4 py-3 border-t space-y-3">
-                      {canManage && dc.status === "REJECTED" && rev.version === dc.currentVersion && (
-                        <div className="flex justify-end">
-                          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setReviseTarget(dc); setEditorMode("revise"); setEditorOpen(true) }}>
-                            <FileEdit className="h-3.5 w-3.5 mr-1" />修訂（開新版本）
+                      {canManage && (dc.status === "REJECTED" || dc.status === "PENDING") && rev.version === dc.currentVersion && (
+                        <div className="flex justify-end gap-2">
+                          {dc.status === "REJECTED" && (
+                            <Button size="sm" className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white" disabled={submitting === dc.id} onClick={() => { setReviseTarget(dc); setEditorMode("revise"); setEditorOpen(true) }}>
+                              <FileEdit className="h-3.5 w-3.5 mr-1" />重新送出變更申請
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" disabled={submitting === dc.id} onClick={() => setCancelTarget(dc)}>
+                            <Ban className="h-3.5 w-3.5 mr-1" />撤銷此設計變更
                           </Button>
                         </div>
                       )}
@@ -551,7 +588,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
 
       <DesignChangeEditorDialog
         open={editorOpen} onOpenChange={setEditorOpen}
-        demandId={demandId} demandNumber={demandNumber} phaseLabel={phaseLabel} token={token}
+        demandId={demandId} demandNumber={demandNumber} phaseLabel={phaseLabel} token={token} currentSp={currentSp}
         mode={editorMode} dcId={reviseTarget?.id}
         initial={editorMode === "revise" && reviseTarget ? {
           title: reviseTarget.title,
@@ -559,9 +596,25 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           checklistMd: latestRevOf(reviseTarget).checklistMd ?? "",
           affectsSp: latestRevOf(reviseTarget).affectsSp,
           spNote: latestRevOf(reviseTarget).spNote ?? "",
+          spDelta: latestRevOf(reviseTarget).spDelta,
         } : undefined}
         onComplete={load}
       />
+
+      <AlertDialog open={!!cancelTarget} onOpenChange={(open) => { if (!open) setCancelTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>撤銷此設計變更？</AlertDialogTitle>
+            <AlertDialogDescription>
+              將設計變更「{cancelTarget?.title}」設為已撤銷。撤銷後將不再需要審核，也不會再擋住階段簽核；此設計變更的紀錄仍會保留。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={doCancelDesignChange}>確定撤銷</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

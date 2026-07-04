@@ -1271,7 +1271,8 @@ export default function DemandDetailPage() {
                     token={token}
                     onComplete={fetchDemand}
                     blocked={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
-                    onGoToDesignChange={() => setActiveTab("design-changes")}
+                    blockedMessage={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? "有待確認的設計變更，需通過後才能進行此階段確認。" : "設計變更已駁回，等待開發端修訂後重新送出，目前無法進行此階段確認。"}
+                    onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
                   />
                 </div>
               )
@@ -2259,6 +2260,7 @@ export default function DemandDetailPage() {
               token={token}
               currentUserId={user?.id}
               canManage={effectiveCanManage}
+              currentSp={demand.confirmedSp ?? demand.estimatedSp}
               watermarkBg={watermarkBg}
               onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}
             />

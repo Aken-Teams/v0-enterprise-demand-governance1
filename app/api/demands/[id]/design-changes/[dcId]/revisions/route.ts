@@ -48,7 +48,7 @@ export async function POST(
     const dc = await prisma.designChange.findUnique({
       where: { id: dcId },
       include: {
-        demand: { select: { id: true, demandNumber: true, title: true, status: true, organizationId: true, contactPersonId: true, demandManagerId: true } },
+        demand: { select: { id: true, demandNumber: true, title: true, status: true, organizationId: true, contactPersonId: true, demandManagerId: true, estimatedSp: true, confirmedSp: true } },
         revisions: { orderBy: { version: "desc" }, take: 1 },
       },
     })
@@ -73,11 +73,17 @@ export async function POST(
     const reviewers = await resolveDesignChangeReviewers(dc.demand, affectsSp)
     const checklistItems = parseChecklistMarkdown(checklistMd)
     const nextVersion = (latest?.version ?? 0) + 1
+    const spCurrent = affectsSp ? (dc.demand.confirmedSp ?? dc.demand.estimatedSp) : null
+    const spDeltaRaw = Number(formData.get("spDelta"))
+    const spDelta = affectsSp && Number.isFinite(spDeltaRaw) ? spDeltaRaw : null
+    if (spCurrent != null && spDelta != null && spCurrent + spDelta < 0) {
+      return NextResponse.json({ error: "SP 下降不可超過目前 SP（調整後不可為負）" }, { status: 400 })
+    }
 
     const rev = await prisma.$transaction(async (tx) => {
       const r = await tx.designChangeRevision.create({
         data: {
-          designChangeId: dc.id, version: nextVersion, summary, checklistMd, affectsSp, spNote,
+          designChangeId: dc.id, version: nextVersion, summary, checklistMd, affectsSp, spCurrent, spDelta, spNote,
           status: "PENDING", submittedById: auth.userId,
         },
       })

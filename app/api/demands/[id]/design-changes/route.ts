@@ -117,7 +117,7 @@ export async function POST(
       where: { id },
       select: {
         id: true, demandNumber: true, title: true, status: true, organizationId: true,
-        contactPersonId: true, demandManagerId: true,
+        contactPersonId: true, demandManagerId: true, estimatedSp: true, confirmedSp: true,
       },
     })
     if (!demand) return NextResponse.json({ error: "需求不存在" }, { status: 404 })
@@ -136,6 +136,13 @@ export async function POST(
 
     const reviewers = await resolveDesignChangeReviewers(demand, affectsSp)
     const checklistItems = parseChecklistMarkdown(checklistMd)
+    // SP 影響：現值快照（伺服器端），增減量由前端提供（正=上調，負=下降）
+    const spCurrent = affectsSp ? (demand.confirmedSp ?? demand.estimatedSp) : null
+    const spDeltaRaw = Number(formData.get("spDelta"))
+    const spDelta = affectsSp && Number.isFinite(spDeltaRaw) ? spDeltaRaw : null
+    if (spCurrent != null && spDelta != null && spCurrent + spDelta < 0) {
+      return NextResponse.json({ error: "SP 下降不可超過目前 SP（調整後不可為負）" }, { status: 400 })
+    }
 
     // 需求內序號
     const last = await prisma.designChange.findFirst({
@@ -152,7 +159,7 @@ export async function POST(
       })
       const rev = await tx.designChangeRevision.create({
         data: {
-          designChangeId: dc.id, version: 1, summary, checklistMd, affectsSp, spNote,
+          designChangeId: dc.id, version: 1, summary, checklistMd, affectsSp, spCurrent, spDelta, spNote,
           status: "PENDING", submittedById: auth.userId,
         },
       })

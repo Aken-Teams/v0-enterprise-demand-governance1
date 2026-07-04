@@ -139,7 +139,7 @@ export const DESIGN_CHANGE_STATUS_MAP: Record<string, { label: string; color: st
   PENDING: { label: "待確認", color: "bg-amber-100 text-amber-700" },
   APPROVED: { label: "已通過", color: "bg-emerald-100 text-emerald-700" },
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
-  CANCELLED: { label: "已撤回", color: "bg-slate-100 text-slate-600" },
+  CANCELLED: { label: "已撤銷", color: "bg-slate-100 text-slate-600" },
 }
 
 /** 需求方對 checklist 每一條的標記 */
