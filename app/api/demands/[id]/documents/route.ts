@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { writeFile, mkdir } from "fs/promises"
+import { randomUUID } from "crypto"
 import path from "path"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
@@ -52,6 +53,13 @@ function getMaxFileSize(file: File): number {
 
 const VALID_STATUSES = new Set<string>(Object.values(DemandStatus))
 const VALID_DOC_TYPES = new Set<string>(Object.values(DocumentType))
+
+/** 驗證關聯設計變更是否屬於本需求；未提供則視為通過（不綁定） */
+async function validateDesignChange(demandId: string, designChangeId: string | null | undefined): Promise<{ ok: boolean; id: string | null }> {
+  if (!designChangeId) return { ok: true, id: null }
+  const dc = await prisma.designChange.findFirst({ where: { id: designChangeId, demandId }, select: { id: true } })
+  return dc ? { ok: true, id: dc.id } : { ok: false, id: null }
+}
 
 // GET: List documents for a demand, filterable by phase
 export async function GET(
@@ -116,7 +124,10 @@ export async function POST(
     // ── JSON body: URL-based document (APP_RESULT) ──
     if (contentType.includes("application/json")) {
       const body = await request.json()
-      const { phase, type, url } = body as { phase?: string; type?: string; url?: string }
+      const { phase, type, url, docGroup, changeNote, designChangeId } = body as {
+        phase?: string; type?: string; url?: string
+        docGroup?: string | null; changeNote?: string | null; designChangeId?: string | null
+      }
 
       if (!url || typeof url !== "string" || !url.startsWith("http")) {
         return NextResponse.json({ error: "請提供有效的連結" }, { status: 400 })
@@ -128,16 +139,41 @@ export async function POST(
       if (phase && !VALID_STATUSES.has(phase)) {
         return NextResponse.json({ error: "無效的階段" }, { status: 400 })
       }
+      const dcCheck = await validateDesignChange(id, designChangeId)
+      if (!dcCheck.ok) return NextResponse.json({ error: "無效的關聯設計變更" }, { status: 400 })
+
+      // 版本群組：docGroup 提供 → 既有文件的新版本；否則產生新群組（版本 1）
+      let group = docGroup || null
+      let version = 1
+      let finalType: string = docType
+      let finalPhase: DemandStatus | null = phase ? (phase as DemandStatus) : null
+      if (group) {
+        const latest = await prisma.demandDocument.findFirst({
+          where: { demandId: id, docGroup: group },
+          orderBy: { version: "desc" },
+          select: { version: true, type: true, phase: true },
+        })
+        if (!latest) return NextResponse.json({ error: "找不到要更新的文件版本群組" }, { status: 400 })
+        version = latest.version + 1
+        finalType = latest.type
+        finalPhase = latest.phase
+      } else {
+        group = randomUUID()
+      }
 
       const doc = await prisma.demandDocument.create({
         data: {
           demandId: id,
-          type: docType as DocumentType,
-          phase: phase ? (phase as DemandStatus) : null,
+          type: finalType as DocumentType,
+          phase: finalPhase,
           fileName: url,
           fileUrl: url,
           fileSize: null,
           uploadedBy: auth.userId,
+          docGroup: group,
+          version,
+          changeNote: (changeNote || "").trim() || null,
+          designChangeId: dcCheck.id,
         },
       })
 
@@ -173,12 +209,33 @@ export async function POST(
     const formData = await request.formData()
     const phase = formData.get("phase") as string | null
     const docType = (formData.get("type") as string) || "ATTACHMENT"
+    const docGroup = (formData.get("docGroup") as string | null) || null
+    const changeNote = ((formData.get("changeNote") as string | null) || "").trim() || null
+    const designChangeId = (formData.get("designChangeId") as string | null) || null
 
     if (phase && !VALID_STATUSES.has(phase)) {
       return NextResponse.json({ error: "無效的階段" }, { status: 400 })
     }
     if (!VALID_DOC_TYPES.has(docType)) {
       return NextResponse.json({ error: "無效的文件類型" }, { status: 400 })
+    }
+    const dcCheck = await validateDesignChange(id, designChangeId)
+    if (!dcCheck.ok) return NextResponse.json({ error: "無效的關聯設計變更" }, { status: 400 })
+
+    // 版本群組（更新既有文件時，沿用群組的 type/phase 並遞增版本）
+    let baseVersion = 0
+    let groupType: DocumentType | null = null
+    let groupPhase: DemandStatus | null = null
+    if (docGroup) {
+      const latest = await prisma.demandDocument.findFirst({
+        where: { demandId: id, docGroup },
+        orderBy: { version: "desc" },
+        select: { version: true, type: true, phase: true },
+      })
+      if (!latest) return NextResponse.json({ error: "找不到要更新的文件版本群組" }, { status: 400 })
+      baseVersion = latest.version
+      groupType = latest.type
+      groupPhase = latest.phase
     }
 
     const files = formData.getAll("files") as File[]
@@ -217,7 +274,9 @@ export async function POST(
     const uploadDir = path.join(process.cwd(), "uploads", "demands", id)
     await mkdir(uploadDir, { recursive: true })
 
+    const isVersioning = !!docGroup
     const savedDocuments = []
+    let vOffset = 0
     for (const file of validFiles) {
       const buffer = Buffer.from(await file.arrayBuffer())
       const safeFileName = `${Date.now()}-${file.name.replace(
@@ -227,15 +286,20 @@ export async function POST(
       const filePath = path.join(uploadDir, safeFileName)
       await writeFile(filePath, buffer)
 
+      vOffset++
       const doc = await prisma.demandDocument.create({
         data: {
           demandId: id,
-          type: docType as DocumentType,
-          phase: phase ? (phase as DemandStatus) : null,
+          type: isVersioning ? groupType! : (docType as DocumentType),
+          phase: isVersioning ? groupPhase : (phase ? (phase as DemandStatus) : null),
           fileName: file.name,
           fileUrl: `/api/uploads/demands/${id}/${safeFileName}`,
           fileSize: file.size,
           uploadedBy: auth.userId,
+          docGroup: isVersioning ? docGroup : randomUUID(),
+          version: isVersioning ? baseVersion + vOffset : 1,
+          changeNote,
+          designChangeId: dcCheck.id,
         },
       })
       savedDocuments.push(doc)

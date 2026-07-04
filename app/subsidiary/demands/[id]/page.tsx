@@ -848,11 +848,15 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             <TabsTrigger value="documents" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
               <Paperclip className="h-3.5 w-3.5 hidden sm:block" />
               文件
-              {demand.documents.filter((d) => d.type !== "GITHUB_REPO").length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
-                  {demand.documents.filter((d) => d.type !== "GITHUB_REPO").length}
-                </Badge>
-              )}
+              {(() => {
+                const visible = demand.documents.filter((d) => d.type !== "GITHUB_REPO")
+                const n = new Set(visible.map((d) => (d as unknown as { docGroup?: string | null }).docGroup || d.id)).size
+                return n > 0 ? (
+                  <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
+                    {n}
+                  </Badge>
+                ) : null
+              })()}
             </TabsTrigger>
             <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
               <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />

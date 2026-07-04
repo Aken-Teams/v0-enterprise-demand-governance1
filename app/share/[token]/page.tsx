@@ -976,11 +976,14 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
               <TabsTrigger value="documents" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
                 <Paperclip className="h-3.5 w-3.5 hidden sm:block" />
                 文件
-                {demand.documents.length > 0 && (
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1 sm:px-1.5 ml-0.5 hidden sm:inline-flex">
-                    {demand.documents.length}
-                  </Badge>
-                )}
+                {(() => {
+                  const n = new Set(demand.documents.map((d) => (d as unknown as { docGroup?: string | null }).docGroup || d.id)).size
+                  return n > 0 ? (
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1 sm:px-1.5 ml-0.5 hidden sm:inline-flex">
+                      {n}
+                    </Badge>
+                  ) : null
+                })()}
               </TabsTrigger>
               <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
                 <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />
@@ -994,6 +997,17 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
               <TabsTrigger value="design-changes" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2.5 sm:px-3">
                 <FileEdit className="h-3.5 w-3.5 hidden sm:block" />
                 設計變更
+                {(() => {
+                  const dcs = (demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []
+                  if (!dcs.length) return null
+                  const pending = dcs.some((d) => d.status === "PENDING")
+                  return (
+                    <>
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1 sm:px-1.5 ml-0.5 hidden sm:inline-flex">{dcs.length}</Badge>
+                      {pending && <span className="h-1.5 w-1.5 rounded-full bg-red-500" title="有待確認的設計變更" />}
+                    </>
+                  )
+                })()}
               </TabsTrigger>
             </TabsList>
           </div>

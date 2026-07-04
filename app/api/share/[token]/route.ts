@@ -33,6 +33,7 @@ export async function GET(
         demandManager: { select: { id: true, name: true } },
         documents: {
           orderBy: { createdAt: "desc" },
+          include: { designChange: { select: { id: true, seq: true, title: true } } },
         },
         comments: {
           include: { user: { select: { id: true, name: true } } },
@@ -62,6 +63,7 @@ export async function GET(
           },
           orderBy: { requestedAt: "desc" },
         },
+        designChanges: { select: { id: true, seq: true, title: true, status: true } },
       },
     })
 

@@ -1139,8 +1139,10 @@ export default function DemandDetailPage() {
               const needsAssignment = (currentPhase === "PRD_REVIEW" || currentPhase === "SP_REVIEW" || currentPhase === "DEVELOPING") && !demand.manager && !demand.developer
               const hasSignoff = currentPhaseSignoff != null
               const hasDesignChange = currentDesignChangeSignoffs.length > 0
+              const myDcReview = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; affectsSp: boolean } | null }).myDesignChangeReview
+              const dcRoleLabel = myDcReview ? (myDcReview.role === "BOARD" ? "董事會" : myDcReview.role === "MANAGER" ? "需求主管" : "需求窗口") : ""
 
-              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange) return null
+              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange && !myDcReview) return null
 
               return (
                 <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 sm:p-3">
@@ -1252,6 +1254,18 @@ export default function DemandDetailPage() {
                       </div>
                     )}
                   </div>
+                  {myDcReview && (
+                    <div className="mt-2.5 pt-2.5 border-t border-blue-200/70 flex items-start gap-2.5">
+                      <FileEdit className="h-4 w-4 shrink-0 text-indigo-600 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-indigo-800">您有一筆設計變更待您確認{myDcReview.affectsSp ? "（SP 調整）" : ""}</p>
+                        <p className="text-[11px] text-indigo-600/80 mt-0.5">DC-{String(myDcReview.seq).padStart(2, "0")}「{myDcReview.title}」，需您以「{dcRoleLabel}」身分審核{myDcReview.affectsSp ? "此變更的 SP 調整" : ""}。</p>
+                      </div>
+                      <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 h-8" onClick={() => setActiveTab("design-changes")}>
+                        <FileEdit className="h-3.5 w-3.5 mr-1" />前往審核
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )
             })()}
@@ -1303,27 +1317,6 @@ export default function DemandDetailPage() {
                   />
                 </div>
               ) : null
-            })()}
-
-            {/* 設計變更待審引導（例如董事會審 SP，或需求方逐條確認） */}
-            {(() => {
-              const r = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; affectsSp: boolean } | null }).myDesignChangeReview
-              if (!r) return null
-              const roleLabel = r.role === "BOARD" ? "董事會" : r.role === "MANAGER" ? "需求主管" : "需求窗口"
-              return (
-                <div className="mt-3 rounded-lg border-2 border-indigo-300 bg-indigo-50/80 p-3 sm:p-4">
-                  <div className="flex items-start gap-2.5 sm:gap-3">
-                    <FileEdit className="h-5 w-5 shrink-0 text-indigo-600 mt-px sm:mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[15px] sm:text-sm text-indigo-900">您有一筆設計變更待您確認{r.affectsSp ? "（SP 調整）" : ""}</p>
-                      <p className="text-xs text-indigo-700/80 mt-1">DC-{String(r.seq).padStart(2, "0")}「{r.title}」，需您以「{roleLabel}」身分審核{r.affectsSp ? "此變更的 SP 調整" : ""}。</p>
-                    </div>
-                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 h-9" onClick={() => setActiveTab("design-changes")}>
-                      <FileEdit className="h-3.5 w-3.5 mr-1" />前往審核
-                    </Button>
-                  </div>
-                </div>
-              )
             })()}
 
             {isRejected && (
@@ -1401,11 +1394,14 @@ export default function DemandDetailPage() {
             <TabsTrigger value="documents" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <FolderOpen className="h-3.5 w-3.5 hidden sm:block" />
               文件
-              {demand.documents.length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
-                  {demand.documents.length}
-                </Badge>
-              )}
+              {(() => {
+                const n = new Set(demand.documents.map((d) => (d as unknown as { docGroup?: string | null }).docGroup || d.id)).size
+                return n > 0 ? (
+                  <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
+                    {n}
+                  </Badge>
+                ) : null
+              })()}
             </TabsTrigger>
             <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />
@@ -2238,6 +2234,7 @@ export default function DemandDetailPage() {
                       selectedDocId={selectedDoc?.id}
                       userId={user?.id}
                       userRole={user?.role}
+                      designChanges={((demand as unknown as { designChanges?: { id: string; seq: number; title: string; status: string }[] }).designChanges ?? []).filter((dc) => dc.status !== "CANCELLED").map((dc) => ({ id: dc.id, seq: dc.seq, title: dc.title }))}
                     />
                   </CardContent>
                 </Card>

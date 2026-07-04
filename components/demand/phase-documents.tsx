@@ -12,9 +12,10 @@ import {
 import {
   FileText, FileSpreadsheet, FileImage, FileVideo2, FileAudio, File, Presentation,
   Download, Upload, Loader2, Check, Circle, ExternalLink, Link, Trash2,
-  ChevronRight, ChevronLeft,
+  ChevronRight, ChevronLeft, History, FileEdit, Plus,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import {
   STATUS_MAP,
@@ -34,6 +35,17 @@ interface Document {
   fileSize: number | null
   uploadedBy: string
   createdAt: string
+  version?: number
+  docGroup?: string | null
+  changeNote?: string | null
+  designChangeId?: string | null
+  designChange?: { id: string; seq: number; title: string } | null
+}
+
+interface DesignChangeOption {
+  id: string
+  seq: number
+  title: string
 }
 
 interface PhaseDocumentsProps {
@@ -49,6 +61,15 @@ interface PhaseDocumentsProps {
   selectedDocId?: string | null
   userId?: string
   userRole?: string
+  /** 供「關聯設計變更」下拉選單使用（選填綁定） */
+  designChanges?: DesignChangeOption[]
+}
+
+/** 版本群組：同一份邏輯文件的多個版本 */
+interface DocGroup {
+  groupId: string
+  versions: Document[] // 由新到舊
+  latest: Document
 }
 
 function getFileIconAndColor(fileName: string): { icon: typeof File; color: string } {
@@ -77,6 +98,30 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function fmtDate(iso: string) {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ""
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
+}
+
+/** 依 docGroup 分組（舊資料無 docGroup → 各自獨立），同組內由新到舊排序 */
+function groupDocs(docs: Document[]): DocGroup[] {
+  const map = new Map<string, Document[]>()
+  for (const d of docs) {
+    const key = d.docGroup || `solo:${d.id}`
+    const arr = map.get(key)
+    if (arr) arr.push(d)
+    else map.set(key, [d])
+  }
+  const groups: DocGroup[] = []
+  for (const [groupId, versions] of map) {
+    versions.sort((a, b) => (b.version || 1) - (a.version || 1))
+    groups.push({ groupId, versions, latest: versions[0] })
+  }
+  groups.sort((a, b) => new Date(b.latest.createdAt).getTime() - new Date(a.latest.createdAt).getTime())
+  return groups
+}
+
 export function PhaseDocuments({
   documents,
   currentPhase,
@@ -90,6 +135,7 @@ export function PhaseDocuments({
   selectedDocId,
   userId,
   userRole,
+  designChanges = [],
 }: PhaseDocumentsProps) {
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [uploadPhase, setUploadPhase] = useState(currentPhase)
@@ -101,10 +147,16 @@ export function PhaseDocuments({
   const [appResultUrl, setAppResultUrl] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [activePhase, setActivePhase] = useState<string | null>(null)
+  // 版本更新相關
+  const [changeNote, setChangeNote] = useState("")
+  const [uploadDcId, setUploadDcId] = useState<string>("")
+  const [versioning, setVersioning] = useState<{ groupId: string; fileName: string; nextVersion: number; typeLabel: string; phaseLabel: string; isLink: boolean } | null>(null)
+  // 每個群組目前檢視的版本
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({})
 
   const LINK_TYPES = new Set(["APP_RESULT", "GITHUB_REPO"])
   const INTERNAL_ONLY_TYPES = new Set(["GITHUB_REPO"])
-  const isLinkType = LINK_TYPES.has(uploadType)
+  const isLinkType = versioning ? versioning.isLink : LINK_TYPES.has(uploadType)
   const isSubsidiary = userRole === "subsidiary"
 
   // Bind external upload trigger button
@@ -112,10 +164,41 @@ export function PhaseDocuments({
     if (!uploadTriggerSelector) return
     const el = document.querySelector(uploadTriggerSelector)
     if (!el) return
-    const handler = () => setShowUploadDialog(true)
+    const handler = () => openNewUpload()
     el.addEventListener("click", handler)
     return () => el.removeEventListener("click", handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadTriggerSelector])
+
+  const resetUploadFields = () => {
+    setSelectedFiles([])
+    setAppResultUrl("")
+    setChangeNote("")
+    setUploadDcId("")
+    setUploadError("")
+  }
+
+  const openNewUpload = () => {
+    setVersioning(null)
+    setUploadPhase(activePhase && activePhase !== "OTHER" ? activePhase : currentPhase)
+    setUploadType("ATTACHMENT")
+    resetUploadFields()
+    setShowUploadDialog(true)
+  }
+
+  const openVersionUpload = (group: DocGroup) => {
+    const latest = group.latest
+    setVersioning({
+      groupId: group.groupId,
+      fileName: latest.fileName,
+      nextVersion: (latest.version || 1) + 1,
+      typeLabel: DOCUMENT_TYPE_LABELS[latest.type] || latest.type,
+      phaseLabel: latest.phase ? (STATUS_MAP[latest.phase]?.label || latest.phase) : "其他",
+      isLink: LINK_TYPES.has(latest.type),
+    })
+    resetUploadFields()
+    setShowUploadDialog(true)
+  }
 
   const getPhaseDocuments = (phase: string) =>
     documents.filter((d) => d.phase === phase && !(isSubsidiary && INTERNAL_ONLY_TYPES.has(d.type)))
@@ -141,8 +224,14 @@ export function PhaseDocuments({
     setUploadError("")
     try {
       const formData = new FormData()
-      if (uploadPhase !== "OTHER") formData.set("phase", uploadPhase)
-      formData.set("type", uploadType)
+      if (versioning) {
+        formData.set("docGroup", versioning.groupId)
+      } else {
+        if (uploadPhase !== "OTHER") formData.set("phase", uploadPhase)
+        formData.set("type", uploadType)
+      }
+      if (changeNote.trim()) formData.set("changeNote", changeNote.trim())
+      if (uploadDcId) formData.set("designChangeId", uploadDcId)
       for (const file of selectedFiles) {
         formData.append("files", file)
       }
@@ -153,8 +242,8 @@ export function PhaseDocuments({
       })
       if (res.ok) {
         setShowUploadDialog(false)
-        setSelectedFiles([])
-        setUploadError("")
+        resetUploadFields()
+        setVersioning(null)
         onRefresh()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -172,15 +261,24 @@ export function PhaseDocuments({
     setUploading(true)
     setUploadError("")
     try {
+      const payload: Record<string, unknown> = { url: appResultUrl.trim() }
+      if (versioning) {
+        payload.docGroup = versioning.groupId
+      } else {
+        payload.phase = uploadPhase !== "OTHER" ? uploadPhase : null
+        payload.type = uploadType
+      }
+      if (changeNote.trim()) payload.changeNote = changeNote.trim()
+      if (uploadDcId) payload.designChangeId = uploadDcId
       const res = await fetch(`/api/demands/${demandId}/documents`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ phase: uploadPhase !== "OTHER" ? uploadPhase : null, type: uploadType, url: appResultUrl.trim() }),
+        body: JSON.stringify(payload),
       })
       if (res.ok) {
         setShowUploadDialog(false)
-        setAppResultUrl("")
-        setUploadError("")
+        resetUploadFields()
+        setVersioning(null)
         onRefresh()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -240,81 +338,165 @@ export function PhaseDocuments({
     return unique.map((t) => ({ value: t, label: DOCUMENT_TYPE_LABELS[t] || t }))
   }
 
-  const renderDocRow = (doc: Document) => {
-    const isExternalLink = LINK_TYPES.has(doc.type) && doc.fileUrl?.startsWith("http")
+  const renderDocGroup = (group: DocGroup) => {
+    const activeId = selectedVersions[group.groupId] || group.latest.id
+    const active = group.versions.find((v) => v.id === activeId) || group.latest
+    const hasVersions = group.versions.length > 1
+    const isViewingHistory = active.id !== group.latest.id
+
+    const isExternalLink = LINK_TYPES.has(active.type) && active.fileUrl?.startsWith("http")
     const { icon: Icon, color: iconColor } = isExternalLink
       ? { icon: ExternalLink, color: "text-blue-500" }
-      : getFileIconAndColor(doc.fileName)
-    const isOwnDoc = userId && doc.uploadedBy === userId
+      : getFileIconAndColor(active.fileName)
+    const isOwnDoc = userId && active.uploadedBy === userId
     const isAdmin = userRole === "admin"
     const docCanDownload = canDownload && (isAdmin || isOwnDoc)
     const docCanDelete = canUpload && (isAdmin || isOwnDoc)
+    const linkedDc = active.designChange
+
     return (
       <div
-        key={doc.id}
+        key={group.groupId}
         className={cn(
-          "flex items-center justify-between rounded-md border px-2 sm:px-3 py-1.5 sm:py-2.5 transition-colors overflow-hidden",
-          onDocumentSelect && "cursor-pointer hover:bg-muted/50",
-          selectedDocId === doc.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
+          "rounded-md border transition-colors overflow-hidden",
+          selectedDocId === active.id && "ring-2 ring-primary/40 bg-primary/[0.03]",
         )}
-        onClick={() => onDocumentSelect?.(doc)}
       >
-        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1">
-          <Icon className={cn("h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0", iconColor)} />
-          <div className="min-w-0 flex-1">
-            {isExternalLink ? (
-              <a
-                href={doc.fileUrl!}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs sm:text-sm font-medium text-blue-600 hover:underline truncate block"
-                onClick={(e) => e.stopPropagation()}
+        {/* Main row */}
+        <div
+          className={cn(
+            "flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2.5 overflow-hidden",
+            onDocumentSelect && "cursor-pointer hover:bg-muted/50",
+          )}
+          onClick={() => onDocumentSelect?.(active)}
+        >
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1">
+            <Icon className={cn("h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0", iconColor)} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {isExternalLink ? (
+                  <a
+                    href={active.fileUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs sm:text-sm font-medium text-blue-600 hover:underline truncate"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {active.fileUrl}
+                  </a>
+                ) : (
+                  <p className="text-xs sm:text-sm font-medium truncate">{active.fileName}</p>
+                )}
+                {!hasVersions && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] h-4 px-1 rounded shrink-0 font-semibold tabular-nums bg-primary/10 text-primary"
+                  >
+                    v{active.version || 1}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                {DOCUMENT_TYPE_LABELS[active.type] || active.type}
+                {active.fileSize ? ` · ${formatFileSize(active.fileSize)}` : ""}
+                {` · ${fmtDate(active.createdAt)}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-0 sm:gap-0.5 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
+            {/* Version switcher */}
+            {hasVersions && (
+              <Select
+                value={activeId}
+                onValueChange={(v) => setSelectedVersions((prev) => ({ ...prev, [group.groupId]: v }))}
               >
-                {doc.fileUrl}
-              </a>
-            ) : (
-              <p className="text-xs sm:text-sm font-medium truncate">{doc.fileName}</p>
+                <SelectTrigger className={cn(
+                  "h-6 sm:h-7 w-auto gap-1 px-1.5 text-[10px] sm:text-xs shrink-0 [&>svg:last-child]:h-3 [&>svg:last-child]:w-3",
+                  isViewingHistory ? "border-amber-300 bg-amber-50 text-amber-700" : "border-muted-foreground/20",
+                )}>
+                  <History className="h-3 w-3 shrink-0 opacity-70" />
+                  <span className="font-semibold tabular-nums">v{active.version || 1}</span>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {group.versions.map((v) => (
+                    <SelectItem key={v.id} value={v.id} className="text-xs">
+                      <span className="font-semibold tabular-nums">v{v.version || 1}</span>
+                      <span className="text-muted-foreground ml-1.5">{fmtDate(v.createdAt)}</span>
+                      {v.id === group.latest.id && <span className="text-primary ml-1">· 最新</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
-            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-              {DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
-              {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
-            </p>
+            {docCanDownload && active.fileUrl && !isExternalLink && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 sm:h-8 sm:w-8"
+                onClick={() => handleDownload(active)}
+                disabled={downloadingId === active.id}
+                title="下載 PDF"
+              >
+                {downloadingId === active.id
+                  ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                  : <Download className="h-3 w-3 sm:h-4 sm:w-4" />}
+              </Button>
+            )}
+            {docCanDownload && isExternalLink && (
+              <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-8 sm:w-8" asChild>
+                <a href={active.fileUrl!} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3 w-3 sm:h-4 sm:w-4" />
+                </a>
+              </Button>
+            )}
+            {canUpload && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/60 hover:text-primary"
+                onClick={() => openVersionUpload(group)}
+                title="上傳新版本"
+              >
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              </Button>
+            )}
+            {docCanDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/40 hover:text-destructive"
+                onClick={() => handleDelete(active.id)}
+                disabled={deletingId === active.id}
+                title="刪除此版本"
+              >
+                {deletingId === active.id ? <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" /> : <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+              </Button>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-0 sm:gap-0.5 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
-          {docCanDownload && doc.fileUrl && !isExternalLink && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 sm:h-8 sm:w-8"
-              onClick={() => handleDownload(doc)}
-              disabled={downloadingId === doc.id}
-              title="下載 PDF"
-            >
-              {downloadingId === doc.id
-                ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                : <Download className="h-3 w-3 sm:h-4 sm:w-4" />}
-            </Button>
-          )}
-          {docCanDownload && isExternalLink && (
-            <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-8 sm:w-8" asChild>
-              <a href={doc.fileUrl!} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3 w-3 sm:h-4 sm:w-4" />
-              </a>
-            </Button>
-          )}
-          {docCanDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/40 hover:text-destructive"
-              onClick={() => handleDelete(doc.id)}
-              disabled={deletingId === doc.id}
-            >
-              {deletingId === doc.id ? <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" /> : <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
-            </Button>
-          )}
-        </div>
+
+        {/* Change note / linked design change for the active version */}
+        {(active.changeNote || linkedDc) && (
+          <div className="border-t bg-muted/20 px-2.5 sm:px-3 py-1.5 space-y-1">
+            {active.changeNote && (
+              <div className="flex items-start gap-1.5">
+                <FileEdit className="h-3 w-3 text-muted-foreground/60 mt-0.5 shrink-0" />
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
+                  <span className="font-medium text-foreground/70">v{active.version || 1} 更新說明：</span>
+                  {active.changeNote}
+                </p>
+              </div>
+            )}
+            {linkedDc && (
+              <div className="flex items-center gap-1.5">
+                <History className="h-3 w-3 text-indigo-500/70 shrink-0" />
+                <Badge variant="outline" className="text-[10px] h-4 px-1.5 bg-indigo-50 text-indigo-700 border-indigo-200 font-normal">
+                  因 DC-{String(linkedDc.seq).padStart(2, "0")}「{linkedDc.title}」而更新
+                </Badge>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -333,13 +515,14 @@ export function PhaseDocuments({
   ]
 
   const activeData = allPhases.find((p) => p.key === activePhase)
+  const activeGroups = activeData ? groupDocs(activeData.docs) : []
 
   return (
     <div className="min-w-0 overflow-hidden">
       {!activeData ? (
         /* ── Phase list ── */
         allPhases.map((phase, idx) => {
-          const count = phase.docs.length
+          const groupCount = groupDocs(phase.docs).length
           const reqDone = phase.required.filter((r) => r.uploaded).length
           const reqTotal = phase.required.length
           return (
@@ -356,9 +539,9 @@ export function PhaseDocuments({
                 <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                   {phase.label}
                 </span>
-                {count > 0 && (
+                {groupCount > 0 && (
                   <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full font-medium">
-                    {count}
+                    {groupCount}
                   </Badge>
                 )}
                 <span className="flex-1" />
@@ -393,10 +576,21 @@ export function PhaseDocuments({
               style={{ backgroundColor: activeData.color }}
             />
             <span className="text-xs sm:text-sm font-semibold">{activeData.label}</span>
-            {activeData.docs.length > 0 && (
+            {activeGroups.length > 0 && (
               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full font-medium">
-                {activeData.docs.length}
+                {activeGroups.length}
               </Badge>
+            )}
+            {canUpload && activeData.key !== "OTHER" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-6 sm:h-7 text-[11px] sm:text-xs px-2"
+                onClick={() => { setActivePhase(activeData.key); openNewUpload() }}
+              >
+                <Upload className="h-3 w-3 mr-1" />
+                上傳
+              </Button>
             )}
           </div>
 
@@ -419,10 +613,10 @@ export function PhaseDocuments({
                 ))}
               </div>
             )}
-            {/* Document list */}
-            {activeData.docs.length > 0 ? (
+            {/* Document groups */}
+            {activeGroups.length > 0 ? (
               <div className="space-y-1.5 min-w-0">
-                {activeData.docs.map(renderDocRow)}
+                {activeGroups.map(renderDocGroup)}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground/40 text-center py-4">尚無文件</p>
@@ -432,46 +626,67 @@ export function PhaseDocuments({
       )}
 
       {/* Upload Dialog */}
-      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-md p-4 sm:p-6">
+      <Dialog open={showUploadDialog} onOpenChange={(open) => { setShowUploadDialog(open); if (!open) { resetUploadFields(); setVersioning(null) } }}>
+        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{isLinkType ? `新增${DOCUMENT_TYPE_LABELS[uploadType] || "連結"}` : "上傳文件"}</DialogTitle>
+            <DialogTitle>
+              {versioning ? "上傳新版本" : isLinkType ? `新增${DOCUMENT_TYPE_LABELS[uploadType] || "連結"}` : "上傳文件"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">所屬階段</label>
-              <Select value={uploadPhase} onValueChange={setUploadPhase}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PIPELINE_STEPS.map((phase) => (
-                    <SelectItem key={phase} value={phase}>
-                      {STATUS_MAP[phase]?.label}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="OTHER">其他</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">文件類型</label>
-              <Select value={uploadType} onValueChange={setUploadType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTypes().map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {versioning ? (
+              /* 更新既有文件 → 顯示鎖定的目標資訊 */
+              <div className="rounded-lg border border-primary/30 bg-primary/[0.04] p-3 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <History className="h-3.5 w-3.5" />
+                  更新文件
+                </div>
+                <p className="text-sm font-medium truncate">{versioning.fileName}</p>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-muted-foreground">{versioning.phaseLabel} · {versioning.typeLabel}</span>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-primary/10 text-primary font-semibold">新版本 v{versioning.nextVersion}</Badge>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-sm font-medium">所屬階段</label>
+                  <Select value={uploadPhase} onValueChange={setUploadPhase}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PIPELINE_STEPS.map((phase) => (
+                        <SelectItem key={phase} value={phase}>
+                          {STATUS_MAP[phase]?.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="OTHER">其他</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">文件類型</label>
+                  <Select value={uploadType} onValueChange={setUploadType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTypes().map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
             {isLinkType ? (
               <div>
-                <label className="text-sm font-medium">{DOCUMENT_TYPE_LABELS[uploadType] || "連結"}</label>
+                <label className="text-sm font-medium">{versioning?.typeLabel || DOCUMENT_TYPE_LABELS[uploadType] || "連結"}</label>
                 <Input
                   className="mt-1"
                   placeholder={uploadType === "GITHUB_REPO" ? "https://github.com/..." : "https://..."}
@@ -485,7 +700,7 @@ export function PhaseDocuments({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  multiple
+                  multiple={!versioning}
                   className="hidden"
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.jpg,.jpeg,.png,.gif,.webp,.mp3,.wav,.ogg,.mp4,.webm"
                   onChange={(e) => {
@@ -501,7 +716,8 @@ export function PhaseDocuments({
                       const limitMB = videoExts.has(ext) ? 50 : 20
                       setUploadError(`檔案「${oversized[0].name}」超過 ${limitMB}MB 限制`)
                     }
-                    setSelectedFiles(selected.filter((f) => f.size <= getLimit(f)))
+                    const ok = selected.filter((f) => f.size <= getLimit(f))
+                    setSelectedFiles(versioning ? ok.slice(0, 1) : ok)
                   }}
                 />
                 <Button
@@ -512,8 +728,41 @@ export function PhaseDocuments({
                   <Upload className="h-4 w-4 mr-2" />
                   {selectedFiles.length > 0
                     ? `已選擇 ${selectedFiles.length} 個檔案`
-                    : "點擊選擇檔案"}
+                    : versioning ? "點擊選擇新版本檔案" : "點擊選擇檔案"}
                 </Button>
+              </div>
+            )}
+
+            {/* 更新說明 —— 讓相關人知道為什麼更新 */}
+            <div>
+              <label className="text-sm font-medium">更新說明{versioning ? "" : "（選填）"}</label>
+              <Textarea
+                className="mt-1 text-sm"
+                rows={2}
+                placeholder="說明這次文件為什麼更新、更新了什麼內容…"
+                value={changeNote}
+                onChange={(e) => setChangeNote(e.target.value)}
+              />
+            </div>
+
+            {/* 關聯設計變更（選填） */}
+            {designChanges.length > 0 && (
+              <div>
+                <label className="text-sm font-medium">關聯設計變更（選填）</label>
+                <Select value={uploadDcId || "none"} onValueChange={(v) => setUploadDcId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="不關聯" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">不關聯</SelectItem>
+                    {designChanges.map((dc) => (
+                      <SelectItem key={dc.id} value={dc.id}>
+                        DC-{String(dc.seq).padStart(2, "0")}「{dc.title}」
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">若此次更新是因某個設計變更造成，可在此標註以利追溯。</p>
               </div>
             )}
           </div>
@@ -521,16 +770,16 @@ export function PhaseDocuments({
             <p className="text-sm text-destructive font-medium">{uploadError}</p>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUploadDialog(false)}>取消</Button>
+            <Button variant="outline" onClick={() => { setShowUploadDialog(false); resetUploadFields(); setVersioning(null) }}>取消</Button>
             {isLinkType ? (
               <Button onClick={handleSubmitLink} disabled={!appResultUrl.trim() || uploading}>
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link className="h-4 w-4 mr-1" />}
-                儲存連結
+                {versioning ? "儲存新版本" : "儲存連結"}
               </Button>
             ) : (
               <Button onClick={handleUpload} disabled={selectedFiles.length === 0 || uploading}>
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                上傳
+                {versioning ? "上傳新版本" : "上傳"}
               </Button>
             )}
           </DialogFooter>

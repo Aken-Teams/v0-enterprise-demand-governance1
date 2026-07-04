@@ -332,8 +332,16 @@ model DemandDocument {
   signoffId  String? /// 簽核附件
   signoff    PhaseSignoff? @relation(fields: [signoffId], references: [id], onDelete: SetNull)
 
+  // ── 版本化 ──
+  version        Int           @default(1) /// 版本號（同 docGroup 內遞增）
+  docGroup       String? /// 版本群組 id（同一份邏輯文件的多版本共用；null = 舊資料/獨立檔）
+  changeNote     String?       @db.Text /// 此版本的更新說明（為什麼更新）
+  designChangeId String? /// 選填：此版本由哪個設計變更造成
+  designChange   DesignChange? @relation("DocDesignChange", fields: [designChangeId], references: [id], onDelete: SetNull)
+
   @@index([demandId])
   @@index([demandId, phase])
+  @@index([docGroup])
   @@map("demand_documents")
 }
 
@@ -535,6 +543,7 @@ model DesignChange {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   revisions      DesignChangeRevision[]
+  docVersions    DemandDocument[]   @relation("DocDesignChange") /// 因此設計變更而更新的文件版本
 
   @@unique([demandId, seq])
   @@index([demandId])
