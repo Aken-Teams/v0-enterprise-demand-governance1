@@ -574,6 +574,7 @@ model DesignChangeChecklistItem {
   text       String   @db.Text
   devChecked Boolean  @default(false) /// 開發端在 Markdown 標記的 [x]
   feedback   DesignChangeItemFeedback[]
+  documents  DesignChangeDocument[]
 
   @@index([revisionId])
   @@map("design_change_checklist_items")
@@ -622,12 +623,15 @@ model DesignChangeDocument {
   fileSize     Int?
   docGroup     String?  /// 同一份邏輯檔案的版本群組（null = 獨立檔）
   fileVersion  Int      @default(1)
+  checklistItemId String? /// 綁定到某一條 checklist（null = 版本層級附件）
+  checklistItem   DesignChangeChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
   uploadedById String
   uploadedBy   User     @relation("DCDocUploader", fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
 
   @@index([revisionId])
   @@index([docGroup])
+  @@index([checklistItemId])
   @@map("design_change_documents")
 }
 

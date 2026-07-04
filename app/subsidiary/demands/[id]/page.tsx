@@ -382,6 +382,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("overview")
   const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
@@ -772,6 +773,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             kind={pendingSignoffKind}
             demandId={demand.id}
             token={token}
+            blocked={pendingSignoffKind !== "DESIGN_CHANGE" && ((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
+            onGoToDesignChange={() => setActiveTab("design-changes")}
             onComplete={() => {
               if (pendingSignoffKind === "DESIGN_CHANGE") setJustApprovedDc(true)
               fetchDemand()
@@ -795,7 +798,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
         })()}
 
         {/* ── Tabs ── */}
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="overflow-x-auto scrollbar-hide">
           <TabsList className="inline-flex w-max sm:w-full justify-start bg-muted/50 h-10 p-1">
             <TabsTrigger value="overview" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">

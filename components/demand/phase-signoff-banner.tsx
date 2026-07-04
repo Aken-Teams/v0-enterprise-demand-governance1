@@ -27,6 +27,10 @@ interface PhaseSignoffBannerProps {
   inline?: boolean
   /** "PHASE" (default) or "DESIGN_CHANGE" */
   kind?: "PHASE" | "DESIGN_CHANGE"
+  /** 有未通過的設計變更時，鎖住階段簽核 */
+  blocked?: boolean
+  blockedMessage?: string
+  onGoToDesignChange?: () => void
 }
 
 function formatFileSize(bytes: number) {
@@ -42,6 +46,9 @@ export function PhaseSignoffBanner({
   onComplete,
   inline,
   kind = "PHASE",
+  blocked = false,
+  blockedMessage,
+  onGoToDesignChange,
 }: PhaseSignoffBannerProps) {
   const [comment, setComment] = useState("")
   const [loading, setLoading] = useState(false)
@@ -212,7 +219,15 @@ export function PhaseSignoffBanner({
         </div>
       )}
 
-      {!showForm ? (
+      {blocked && !isDesignChange && !isBoardOverride ? (
+            <div className={cn("flex items-center gap-1.5 text-xs text-indigo-700 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5", !inline && "mt-2")}>
+              <FileEdit className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 min-w-0">{blockedMessage || "有尚未通過的設計變更，需先完成審核並通過才能進行此階段確認。"}</span>
+              {onGoToDesignChange && (
+                <button onClick={onGoToDesignChange} className="font-medium hover:underline shrink-0 whitespace-nowrap">前往設計變更 →</button>
+              )}
+            </div>
+          ) : !showForm ? (
             <div className={cn("flex items-center gap-2 sm:justify-end", !inline && "mt-3")}>
               <Button
                 size="sm"

@@ -99,6 +99,20 @@ export async function PATCH(
       return NextResponse.json({ error: "此簽核已處理" }, { status: 400 })
     }
 
+    // 階段簽核前置條件：若有尚未通過的設計變更，須先完成設計變更審核
+    if ((signoff.kind ?? "PHASE") === "PHASE") {
+      const blockingDC = await prisma.designChange.findFirst({
+        where: { demandId: id, status: { in: ["PENDING", "REJECTED"] } },
+        select: { seq: true, status: true },
+      })
+      if (blockingDC) {
+        return NextResponse.json(
+          { error: `請先完成設計變更審核（DC-${String(blockingDC.seq).padStart(2, "0")} ${blockingDC.status === "PENDING" ? "待確認" : "已駁回"}），通過後才能進行階段簽核` },
+          { status: 409 }
+        )
+      }
+    }
+
     // Admin write permission check (view-only admins cannot respond to signoffs)
     if (auth.role === "admin") {
       const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, {

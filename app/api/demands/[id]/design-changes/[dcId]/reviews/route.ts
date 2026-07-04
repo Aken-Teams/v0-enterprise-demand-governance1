@@ -35,13 +35,18 @@ export async function POST(
     const overallComment = (formData.get("comment") as string | null)?.trim() || null
     let items: ItemInput[] = []
     try { items = JSON.parse((formData.get("items") as string) || "[]") } catch { items = [] }
-    const files = (formData.getAll("files") as File[]).filter((f) => f.size > 0)
+    // 每個檔案對應的 checklistItemId（與 files 同序，"" = 版本層級附件）
+    let fileItemIds: string[] = []
+    try { fileItemIds = JSON.parse((formData.get("fileItemIds") as string) || "[]") } catch { fileItemIds = [] }
+    const rawFiles = formData.getAll("files") as File[]
+    // 保留原始索引以對應 fileItemIds，再濾掉空檔
+    const files = rawFiles.map((f, i) => ({ file: f, itemId: fileItemIds[i] || null })).filter((x) => x.file.size > 0)
 
     if (!revisionId) return NextResponse.json({ error: "缺少版本" }, { status: 400 })
     if (decision !== "APPROVED" && decision !== "REJECTED") {
       return NextResponse.json({ error: "請選擇通過或駁回" }, { status: 400 })
     }
-    for (const file of files) {
+    for (const { file } of files) {
       if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: `檔案「${file.name}」超過 10MB 限制` }, { status: 400 })
       if (!ALLOWED_MIME_TYPES.has(file.type)) return NextResponse.json({ error: `檔案「${file.name}」格式不支援` }, { status: 400 })
       if (file.type === "application/octet-stream") {
@@ -84,6 +89,14 @@ export async function POST(
     if (decision === "REJECTED" && !overallComment && !items.some((it) => it.mark === "CROSS" || it.mark === "WARN")) {
       return NextResponse.json({ error: "駁回請填寫總回應或標記問題項目" }, { status: 400 })
     }
+    // 通過必須每一條 checklist 都確認
+    if (decision === "APPROVED") {
+      const confirmed = new Set(items.filter((it) => it.mark === "CONFIRMED").map((it) => it.itemId))
+      const allConfirmed = revision.items.every((it) => confirmed.has(it.id))
+      if (!allConfirmed) {
+        return NextResponse.json({ error: "需全部檢查項目都確認後才能通過" }, { status: 400 })
+      }
+    }
 
     const now = new Date()
     await prisma.$transaction(async (tx) => {
@@ -108,11 +121,11 @@ export async function POST(
       }
     })
 
-    // 審核人附件（存為該版本的文件，uploadedBy = 審核人）
+    // 審核人附件（存為該版本的文件，uploadedBy = 審核人；可綁定 checklist 項目）
     if (files.length > 0) {
       const uploadDir = path.join(process.cwd(), "uploads", "demands", id)
       await mkdir(uploadDir, { recursive: true })
-      for (const file of files) {
+      for (const { file, itemId } of files) {
         const buffer = Buffer.from(await file.arrayBuffer())
         const safeFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._\-一-鿿]/g, "_")}`
         await writeFile(path.join(uploadDir, safeFileName), buffer)
@@ -120,6 +133,7 @@ export async function POST(
           data: {
             revisionId, fileName: file.name, fileUrl: `/api/uploads/demands/${id}/${safeFileName}`,
             fileSize: file.size, docGroup: crypto.randomUUID(), fileVersion: 1, uploadedById: auth.userId,
+            checklistItemId: itemId && validItemIds.has(itemId) ? itemId : null,
           },
         })
       }

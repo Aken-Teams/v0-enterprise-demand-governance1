@@ -1270,6 +1270,8 @@ export default function DemandDetailPage() {
                     demandId={demand.id}
                     token={token}
                     onComplete={fetchDemand}
+                    blocked={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
+                    onGoToDesignChange={() => setActiveTab("design-changes")}
                   />
                 </div>
               )
