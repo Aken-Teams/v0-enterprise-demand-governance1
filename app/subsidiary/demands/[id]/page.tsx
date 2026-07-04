@@ -36,6 +36,7 @@ import {
   Trash2,
   Copy,
   XCircle,
+  FileEdit,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -43,6 +44,7 @@ import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
+import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
@@ -830,11 +832,27 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
               <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />
               簽核紀錄
-              {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
-                  {demand.phaseSignoffs.length}
-                </Badge>
-              )}
+              {(() => {
+                const c = demand.phaseSignoffs?.filter((s: { targetUserId: string | null; status: string }) => s.targetUserId || s.status !== "PENDING").length ?? 0
+                return c > 0 ? (
+                  <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">{c}</Badge>
+                ) : null
+              })()}
+            </TabsTrigger>
+            <TabsTrigger value="design-changes" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm">
+              <FileEdit className="h-3.5 w-3.5 hidden sm:block" />
+              設計變更
+              {(() => {
+                const dcs = (demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []
+                if (!dcs.length) return null
+                const pending = dcs.some((d) => d.status === "PENDING")
+                return (
+                  <>
+                    <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">{dcs.length}</Badge>
+                    {pending && <span className="h-1.5 w-1.5 rounded-full bg-red-500" title="有待確認的設計變更" />}
+                  </>
+                )
+              })()}
             </TabsTrigger>
           </TabsList>
           </div>
@@ -1663,6 +1681,20 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ══════ Tab: 設計變更 ══════ */}
+          <TabsContent value="design-changes" className="mt-5">
+            <DesignChangeTab
+              demandId={demand.id}
+              demandNumber={demand.demandNumber}
+              phaseLabel={statusInfo.label}
+              token={token}
+              currentUserId={user?.id}
+              canManage={false}
+              watermarkBg={watermarkBg}
+              onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}
+            />
           </TabsContent>
         </Tabs>
       </div>

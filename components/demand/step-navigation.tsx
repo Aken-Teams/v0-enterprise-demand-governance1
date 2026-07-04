@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -170,6 +171,9 @@ export function StepNavigation({
       if (res.ok) {
         setShowConfirm(false)
         onStatusChange(targetStatus!)
+      } else {
+        const e = await res.json().catch(() => ({}))
+        toast.error(e.error || "推進失敗")
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
@@ -192,6 +196,9 @@ export function StepNavigation({
       if (res.ok) {
         setShowClosingWizard(false)
         onStatusChange("CLOSED")
+      } else {
+        const e = await res.json().catch(() => ({}))
+        toast.error(e.error || "結案失敗")
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
@@ -224,6 +231,9 @@ export function StepNavigation({
         setShowForceDialog(false)
         setForceComment("")
         onStatusChange(targetStatus!)
+      } else {
+        const e = await res.json().catch(() => ({}))
+        toast.error(e.error || "推進失敗")
       }
     } catch { /* ignore */ } finally {
       setLoading(false)

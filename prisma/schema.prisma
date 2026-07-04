@@ -35,6 +35,22 @@ enum DemandStatus {
   CANCELLED   // 已取消（軟取消，保留記錄、釋放 SP，可重新啟動）
 }
 
+/// 設計變更 / 逐條回應狀態
+enum DesignChangeStatus {
+  PENDING    // 待確認
+  APPROVED   // 已通過
+  REJECTED   // 已駁回
+  CANCELLED  // 已撤回
+}
+
+/// 需求方對 checklist 每一條的標記
+enum ChecklistMark {
+  PENDING    // 尚未回應
+  CONFIRMED  // 勾選：確認沒問題
+  CROSS      // 叉叉：有問題
+  WARN       // 驚嘆號：有疑慮
+}
+
 enum DemandPriority {
   low
   medium
@@ -179,6 +195,11 @@ model User {
   signoffRequests    PhaseSignoff[]  @relation("SignoffRequester")
   signoffResponses   PhaseSignoff[]  @relation("SignoffResponder")
   signoffTargets     PhaseSignoff[]  @relation("SignoffTarget")
+  designChangesCreated   DesignChange[]             @relation("DCCreator")
+  designRevSubmitted     DesignChangeRevision[]     @relation("DCRevSubmitter")
+  designItemFeedback     DesignChangeItemFeedback[] @relation("DCItemReviewer")
+  designReviews          DesignChangeReview[]       @relation("DCReviewer")
+  designDocsUploaded     DesignChangeDocument[]     @relation("DCDocUploader")
   createdShares      DemandShare[]
   auditLogs          AuditLog[]
   sentMailLogs       MailLog[]
@@ -270,6 +291,7 @@ model Demand {
   accessGrants      DemandAccess[]
   adminAccessGrants AdminAccess[]
   phaseSignoffs     PhaseSignoff[]
+  designChanges     DesignChange[]
   shares            DemandShare[]
   auditLogs         AuditLog[]
   mailLogs          MailLog[]
@@ -496,6 +518,117 @@ model PhaseSignoff {
   @@index([demandId, kind])
   @@index([status])
   @@map("phase_signoffs")
+}
+
+/// 設計變更主體（一個變更主題，可反覆修訂累積版本 v1/v2/v3）
+model DesignChange {
+  id             String             @id @default(cuid())
+  demandId       String
+  demand         Demand             @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  seq            Int                /// 需求內序號 → DC-01, DC-02
+  title          String
+  phase          DemandStatus       /// 提出時所在階段
+  status         DesignChangeStatus @default(PENDING) /// 追隨最新版本狀態
+  currentVersion Int                @default(1)
+  createdById    String
+  createdBy      User               @relation("DCCreator", fields: [createdById], references: [id])
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  revisions      DesignChangeRevision[]
+
+  @@unique([demandId, seq])
+  @@index([demandId])
+  @@map("design_changes")
+}
+
+/// 設計變更版本（每次送出/修訂 = 一個版本，保留當時快照）
+model DesignChangeRevision {
+  id             String             @id @default(cuid())
+  designChangeId String
+  designChange   DesignChange       @relation(fields: [designChangeId], references: [id], onDelete: Cascade)
+  version        Int
+  summary        String             @db.Text /// 變更摘要說明 (Markdown)
+  checklistMd    String?            @db.Text /// checklist 原始 Markdown
+  affectsSp      Boolean            @default(false) /// 是否影響 SP → 需董事會加入審核
+  spNote         String?            @db.Text /// SP 影響說明
+  status         DesignChangeStatus @default(PENDING)
+  submittedById  String
+  submittedBy    User               @relation("DCRevSubmitter", fields: [submittedById], references: [id])
+  submittedAt    DateTime           @default(now())
+  decidedAt      DateTime?
+  items          DesignChangeChecklistItem[]
+  reviews        DesignChangeReview[]
+  documents      DesignChangeDocument[]
+
+  @@unique([designChangeId, version])
+  @@index([designChangeId])
+  @@map("design_change_revisions")
+}
+
+/// checklist 逐條（由貼上的 Markdown 拆解而成）
+model DesignChangeChecklistItem {
+  id         String   @id @default(cuid())
+  revisionId String
+  revision   DesignChangeRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  orderIndex Int
+  text       String   @db.Text
+  devChecked Boolean  @default(false) /// 開發端在 Markdown 標記的 [x]
+  feedback   DesignChangeItemFeedback[]
+
+  @@index([revisionId])
+  @@map("design_change_checklist_items")
+}
+
+/// 需求方對每一條 checklist 的回應（確認 / 有問題 / 疑慮 + 說明）
+model DesignChangeItemFeedback {
+  id         String        @id @default(cuid())
+  itemId     String
+  item       DesignChangeChecklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  reviewerId String
+  reviewer   User          @relation("DCItemReviewer", fields: [reviewerId], references: [id])
+  mark       ChecklistMark @default(PENDING)
+  comment    String?       @db.Text /// 問題點說明（非確認時填）
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([itemId, reviewerId])
+  @@index([itemId])
+  @@map("design_change_item_feedback")
+}
+
+/// 審核人對整個版本的裁決（通過 / 駁回 + 總回應）
+model DesignChangeReview {
+  id         String             @id @default(cuid())
+  revisionId String
+  revision   DesignChangeRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  reviewerId String
+  reviewer   User               @relation("DCReviewer", fields: [reviewerId], references: [id])
+  role       String             /// REQUESTER / MANAGER / BOARD
+  decision   DesignChangeStatus @default(PENDING)
+  comment    String?            @db.Text
+  decidedAt  DateTime?
+
+  @@unique([revisionId, reviewerId])
+  @@index([revisionId])
+  @@map("design_change_reviews")
+}
+
+/// 設計變更附件（綁定版本快照；同一份檔可用 docGroup + fileVersion 換版回溯）
+model DesignChangeDocument {
+  id           String   @id @default(cuid())
+  revisionId   String
+  revision     DesignChangeRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  fileName     String
+  fileUrl      String?  @db.Text
+  fileSize     Int?
+  docGroup     String?  /// 同一份邏輯檔案的版本群組（null = 獨立檔）
+  fileVersion  Int      @default(1)
+  uploadedById String
+  uploadedBy   User     @relation("DCDocUploader", fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([revisionId])
+  @@index([docGroup])
+  @@map("design_change_documents")
 }
 
 /// 需求分享短網址

@@ -30,7 +30,7 @@ import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
-import { DesignChangeDialog } from "@/components/demand/design-change-dialog"
+import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { NotifySignersDialog } from "@/components/demand/notify-signers-dialog"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
@@ -399,7 +399,6 @@ export default function DemandDetailPage() {
   const [justApprovedDc, setJustApprovedDc] = useState(false)
 
   // Design change dialog
-  const [designChangeOpen, setDesignChangeOpen] = useState(false)
   // Notify signers dialog
   const [notifySignersOpen, setNotifySignersOpen] = useState(false)
   const [notifyShareUrl, setNotifyShareUrl] = useState<string | undefined>(undefined)
@@ -780,11 +779,6 @@ export default function DemandDetailPage() {
   const dcHasRejected = currentDesignChangeSignoffs.some(s => s.status === "REJECTED")
   const designChangePendingCount = currentDesignChangeSignoffs.filter(s => s.status === "PENDING").length
 
-  // Can propose design change: admin/delivery + current phase allowed + no pending DC
-  const canProposeDesignChange =
-    effectiveCanManage
-    && (DESIGN_CHANGE_ALLOWED_PHASES as readonly string[]).includes(demand.status)
-    && !dcHasPending
   return (
     <AppLayout>
       <div className="space-y-4 sm:space-y-6">
@@ -1140,7 +1134,7 @@ export default function DemandDetailPage() {
               const hasSignoff = currentPhaseSignoff != null
               const hasDesignChange = currentDesignChangeSignoffs.length > 0
 
-              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange && !canProposeDesignChange) return null
+              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange) return null
 
               return (
                 <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 sm:p-3">
@@ -1205,25 +1199,9 @@ export default function DemandDetailPage() {
                       </div>
                     </div>
                     </div>
-                    {(canProposeDesignChange || (canManage && curHasPending) || (canManage && (curHasPending || dcHasPending) && !curHasPendingOverride)) && (
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 ml-6 sm:ml-0 sm:shrink-0">
+                    {((canManage && curHasPending) || (canManage && (curHasPending || dcHasPending) && !curHasPendingOverride)) && (
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 ml-6 sm:ml-0 sm:shrink-0">
                         <TooltipProvider>
-                        {canProposeDesignChange && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 shrink-0 h-6 w-6 p-0 sm:h-7 sm:w-auto sm:px-2"
-                                onClick={() => setDesignChangeOpen(true)}
-                              >
-                                <FileEdit className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" />
-                                <span className="hidden sm:inline text-xs">提出設計變更</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="sm:hidden">提出設計變更</TooltipContent>
-                          </Tooltip>
-                        )}
                         {canManage && curHasPending && (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1402,11 +1380,27 @@ export default function DemandDetailPage() {
             <TabsTrigger value="signoffs" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <ClipboardCheck className="h-3.5 w-3.5 hidden sm:block" />
               簽核紀錄
-              {demand.phaseSignoffs && demand.phaseSignoffs.length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">
-                  {demand.phaseSignoffs.length}
-                </Badge>
-              )}
+              {(() => {
+                const c = demand.phaseSignoffs?.filter((s: { targetUserId: string | null; status: string }) => s.targetUserId || s.status !== "PENDING").length ?? 0
+                return c > 0 ? (
+                  <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">{c}</Badge>
+                ) : null
+              })()}
+            </TabsTrigger>
+            <TabsTrigger value="design-changes" className="gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <FileEdit className="h-3.5 w-3.5 hidden sm:block" />
+              設計變更
+              {(() => {
+                const dcs = (demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []
+                if (!dcs.length) return null
+                const pending = dcs.some((d) => d.status === "PENDING")
+                return (
+                  <>
+                    <Badge variant="secondary" className="text-[10px] h-4 min-w-4 px-1 rounded-full ml-0.5">{dcs.length}</Badge>
+                    {pending && <span className="h-1.5 w-1.5 rounded-full bg-red-500" title="有待確認的設計變更" />}
+                  </>
+                )
+              })()}
             </TabsTrigger>
           </TabsList>
           </div>
@@ -2253,6 +2247,20 @@ export default function DemandDetailPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* 設計變更 Tab */}
+          <TabsContent value="design-changes" className="mt-3 sm:mt-4">
+            <DesignChangeTab
+              demandId={demand.id}
+              demandNumber={demand.demandNumber}
+              phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
+              token={token}
+              currentUserId={user?.id}
+              canManage={effectiveCanManage}
+              watermarkBg={watermarkBg}
+              onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}
+            />
+          </TabsContent>
         </Tabs>
 
         {/* SP 時程編輯 Dialog */}
@@ -2317,28 +2325,6 @@ export default function DemandDetailPage() {
         doc={fullScreenDoc}
         watermarkBg={watermarkBg}
       />
-
-      {/* Design change dialog */}
-      {canProposeDesignChange && (
-        <DesignChangeDialog
-          open={designChangeOpen}
-          onOpenChange={setDesignChangeOpen}
-          demandId={demand.id}
-          demandNumber={demand.demandNumber}
-          demandTitle={demand.title}
-          phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
-          targets={[
-            ...(demand.contactPerson
-              ? [{ userId: demand.contactPerson.id, name: demand.contactPerson.name, role: "REQUESTER" }]
-              : []),
-            ...(demand.demandManager
-              ? [{ userId: demand.demandManager.id, name: demand.demandManager.name, role: "MANAGER" }]
-              : []),
-          ]}
-          token={token}
-          onComplete={fetchDemand}
-        />
-      )}
 
       {/* Notify signers dialog */}
       <NotifySignersDialog

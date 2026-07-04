@@ -63,6 +63,7 @@ export async function GET(
           },
           orderBy: { requestedAt: "desc" },
         },
+        designChanges: { select: { id: true, status: true } },
       },
     })
 
@@ -611,6 +612,11 @@ export async function PATCH(
     const currentIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
     const targetIdx = PIPELINE_STEPS.indexOf(status as typeof PIPELINE_STEPS[number])
     const isForward = currentIdx >= 0 && targetIdx >= 0 && targetIdx > currentIdx
+
+    // 推進到下一階段前必須先指派需求窗口，否則會產生無對象的幽靈簽核、且缺少需求方背書
+    if (isForward && !demand.contactPersonId) {
+      return NextResponse.json({ error: "請先指派需求窗口，才能進入下一階段" }, { status: 400 })
+    }
 
     if (isForward && signoffPhases.includes(demand.status)) {
       // Check if all required signers have signoff records; auto-create missing ones

@@ -126,12 +126,29 @@ export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }
   CANCELLED: { label: "已撤回", color: "bg-slate-100 text-slate-600" },
 }
 
-/** 可發起設計變更的階段 (MVP/開案/驗收) */
+/** 可發起設計變更的階段 (MVP/開案/開發中/驗收；僅需求確認與已結案不可) */
 export const DESIGN_CHANGE_ALLOWED_PHASES = [
   "PRD_REVIEW",
   "SP_REVIEW",
+  "DEVELOPING",
   "ACCEPTANCE",
 ] as const
+
+/** 設計變更 / 版本狀態標籤 */
+export const DESIGN_CHANGE_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  PENDING: { label: "待確認", color: "bg-amber-100 text-amber-700" },
+  APPROVED: { label: "已通過", color: "bg-emerald-100 text-emerald-700" },
+  REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
+  CANCELLED: { label: "已撤回", color: "bg-slate-100 text-slate-600" },
+}
+
+/** 需求方對 checklist 每一條的標記 */
+export const CHECKLIST_MARK_MAP: Record<string, { label: string; icon: string; color: string }> = {
+  PENDING: { label: "尚未回應", icon: "○", color: "text-slate-400" },
+  CONFIRMED: { label: "確認", icon: "✓", color: "text-emerald-600" },
+  CROSS: { label: "有問題", icon: "✕", color: "text-red-600" },
+  WARN: { label: "疑慮", icon: "!", color: "text-amber-600" },
+}
 
 /** 簽核種類標籤 */
 export const SIGNOFF_KIND_LABELS: Record<string, string> = {
