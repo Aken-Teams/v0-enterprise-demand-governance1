@@ -5,12 +5,13 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import {
   FileEdit, Plus, ChevronDown, ChevronRight, Check, X, Paperclip, Loader2,
-  History, CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban,
+  CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban,
 } from "lucide-react"
 import { DESIGN_CHANGE_STATUS_MAP, CHECKLIST_MARK_MAP, STATUS_MAP } from "@/lib/constants/demand"
 import { DesignChangeEditorDialog } from "@/components/demand/design-change-editor-dialog"
@@ -249,12 +250,22 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     <span>v{rev.version} · {fmt(rev.submittedAt)}</span>
                     <StatusBadge status={rev.status} />
                     {dc.revisions.length > 1 && (
-                      <div className="flex items-center gap-1 ml-auto">
-                        <span>版本：</span>
-                        {dc.revisions.map((r) => (
-                          <button key={r.id} onClick={() => setSelectedVer((s) => ({ ...s, [dc.id]: r.version }))}
-                            className={cn("text-[11px] px-1.5 py-0.5 rounded border", r.version === rev.version ? "bg-indigo-600 text-white border-indigo-600" : "bg-background hover:bg-muted")}>v{r.version}</button>
-                        ))}
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <span>版本</span>
+                        <Select value={String(rev.version)} onValueChange={(v) => setSelectedVer((s) => ({ ...s, [dc.id]: Number(v) }))}>
+                          <SelectTrigger className="h-7 w-auto min-w-[180px] text-xs gap-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {[...dc.revisions].reverse().map((r) => (
+                              <SelectItem key={r.id} value={String(r.version)} className="text-xs">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="font-medium">v{r.version}</span>
+                                  <StatusBadge status={r.status} />
+                                  <span className="text-muted-foreground">{r.submittedBy.name} · {fmt(r.submittedAt)}</span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                   </div>
@@ -530,35 +541,17 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     </Card>
                   </div>
 
-                  {/* 版本歷程 + 動作（重送 / 撤銷） */}
-                  {((canManage && (dc.status === "REJECTED" || dc.status === "PENDING") && rev.version === dc.currentVersion) || dc.revisions.length > 1) && (
-                    <div className="px-3 sm:px-4 py-3 border-t space-y-3">
-                      {canManage && (dc.status === "REJECTED" || dc.status === "PENDING") && rev.version === dc.currentVersion && (
-                        <div className="flex justify-end gap-2">
-                          {dc.status === "REJECTED" && (
-                            <Button size="sm" className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white" disabled={submitting === dc.id} onClick={() => { setReviseTarget(dc); setEditorMode("revise"); setEditorOpen(true) }}>
-                              <FileEdit className="h-3.5 w-3.5 mr-1" />重新送出變更申請
-                            </Button>
-                          )}
-                          <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" disabled={submitting === dc.id} onClick={() => setCancelTarget(dc)}>
-                            <Ban className="h-3.5 w-3.5 mr-1" />撤銷此設計變更
-                          </Button>
-                        </div>
+                  {/* 動作（重送 / 撤銷） */}
+                  {canManage && (dc.status === "REJECTED" || dc.status === "PENDING") && rev.version === dc.currentVersion && (
+                    <div className="px-3 sm:px-4 py-3 border-t flex justify-end gap-2">
+                      {dc.status === "REJECTED" && (
+                        <Button size="sm" className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white" disabled={submitting === dc.id} onClick={() => { setReviseTarget(dc); setEditorMode("revise"); setEditorOpen(true) }}>
+                          <FileEdit className="h-3.5 w-3.5 mr-1" />重新送出變更申請
+                        </Button>
                       )}
-                      {dc.revisions.length > 1 && (
-                        <div>
-                          <p className="text-[11px] font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><History className="h-3 w-3" />版本歷程</p>
-                          <div className="space-y-1">
-                            {dc.revisions.map((r) => (
-                              <div key={r.id} className="flex items-center gap-2 text-[11px]">
-                                <span className="font-medium">v{r.version}</span>
-                                <span className="text-muted-foreground">{r.submittedBy.name} · {fmt(r.submittedAt)}</span>
-                                <StatusBadge status={r.status} />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" disabled={submitting === dc.id} onClick={() => setCancelTarget(dc)}>
+                        <Ban className="h-3.5 w-3.5 mr-1" />撤銷此設計變更
+                      </Button>
                     </div>
                   )}
                 </div>
