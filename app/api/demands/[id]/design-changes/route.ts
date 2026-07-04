@@ -134,7 +134,7 @@ export async function POST(
       return NextResponse.json({ error: "請先指派需求窗口" }, { status: 400 })
     }
 
-    const reviewers = await resolveDesignChangeReviewers(demand, affectsSp)
+    const reviewers = resolveDesignChangeReviewers(demand)
     const checklistItems = parseChecklistMarkdown(checklistMd)
     // SP 影響：現值快照（伺服器端），增減量由前端提供（正=上調，負=下降）
     const spCurrent = affectsSp ? (demand.confirmedSp ?? demand.estimatedSp) : null

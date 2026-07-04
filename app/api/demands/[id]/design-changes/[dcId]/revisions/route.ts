@@ -70,7 +70,7 @@ export async function POST(
       return NextResponse.json({ error: "此設計變更已通過，無需再修訂" }, { status: 400 })
     }
 
-    const reviewers = await resolveDesignChangeReviewers(dc.demand, affectsSp)
+    const reviewers = resolveDesignChangeReviewers(dc.demand)
     const checklistItems = parseChecklistMarkdown(checklistMd)
     const nextVersion = (latest?.version ?? 0) + 1
     const spCurrent = affectsSp ? (dc.demand.confirmedSp ?? dc.demand.estimatedSp) : null

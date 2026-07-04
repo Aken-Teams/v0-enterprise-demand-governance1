@@ -29,28 +29,30 @@ export interface ReviewerTarget {
 }
 
 /**
- * 決定一個設計變更版本的必需審核人：
- * 需求窗口(REQUESTER) + 需求主管(MANAGER，若有指派)；
- * 若該版影響 SP，額外加入董事會(BOARD) 成員。
+ * 第一階段審核人：需求窗口(REQUESTER) + 需求主管(MANAGER，若有指派)。
+ * 董事會不在此階段——採兩段式：需求方通過後、若該版影響 SP，才送董事會。
  */
-export async function resolveDesignChangeReviewers(
-  demand: { contactPersonId: string | null; demandManagerId: string | null; organizationId: string },
-  affectsSp: boolean
-): Promise<ReviewerTarget[]> {
+export function resolveDesignChangeReviewers(
+  demand: { contactPersonId: string | null; demandManagerId: string | null }
+): ReviewerTarget[] {
   const targets: ReviewerTarget[] = []
   if (demand.contactPersonId) targets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
   if (demand.demandManagerId) targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
+  return targets
+}
 
-  if (affectsSp) {
-    const boardMembers = await prisma.user.findMany({
-      where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
-      select: { id: true, restrictBoardToOrg: true, organizationId: true },
-    })
-    for (const u of boardMembers) {
-      if (u.restrictBoardToOrg && u.organizationId !== demand.organizationId) continue
-      if (targets.some((t) => t.userId === u.id)) continue // 避免同人重複
-      targets.push({ userId: u.id, role: "BOARD" })
-    }
+/**
+ * 董事會審核人（第二階段，僅在需求方通過且該版影響 SP 時加入）。
+ */
+export async function resolveBoardReviewers(organizationId: string): Promise<ReviewerTarget[]> {
+  const boardMembers = await prisma.user.findMany({
+    where: { isBoardMember: true, isActive: true, boardExemptFromSignoff: false },
+    select: { id: true, restrictBoardToOrg: true, organizationId: true },
+  })
+  const targets: ReviewerTarget[] = []
+  for (const u of boardMembers) {
+    if (u.restrictBoardToOrg && u.organizationId !== organizationId) continue
+    targets.push({ userId: u.id, role: "BOARD" })
   }
   return targets
 }

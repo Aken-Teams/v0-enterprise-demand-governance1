@@ -4,7 +4,7 @@ import path from "path"
 import crypto from "crypto"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
-import { computeRevisionStatus } from "@/lib/design-change"
+import { resolveBoardReviewers } from "@/lib/design-change"
 import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 
@@ -58,7 +58,7 @@ export async function POST(
     const revision = await prisma.designChangeRevision.findUnique({
       where: { id: revisionId },
       include: {
-        designChange: { include: { demand: { select: { id: true, demandNumber: true, title: true } } } },
+        designChange: { include: { demand: { select: { id: true, demandNumber: true, title: true, organizationId: true } } } },
         reviews: true,
         items: { select: { id: true } },
       },
@@ -89,8 +89,8 @@ export async function POST(
     if (decision === "REJECTED" && !overallComment && !items.some((it) => it.mark === "CROSS" || it.mark === "WARN")) {
       return NextResponse.json({ error: "駁回請填寫總回應或標記問題項目" }, { status: 400 })
     }
-    // 通過必須每一條 checklist 都確認
-    if (decision === "APPROVED") {
+    // 通過必須每一條 checklist 都確認（董事會第二階段只審 SP，不受此限）
+    if (decision === "APPROVED" && myReview?.role !== "BOARD") {
       const confirmed = new Set(items.filter((it) => it.mark === "CONFIRMED").map((it) => it.itemId))
       const allConfirmed = revision.items.every((it) => confirmed.has(it.id))
       if (!allConfirmed) {
@@ -98,8 +98,13 @@ export async function POST(
       }
     }
 
+    // 兩段式：需求方全部通過後，若該版影響 SP，才把董事會加入為第二階段審核人
+    const boardCandidates = revision.affectsSp ? await resolveBoardReviewers(revision.designChange.demand.organizationId) : []
+    type Outcome = "REJECTED" | "APPROVED" | "TO_BOARD" | "PENDING"
+
     const now = new Date()
-    await prisma.$transaction(async (tx) => {
+    const outcome: Outcome = await prisma.$transaction(async (tx): Promise<Outcome> => {
+      let result: Outcome = "PENDING"
       for (const it of items) {
         if (!validItemIds.has(it.itemId)) continue
         await tx.designChangeItemFeedback.upsert({
@@ -113,12 +118,26 @@ export async function POST(
       } else {
         await tx.designChangeReview.create({ data: { revisionId, reviewerId: auth.userId, role: "MANAGER", decision, comment: overallComment, decidedAt: now } })
       }
-      const allReviews = await tx.designChangeReview.findMany({ where: { revisionId }, select: { decision: true } })
-      const revStatus = computeRevisionStatus(allReviews)
-      if (revStatus !== "PENDING") {
-        await tx.designChangeRevision.update({ where: { id: revisionId }, data: { status: revStatus, decidedAt: now } })
-        await tx.designChange.update({ where: { id: dcId }, data: { status: revStatus } })
+      const allReviews = await tx.designChangeReview.findMany({ where: { revisionId }, select: { decision: true, role: true } })
+      if (allReviews.some((r) => r.decision === "REJECTED")) {
+        result = "REJECTED"
+      } else if (allReviews.every((r) => r.decision === "APPROVED")) {
+        const hasBoard = allReviews.some((r) => r.role === "BOARD")
+        if (revision.affectsSp && !hasBoard && boardCandidates.length > 0) {
+          // 需求方全數通過 → 進董事會階段（版本維持待確認）
+          await tx.designChangeReview.createMany({
+            data: boardCandidates.map((b) => ({ revisionId, reviewerId: b.userId, role: "BOARD", decision: "PENDING" as const })),
+          })
+          result = "TO_BOARD"
+        } else {
+          result = "APPROVED"
+        }
       }
+      if (result === "REJECTED" || result === "APPROVED") {
+        await tx.designChangeRevision.update({ where: { id: revisionId }, data: { status: result, decidedAt: now } })
+        await tx.designChange.update({ where: { id: dcId }, data: { status: result } })
+      }
+      return result
     })
 
     // 審核人附件（存為該版本的文件，uploadedBy = 審核人；可綁定 checklist 項目）
@@ -139,20 +158,34 @@ export async function POST(
       }
     }
 
-    const proposerId = revision.submittedById
-    if (proposerId !== auth.userId) {
-      const decLabel = decision === "APPROVED" ? "已確認" : "已駁回"
-      notifyUsers([proposerId], {
-        type: "SIGNOFF",
-        title: `設計變更${decLabel}`,
-        message: `需求 ${revision.designChange.demand.demandNumber}「${revision.designChange.demand.title}」的設計變更「${revision.designChange.title}」v${revision.version} 被${decLabel}。`,
-        linkUrl: `/demands/${id}`,
-      })
+    const dm = revision.designChange.demand
+    const dcTitle = revision.designChange.title
+    if (outcome === "TO_BOARD") {
+      const boardIds = [...new Set(boardCandidates.map((b) => b.userId).filter((uid) => uid !== auth.userId))]
+      if (boardIds.length > 0) {
+        notifyUsers(boardIds, {
+          type: "SIGNOFF",
+          title: "設計變更待董事會審核 SP",
+          message: `需求 ${dm.demandNumber}「${dm.title}」的設計變更「${dcTitle}」需求方已確認，且影響 SP（${revision.spCurrent} → ${(revision.spCurrent ?? 0) + (revision.spDelta ?? 0)}），請董事會審核。`,
+          linkUrl: `/demands/${id}`,
+        })
+      }
+    } else if (outcome === "REJECTED" || outcome === "APPROVED") {
+      const proposerId = revision.submittedById
+      if (proposerId !== auth.userId) {
+        const decLabel = outcome === "APPROVED" ? "已通過" : "已駁回"
+        notifyUsers([proposerId], {
+          type: "SIGNOFF",
+          title: `設計變更${decLabel}`,
+          message: `需求 ${dm.demandNumber}「${dm.title}」的設計變更「${dcTitle}」v${revision.version} ${decLabel}。`,
+          linkUrl: `/demands/${id}`,
+        })
+      }
     }
     logAudit({
       userId: auth.userId, action: decision === "APPROVED" ? "SIGNOFF_APPROVE" : "SIGNOFF_REJECT",
       entity: "SIGNOFF", entityId: dcId, demandId: id,
-      details: { kind: "DESIGN_CHANGE_REVIEW", version: revision.version, decision, itemCount: items.length, files: files.length },
+      details: { kind: "DESIGN_CHANGE_REVIEW", version: revision.version, decision, outcome, itemCount: items.length, files: files.length },
       request,
     })
 

@@ -220,12 +220,29 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           const selection = selOf(dc, rev)
           const cur = dd(dc.id)
           const allConfirmed = rev.items.length > 0 && rev.items.every((it) => (cur.items[it.id]?.mark ?? "PENDING") === "CONFIRMED")
+          // 董事會第二階段只審 SP，不受「全部確認」限制
+          const iAmBoard = rev.reviews.some((r) => r.reviewerId === currentUserId && r.role === "BOARD")
+          const canApprove = allConfirmed || iAmBoard
           // 版本層級附件依上傳者分類：需求方(審核人)佐證 vs 開發端文件
           const reviewerIds = new Set(rev.reviews.map((r) => r.reviewerId))
           const versionDocs = rev.documents.filter((d) => !d.checklistItemId)
           const devDocs = versionDocs.filter((d) => !reviewerIds.has(d.uploadedBy.id))
           const reviewerDocs = versionDocs.filter((d) => reviewerIds.has(d.uploadedBy.id))
           const decidedReviews = rev.reviews.filter((r) => r.decision !== "PENDING")
+          // 簽核流程（依版本而異）：需求方 →（若影響 SP）董事會
+          const stage1Reviews = rev.reviews.filter((r) => r.role === "REQUESTER" || r.role === "MANAGER")
+          const boardReviews = rev.reviews.filter((r) => r.role === "BOARD")
+          const boardUpcoming = rev.affectsSp && boardReviews.length === 0
+          const flowItems: { key: string; roleLabel: string; name: string; decision?: string; upcoming?: boolean }[] = [
+            ...stage1Reviews.map((r) => ({ key: r.reviewerId, roleLabel: ROLE_LABELS[r.role] ?? r.role, name: r.reviewer.name, decision: r.decision })),
+            ...(boardReviews.length > 0
+              ? boardReviews.map((r) => ({ key: r.reviewerId, roleLabel: "董事會", name: r.reviewer.name, decision: r.decision }))
+              : boardUpcoming ? [{ key: "board-upcoming", roleLabel: "董事會", name: "因影響 SP", upcoming: true }] : []),
+          ]
+          const pendingStage1 = stage1Reviews.filter((r) => r.decision === "PENDING")
+          const currentTurn = rev.status !== "PENDING" ? null
+            : pendingStage1.length > 0 ? pendingStage1.map((r) => ROLE_LABELS[r.role] ?? r.role).join("、")
+            : boardReviews.some((r) => r.decision === "PENDING") ? "董事會" : null
           return (
             <Card key={dc.id} className="overflow-hidden p-0">
               {/* Header */}
@@ -235,7 +252,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                 <span className="font-mono text-xs text-muted-foreground shrink-0">DC-{String(dc.seq).padStart(2, "0")}</span>
                 <span className="font-medium text-sm truncate flex-1">{dc.title}</span>
                 <Badge variant="outline" className="text-[10px] shrink-0 bg-slate-50">{STATUS_MAP[dc.phase]?.label ?? dc.phase} 提出</Badge>
-                {latest.affectsSp && <Badge className="bg-amber-100 text-amber-700 text-[10px] gap-0.5 shrink-0"><CircleDollarSign className="h-3 w-3" />影響SP</Badge>}
+                {latest.affectsSp && <Badge className="bg-violet-100 text-violet-700 text-[10px] gap-0.5 shrink-0"><CircleDollarSign className="h-3 w-3" />影響SP</Badge>}
                 <Badge variant="outline" className="text-[10px] shrink-0">v{dc.currentVersion}</Badge>
                 <StatusBadge status={dc.status} />
                 {dc.status === "PENDING" && <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" title="待確認" />}
@@ -278,7 +295,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                       <div className="flex items-start gap-2 mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
                         <CircleDollarSign className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                         <div className="min-w-0">
-                          <span className="font-medium">影響 SP（已納入董事會審核）</span>
+                          <span className="font-medium">影響 SP（需求方通過後將送董事會審核）</span>
                           {rev.spDelta != null && rev.spCurrent != null && (
                             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                               <span>目前 <strong>{rev.spCurrent}</strong></span>
@@ -293,6 +310,22 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                       </div>
                     )}
                   </div>
+
+                  {/* 簽核流程（依版本而異：需求方 →（影響 SP 才有）董事會） */}
+                  {flowItems.length > 0 && (
+                    <div className="px-3 sm:px-4 py-2.5 border-b">
+                      <p className="text-[11px] font-semibold text-muted-foreground mb-2">簽核流程</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {flowItems.map((it, i) => (
+                          <div key={it.key} className="flex items-center gap-1.5">
+                            <FlowNode roleLabel={it.roleLabel} name={it.name} decision={it.decision} upcoming={it.upcoming} />
+                            {i < flowItems.length - 1 && <span className="text-muted-foreground text-xs">→</span>}
+                          </div>
+                        ))}
+                      </div>
+                      {currentTurn && <p className="text-[11px] text-muted-foreground mt-2">目前待簽：<strong className="text-amber-700">{currentTurn}</strong></p>}
+                    </div>
+                  )}
 
                   {/* 左右工作區（左預覽卡、右導覽卡，參考「文件」tab） */}
                   <div className="grid gap-3 sm:gap-4 lg:grid-cols-5 p-3 sm:p-4">
@@ -520,7 +553,10 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                               ))}
                             </div>
                           )}
-                          {!allConfirmed && (
+                          {iAmBoard && (
+                            <p className="text-[11px] text-indigo-600">董事會審核：請確認 SP 影響後通過或駁回（無需逐條勾選 checklist）。</p>
+                          )}
+                          {!canApprove && !iAmBoard && (
                             <p className="text-[11px] text-amber-600">需將全部檢查項目標記為「確認」才能通過（有疑慮/問題請駁回）。</p>
                           )}
                           <div className="flex items-center justify-between gap-2">
@@ -531,7 +567,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                               <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" disabled={submitting === dc.id} onClick={() => submitReview(dc, rev, "REJECTED")}>
                                 {submitting === dc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <X className="h-3.5 w-3.5 mr-1" />}駁回
                               </Button>
-                              <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50" disabled={submitting === dc.id || !allConfirmed} title={!allConfirmed ? "需全部項目確認" : ""} onClick={() => submitReview(dc, rev, "APPROVED")}>
+                              <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50" disabled={submitting === dc.id || !canApprove} title={!canApprove ? "需全部項目確認" : ""} onClick={() => submitReview(dc, rev, "APPROVED")}>
                                 {submitting === dc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}通過
                               </Button>
                             </div>
@@ -614,6 +650,23 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
 
 function Empty({ text }: { text: string }) {
   return <div className="h-full min-h-[240px] flex items-center justify-center text-sm text-muted-foreground">{text}</div>
+}
+
+function FlowNode({ roleLabel, name, decision, upcoming }: { roleLabel: string; name: string; decision?: string; upcoming?: boolean }) {
+  let cls = "border-slate-200 bg-slate-50 text-slate-500"
+  let status = "待前段通過"
+  if (!upcoming) {
+    if (decision === "APPROVED") { cls = "border-emerald-200 bg-emerald-50 text-emerald-700"; status = "✓ 已通過" }
+    else if (decision === "REJECTED") { cls = "border-red-200 bg-red-50 text-red-700"; status = "✕ 已駁回" }
+    else { cls = "border-amber-200 bg-amber-50 text-amber-700"; status = "⏱ 待確認" }
+  }
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]", cls)}>
+      <span className="font-medium">{roleLabel}</span>
+      <span className="opacity-70">{name}</span>
+      <span className="font-medium">{status}</span>
+    </span>
+  )
 }
 
 function InlinePreview({ doc, watermarkBg, onFullScreen }: { doc: DcDocument; watermarkBg?: string; onFullScreen?: (d: PreviewableDoc) => void }) {
