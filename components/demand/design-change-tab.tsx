@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypeRaw from "rehype-raw"
+import { mermaidMarkdownComponents } from "@/components/mermaid-block"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -327,7 +328,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                   {/* 變更摘要 */}
                   <div className="px-3 sm:px-4 py-2.5 border-b">
                     <p className="text-[11px] font-semibold text-indigo-600 mb-1">變更摘要</p>
-                    <div className="prose prose-sm prose-neutral max-w-none text-sm prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-2 prose-th:py-1 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-2 prose-td:py-1"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }}>{rev.summary}</ReactMarkdown></div>
+                    <div className="prose prose-sm prose-neutral max-w-none text-sm prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-2 prose-th:py-1 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-2 prose-td:py-1"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mermaidMarkdownComponents}>{rev.summary}</ReactMarkdown></div>
                     {rev.affectsSp && (
                       <div className="mt-2 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs text-violet-900">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -774,7 +775,7 @@ function InlinePreview({ doc, watermarkBg, onFullScreen }: { doc: DcDocument; wa
   if (isText) {
     body = loadingText
       ? <div className="flex items-center justify-center py-10 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" />載入中…</div>
-      : <div className="prose prose-sm prose-neutral max-w-none text-sm prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-2 prose-th:py-1 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-2 prose-td:py-1"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }}>{text}</ReactMarkdown></div>
+      : <div className="prose prose-sm prose-neutral max-w-none text-sm prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-2 prose-th:py-1 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-2 prose-td:py-1"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mermaidMarkdownComponents}>{text}</ReactMarkdown></div>
   } else if (isImg) {
     body = <img src={doc.fileUrl ?? ""} alt={doc.fileName} className="max-w-full rounded" />
   } else if (isPdf) {
