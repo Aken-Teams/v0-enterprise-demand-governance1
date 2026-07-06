@@ -2283,7 +2283,9 @@ export default function DemandDetailPage() {
               phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
               token={token}
               currentUserId={user?.id}
-              canManage={effectiveCanManage}
+              // 設計變更在「已結案」後仍可發起（例如結案後才提出的新需求需調整 SP），
+              // 因此使用 canManage 而非受結案鎖定的 effectiveCanManage。
+              canManage={canManage}
               currentSp={demand.confirmedSp ?? demand.estimatedSp}
               watermarkBg={watermarkBg}
               onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}

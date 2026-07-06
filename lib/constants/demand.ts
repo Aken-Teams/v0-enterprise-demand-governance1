@@ -126,12 +126,13 @@ export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }
   CANCELLED: { label: "已撤回", color: "bg-slate-100 text-slate-600" },
 }
 
-/** 可發起設計變更的階段 (MVP/開案/開發中/驗收；僅需求確認與已結案不可) */
+/** 可發起設計變更的階段 (MVP/開案/開發中/驗收/已結案；僅需求確認不可) */
 export const DESIGN_CHANGE_ALLOWED_PHASES = [
   "PRD_REVIEW",
   "SP_REVIEW",
   "DEVELOPING",
   "ACCEPTANCE",
+  "CLOSED",
 ] as const
 
 /** 設計變更 / 版本狀態標籤 */
