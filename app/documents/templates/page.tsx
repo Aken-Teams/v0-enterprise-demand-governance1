@@ -59,6 +59,7 @@ const DOC_INFO: Record<string, { label: string; desc: string }> = {
   SECURITY_REPORT: { label: "資安報告", desc: "弱點掃描、滲透測試與資安檢測結果（選填）" },
   SECURITY_FIX_REPORT: { label: "資安修正報告", desc: "針對檢測出的資安問題，記錄修正內容與複測結果（選填）" },
   OPERATION_MANUAL: { label: "操作手冊", desc: "圖文並茂的系統操作說明，引導使用者完成各項功能（選填）" },
+  DESIGN_CHANGE_CHECKLIST: { label: "設計變更 Checklist", desc: "發起設計變更時，供需求方逐條確認的檢查清單範本" },
 }
 
 /* ─── Markdown 範本內容 ─── */
@@ -853,6 +854,32 @@ flowchart TD
 | 客服信箱 | （email） |
 | 服務時間 | （時間） |
 `,
+
+  DESIGN_CHANGE_CHECKLIST: `# 設計變更 Checklist 範本
+
+> 使用方式：開發端先依實際完成狀況勾選（\`[x]\` 表示已完成），把下方 checklist 貼到「設計變更」的檢查清單欄位；需求方會逐條確認，或標記疑慮／問題。
+> 說明文字（非 \`- [ ]\` 開頭的行）不會被拆成項目，可自由增減。
+
+## 一、變更內容
+- [ ] 已清楚描述此次要新增／修改／刪減的需求內容
+- [ ] 已標示與「原確認範圍」不同之處
+- [ ] 已附上佐證（會議紀錄、對話截圖、修訂後的設計稿等）
+
+## 二、影響評估
+- [ ] 已評估對現有功能／流程的影響
+- [ ] 已確認是否牽動其他模組或介接
+- [ ] 已評估是否影響 SP（工時點數）— 若影響，發起時請填寫增減數量
+
+## 三、實作與驗證
+- [ ] 已完成對應的程式調整
+- [ ] 已自行測試調整後功能正常
+- [ ] 已更新相關文件（PRD／SDD／操作手冊等）
+
+## 四、溝通與確認
+- [ ] 已通知需求窗口此次變更
+- [ ] 需求方逐條確認、無疑慮或問題
+- [ ] （如影響 SP）已送董事會確認 SP 調整
+`,
 }
 
 /* ─── Mermaid 渲染元件 ─── */
@@ -984,6 +1011,40 @@ export default function DocumentTemplatesPage() {
             )
           })}
         </Tabs>
+
+        {/* 設計變更（不限特定階段，除「需求確認」外皆可發起） */}
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-start gap-2 sm:gap-3 rounded-lg border bg-muted/30 p-3 sm:p-4">
+            <Badge className="bg-indigo-100 text-indigo-700 shrink-0 text-[10px] sm:text-xs">設計變更</Badge>
+            <p className="text-xs sm:text-sm text-muted-foreground">需求進入開發後有新增／修改／刪減時發起（除「需求確認」外的各階段皆可）。貼上此 checklist 讓需求方逐條確認。</p>
+          </div>
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {(() => {
+              const docKey = "DESIGN_CHANGE_CHECKLIST"
+              const doc = DOC_INFO[docKey]
+              return (
+                <Card key={docKey}>
+                  <CardContent className="pt-4 sm:pt-5 space-y-2.5 sm:space-y-3 px-4 sm:px-6">
+                    <div>
+                      <p className="font-medium text-foreground text-xs sm:text-sm">{doc.label}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">{doc.desc}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1 text-[10px] sm:text-xs h-7 sm:h-8" onClick={() => setPreviewDoc(docKey)}>
+                        <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
+                        預覽範本
+                      </Button>
+                      <Button variant="outline" size="sm" className="flex-1 text-[10px] sm:text-xs h-7 sm:h-8" onClick={() => downloadMd(docKey)}>
+                        <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
+                        下載 .md
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })()}
+          </div>
+        </div>
       </div>
 
       {/* 預覽 Dialog */}
