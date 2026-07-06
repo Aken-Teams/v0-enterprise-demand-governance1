@@ -9,7 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
-import { FileEdit, FileIcon, Loader2, Paperclip, Trash2, ListChecks } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { FileEdit, FileIcon, Loader2, Paperclip, Trash2, ListChecks, UserCheck } from "lucide-react"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -25,19 +26,26 @@ interface Props {
   demandNumber: string
   phaseLabel: string
   token: string | null
-  mode: "create" | "revise"
+  mode: "create" | "revise" | "edit"
   dcId?: string
   /** 需求目前 SP（供 SP 影響評估） */
   currentSp: number
   /** revise 時帶入上一版內容 */
   initial?: { title: string; summary: string; checklistMd: string; affectsSp: boolean; spNote: string; spDelta: number | null }
+  /** 需求窗口人選（供手動指定；預設沿用專案需求窗口） */
+  windowCandidates?: { id: string; name: string }[]
+  /** 專案目前的需求窗口 id（用於標示「專案窗口」） */
+  contactPersonId?: string | null
+  /** 預先選取的窗口（編輯時＝該設計變更目前窗口；未指定則預設專案窗口） */
+  initialWindowId?: string | null
   onComplete: () => void
 }
 
 export function DesignChangeEditorDialog({
-  open, onOpenChange, demandId, demandNumber, phaseLabel, token, mode, dcId, currentSp, initial, onComplete,
+  open, onOpenChange, demandId, demandNumber, phaseLabel, token, mode, dcId, currentSp, initial, windowCandidates, contactPersonId, initialWindowId, onComplete,
 }: Props) {
   const [title, setTitle] = useState("")
+  const [windowId, setWindowId] = useState<string>("")
   const [summary, setSummary] = useState("")
   const [checklistMd, setChecklistMd] = useState("")
   const [affectsSp, setAffectsSp] = useState(false)
@@ -52,6 +60,7 @@ export function DesignChangeEditorDialog({
   useEffect(() => {
     if (open) {
       setTitle(initial?.title ?? "")
+      setWindowId(initialWindowId ?? contactPersonId ?? "")
       setSummary(initial?.summary ?? "")
       setChecklistMd(initial?.checklistMd ?? "")
       setAffectsSp(initial?.affectsSp ?? false)
@@ -62,7 +71,7 @@ export function DesignChangeEditorDialog({
       setFiles([])
       setError("")
     }
-  }, [open, initial])
+  }, [open, initial, contactPersonId, initialWindowId])
 
   const spAmountNum = Number(spAmount)
   const spDelta = spDirection === "up" ? spAmountNum : -spAmountNum
@@ -80,7 +89,7 @@ export function DesignChangeEditorDialog({
   }
 
   const handleSubmit = async () => {
-    if (mode === "create" && !title.trim()) { setError("請填寫變更標題"); return }
+    if ((mode === "create" || mode === "edit") && !title.trim()) { setError("請填寫變更標題"); return }
     if (!summary.trim()) { setError("請填寫變更摘要說明"); return }
     if (affectsSp && (!Number.isFinite(spAmountNum) || spAmountNum <= 0)) { setError("請填寫 SP 增減數量"); return }
     if (spExceeds) { setError(`下降不可超過目前 SP（${currentSp}），調整後不可為負數`); return }
@@ -88,7 +97,10 @@ export function DesignChangeEditorDialog({
     setLoading(true); setError("")
     try {
       const fd = new FormData()
-      if (mode === "create") fd.append("title", title.trim())
+      if (mode === "create" || mode === "edit") fd.append("title", title.trim())
+      // 需求窗口：create 僅在改成非專案預設時才覆寫；edit 一律帶入目前選取的窗口
+      if (mode === "create" && windowId && windowId !== (contactPersonId ?? "")) fd.append("contactPersonId", windowId)
+      if (mode === "edit" && windowId) fd.append("contactPersonId", windowId)
       fd.append("summary", summary.trim())
       fd.append("checklistMd", checklistMd)
       fd.append("affectsSp", String(affectsSp))
@@ -97,8 +109,11 @@ export function DesignChangeEditorDialog({
 
       const url = mode === "create"
         ? `/api/demands/${demandId}/design-changes`
+        : mode === "edit"
+        ? `/api/demands/${demandId}/design-changes/${dcId}`
         : `/api/demands/${demandId}/design-changes/${dcId}/revisions`
-      const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })
+      const method = mode === "edit" ? "PATCH" : "POST"
+      const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd })
       if (res.ok) { onOpenChange(false); onComplete() }
       else { const d = await res.json().catch(() => ({})); setError(d.error || "提交失敗") }
     } catch { setError("網路錯誤") } finally { setLoading(false) }
@@ -112,19 +127,40 @@ export function DesignChangeEditorDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
             <FileEdit className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
-            {mode === "create" ? "提出設計變更" : "修訂設計變更（開新版本）"}
+            {mode === "create" ? "提出設計變更" : mode === "edit" ? "編輯設計變更" : "修訂設計變更（開新版本）"}
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            於「{phaseLabel}」階段，需求 {demandNumber}。貼上 Markdown 檢查清單，系統會拆成逐條供需求方確認；僅留紀錄，不改變需求狀態或 SP。
+            {mode === "edit"
+              ? "編輯此設計變更的內容。因內容有更動，儲存後會重置審核狀態並重新通知需求窗口確認。"
+              : `於「${phaseLabel}」階段，需求 ${demandNumber}。貼上 Markdown 檢查清單，系統會拆成逐條供需求方確認；僅留紀錄，不改變需求狀態或 SP。`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 sm:space-y-4 overflow-y-auto px-1 py-1">
-          {mode === "create" && (
+          {(mode === "create" || mode === "edit") && (
             <div className="space-y-1.5">
               <Label className="text-xs sm:text-sm">變更標題 <span className="text-red-500">*</span></Label>
               <Input value={title} onChange={(e) => { setTitle(e.target.value); setError("") }}
                 placeholder="例如：KM 回答機器人 — 檔案格式限制調整" disabled={loading} className="text-sm" />
+            </div>
+          )}
+
+          {(mode === "create" || mode === "edit") && windowCandidates && windowCandidates.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs sm:text-sm flex items-center gap-1.5">
+                <UserCheck className="h-3.5 w-3.5" />需求窗口（審核人）
+              </Label>
+              <Select value={windowId || "none"} onValueChange={(v) => setWindowId(v === "none" ? "" : v)} disabled={loading}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="選擇需求窗口" /></SelectTrigger>
+                <SelectContent>
+                  {windowCandidates.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name}{u.id === contactPersonId ? "（專案窗口）" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">預設沿用專案設定的需求窗口，也可手動改由其他窗口審核此設計變更。</p>
             </div>
           )}
 
@@ -205,7 +241,7 @@ export function DesignChangeEditorDialog({
           <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm" onClick={() => onOpenChange(false)} disabled={loading}>取消</Button>
           <Button size="sm" className="h-8 text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50" onClick={handleSubmit} disabled={loading || spExceeds}>
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <FileEdit className="h-3.5 w-3.5 mr-1" />}
-            {mode === "create" ? "提交設計變更" : "送出新版本"}
+            {mode === "create" ? "提交設計變更" : mode === "edit" ? "儲存變更" : "送出新版本"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -79,9 +79,13 @@ interface Props {
   currentSp?: number
   watermarkBg?: string
   onPreviewDoc?: (doc: PreviewableDoc) => void
+  /** 需求窗口人選（供手動指定設計變更審核窗口） */
+  windowCandidates?: { id: string; name: string }[]
+  /** 專案目前的需求窗口 id（預設值） */
+  contactPersonId?: string | null
 }
 
-export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, currentUserId, canManage, currentSp = 0, watermarkBg, onPreviewDoc }: Props) {
+export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, currentUserId, canManage, currentSp = 0, watermarkBg, onPreviewDoc, windowCandidates, contactPersonId }: Props) {
   const [changes, setChanges] = useState<DesignChange[]>([])
   const [canPropose, setCanPropose] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -89,7 +93,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
   const [selectedVer, setSelectedVer] = useState<Record<string, number>>({})
   const [sel, setSel] = useState<Record<string, Selection>>({})
   const [editorOpen, setEditorOpen] = useState(false)
-  const [editorMode, setEditorMode] = useState<"create" | "revise">("create")
+  const [editorMode, setEditorMode] = useState<"create" | "revise" | "edit">("create")
   const [reviseTarget, setReviseTarget] = useState<DesignChange | null>(null)
   const [cancelTarget, setCancelTarget] = useState<DesignChange | null>(null)
   const [deleteDcTarget, setDeleteDcTarget] = useState<DesignChange | null>(null)
@@ -634,6 +638,11 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                           <FileEdit className="h-3.5 w-3.5 mr-1" />重新送出變更申請
                         </Button>
                       )}
+                      {dc.status === "PENDING" && (
+                        <Button size="sm" variant="outline" className="h-8 text-xs text-indigo-700 border-indigo-200 hover:bg-indigo-50" disabled={submitting === dc.id} onClick={() => { setReviseTarget(dc); setEditorMode("edit"); setEditorOpen(true) }}>
+                          <FileEdit className="h-3.5 w-3.5 mr-1" />編輯
+                        </Button>
+                      )}
                       {(dc.status === "PENDING" || dc.status === "REJECTED") && (
                         <Button size="sm" variant="outline" className="h-8 text-xs text-amber-700 border-amber-200 hover:bg-amber-50" disabled={submitting === dc.id} onClick={() => setCancelTarget(dc)}>
                           <Ban className="h-3.5 w-3.5 mr-1" />撤銷
@@ -673,7 +682,9 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
         open={editorOpen} onOpenChange={setEditorOpen}
         demandId={demandId} demandNumber={demandNumber} phaseLabel={phaseLabel} token={token} currentSp={currentSp}
         mode={editorMode} dcId={reviseTarget?.id}
-        initial={editorMode === "revise" && reviseTarget ? {
+        windowCandidates={windowCandidates} contactPersonId={contactPersonId}
+        initialWindowId={editorMode === "edit" && reviseTarget ? (latestRevOf(reviseTarget).reviews.find((r) => r.role === "REQUESTER")?.reviewerId ?? null) : null}
+        initial={(editorMode === "revise" || editorMode === "edit") && reviseTarget ? {
           title: reviseTarget.title,
           summary: latestRevOf(reviseTarget).summary,
           checklistMd: latestRevOf(reviseTarget).checklistMd ?? "",

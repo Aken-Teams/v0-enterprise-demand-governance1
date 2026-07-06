@@ -2289,6 +2289,8 @@ export default function DemandDetailPage() {
               currentSp={demand.confirmedSp ?? demand.estimatedSp}
               watermarkBg={watermarkBg}
               onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}
+              windowCandidates={Array.from(new Map(accessUsers.map((u) => [u.id, { id: u.id, name: u.name }])).values())}
+              contactPersonId={demand.contactPerson?.id ?? null}
             />
           </TabsContent>
         </Tabs>

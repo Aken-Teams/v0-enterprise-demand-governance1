@@ -29,13 +29,20 @@ export interface ReviewerTarget {
 /**
  * 第一階段審核人：需求窗口(REQUESTER) + 需求主管(MANAGER，若有指派)。
  * 董事會不在此階段——採兩段式：需求方通過後、若該版影響 SP，才送董事會。
+ *
+ * 需求窗口預設沿用專案設定 (demand.contactPersonId)，但可用 contactPersonOverride 手動指定。
+ * 若窗口與需求主管為同一人，只留一筆（避免 revisionId+reviewerId 唯一鍵衝突）。
  */
 export function resolveDesignChangeReviewers(
-  demand: { contactPersonId: string | null; demandManagerId: string | null }
+  demand: { contactPersonId: string | null; demandManagerId: string | null },
+  opts?: { contactPersonOverride?: string | null }
 ): ReviewerTarget[] {
   const targets: ReviewerTarget[] = []
-  if (demand.contactPersonId) targets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
-  if (demand.demandManagerId) targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
+  const requesterId = opts?.contactPersonOverride || demand.contactPersonId
+  if (requesterId) targets.push({ userId: requesterId, role: "REQUESTER" })
+  if (demand.demandManagerId && demand.demandManagerId !== requesterId) {
+    targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
+  }
   return targets
 }
 

@@ -99,6 +99,7 @@ export async function POST(
     const checklistMd = (formData.get("checklistMd") as string | null) ?? null
     const affectsSp = formData.get("affectsSp") === "true"
     const spNote = (formData.get("spNote") as string | null)?.trim() || null
+    const contactPersonOverride = (formData.get("contactPersonId") as string | null)?.trim() || null
     const files = (formData.getAll("files") as File[]).filter((f) => f.size > 0)
 
     if (!title) return NextResponse.json({ error: "請填寫變更標題" }, { status: 400 })
@@ -130,11 +131,21 @@ export async function POST(
     if (!DESIGN_CHANGE_ALLOWED_PHASES.includes(demand.status as typeof DESIGN_CHANGE_ALLOWED_PHASES[number])) {
       return NextResponse.json({ error: "設計變更僅能於 MVP / 開案 / 開發中 / 驗收 階段提出" }, { status: 400 })
     }
-    if (!demand.contactPersonId) {
+    // 需求窗口：預設沿用專案設定，可手動指定（須為本需求 REQUESTER 權限的使用者）
+    let finalContactPersonId = demand.contactPersonId
+    if (contactPersonOverride) {
+      const eligible = await prisma.demandAccess.findFirst({
+        where: { demandId: id, userId: contactPersonOverride },
+        select: { userId: true },
+      })
+      if (!eligible) return NextResponse.json({ error: "指定的需求窗口無效（須為對此需求有存取權的使用者）" }, { status: 400 })
+      finalContactPersonId = contactPersonOverride
+    }
+    if (!finalContactPersonId) {
       return NextResponse.json({ error: "請先指派需求窗口" }, { status: 400 })
     }
 
-    const reviewers = resolveDesignChangeReviewers(demand)
+    const reviewers = resolveDesignChangeReviewers(demand, { contactPersonOverride: finalContactPersonId })
     const checklistItems = parseChecklistMarkdown(checklistMd)
     // SP 影響：現值快照（伺服器端），增減量由前端提供（正=上調，負=下降）
     const spCurrent = affectsSp ? (demand.confirmedSp ?? demand.estimatedSp) : null
