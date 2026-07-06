@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import remarkBreaks from "remark-breaks"
+import rehypeRaw from "rehype-raw"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -89,6 +91,8 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
   const [editorMode, setEditorMode] = useState<"create" | "revise">("create")
   const [reviseTarget, setReviseTarget] = useState<DesignChange | null>(null)
   const [cancelTarget, setCancelTarget] = useState<DesignChange | null>(null)
+  const [deleteDcTarget, setDeleteDcTarget] = useState<DesignChange | null>(null)
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{ dcId: string; doc: DcDocument } | null>(null)
   const [draft, setDraft] = useState<Record<string, DraftState>>({})
   const [submitting, setSubmitting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -188,6 +192,36 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
       const res = await fetch(`/api/demands/${demandId}/design-changes/${dc.id}/cancel`, { method: "POST", headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) { setCancelTarget(null); await load() }
       else { const e = await res.json().catch(() => ({})); alert(e.error || "撤銷失敗") }
+    } finally { setSubmitting(null) }
+  }
+
+  const doDeleteDesignChange = async () => {
+    const dc = deleteDcTarget
+    if (!token || !dc) return
+    setSubmitting(dc.id)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/design-changes/${dc.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) { setDeleteDcTarget(null); await load() }
+      else { const e = await res.json().catch(() => ({})); alert(e.error || "刪除失敗") }
+    } finally { setSubmitting(null) }
+  }
+
+  const doDeleteFile = async () => {
+    if (!token || !deleteFileTarget) return
+    const { dcId, doc } = deleteFileTarget
+    setSubmitting(dcId)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/design-changes/${dcId}/documents?docId=${doc.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) {
+        setDeleteFileTarget(null)
+        // 若刪除的是目前預覽的檔案，清掉選取
+        setSel((s) => {
+          const c = { ...s }
+          if (c[dcId]?.kind === "file" && (c[dcId] as { kind: "file"; id: string }).id === doc.id) delete c[dcId]
+          return c
+        })
+        await load()
+      } else { const e = await res.json().catch(() => ({})); alert(e.error || "刪除失敗") }
     } finally { setSubmitting(null) }
   }
 
@@ -293,7 +327,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                   {/* 變更摘要 */}
                   <div className="px-3 sm:px-4 py-2.5 border-b">
                     <p className="text-[11px] font-semibold text-indigo-600 mb-1">變更摘要</p>
-                    <div className="prose prose-sm prose-neutral max-w-none text-sm"><ReactMarkdown remarkPlugins={[remarkGfm]}>{rev.summary}</ReactMarkdown></div>
+                    <div className="prose prose-sm prose-neutral max-w-none text-sm prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-2 prose-th:py-1 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-2 prose-td:py-1"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }}>{rev.summary}</ReactMarkdown></div>
                     {rev.affectsSp && (
                       <div className="mt-2 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs text-violet-900">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -465,13 +499,23 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                             <div className="space-y-1">
                               {devDocs.map((d) => {
                                 const active = selection?.kind === "file" && selection.id === d.id
+                                const canDeleteFile = canManage && (dc.status === "PENDING" || dc.status === "REJECTED" || dc.status === "CANCELLED")
                                 return (
-                                  <button key={d.id} onClick={() => setSel((s) => ({ ...s, [dc.id]: { kind: "file", id: d.id } }))}
-                                    className={cn("w-full flex items-center gap-2 px-2.5 py-2 rounded text-sm text-left", active ? "bg-indigo-50 text-indigo-700 border border-indigo-200" : "hover:bg-muted")}>
-                                    <Paperclip className="h-4 w-4 shrink-0" />
-                                    <span className="truncate flex-1">{d.fileName}</span>
-                                    {d.fileVersion > 1 && <Badge variant="outline" className="text-[10px]">v{d.fileVersion}</Badge>}
-                                  </button>
+                                  <div key={d.id}
+                                    className={cn("w-full flex items-center gap-1 pl-2.5 pr-1 py-2 rounded text-sm", active ? "bg-indigo-50 text-indigo-700 border border-indigo-200" : "hover:bg-muted")}>
+                                    <button onClick={() => setSel((s) => ({ ...s, [dc.id]: { kind: "file", id: d.id } }))}
+                                      className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                                      <Paperclip className="h-4 w-4 shrink-0" />
+                                      <span className="truncate flex-1">{d.fileName}</span>
+                                      {d.fileVersion > 1 && <Badge variant="outline" className="text-[10px]">v{d.fileVersion}</Badge>}
+                                    </button>
+                                    {canDeleteFile && (
+                                      <button onClick={() => setDeleteFileTarget({ dcId: dc.id, doc: d })}
+                                        className="shrink-0 p-1 text-muted-foreground/40 hover:text-red-600" title="刪除檔案">
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
                                 )
                               })}
                             </div>
@@ -581,16 +625,21 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     </Card>
                   </div>
 
-                  {/* 動作（重送 / 撤銷） */}
-                  {canManage && (dc.status === "REJECTED" || dc.status === "PENDING") && rev.version === dc.currentVersion && (
+                  {/* 動作（重送 / 撤銷 / 刪除） */}
+                  {canManage && rev.version === dc.currentVersion && (
                     <div className="px-3 sm:px-4 py-3 border-t flex justify-end gap-2">
                       {dc.status === "REJECTED" && (
                         <Button size="sm" className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white" disabled={submitting === dc.id} onClick={() => { setReviseTarget(dc); setEditorMode("revise"); setEditorOpen(true) }}>
                           <FileEdit className="h-3.5 w-3.5 mr-1" />重新送出變更申請
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" disabled={submitting === dc.id} onClick={() => setCancelTarget(dc)}>
-                        <Ban className="h-3.5 w-3.5 mr-1" />撤銷此設計變更
+                      {(dc.status === "PENDING" || dc.status === "REJECTED") && (
+                        <Button size="sm" variant="outline" className="h-8 text-xs text-amber-700 border-amber-200 hover:bg-amber-50" disabled={submitting === dc.id} onClick={() => setCancelTarget(dc)}>
+                          <Ban className="h-3.5 w-3.5 mr-1" />撤銷
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" disabled={submitting === dc.id} onClick={() => setDeleteDcTarget(dc)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />刪除
                       </Button>
                     </div>
                   )}
@@ -648,6 +697,38 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 刪除整筆設計變更 */}
+      <AlertDialog open={!!deleteDcTarget} onOpenChange={(open) => { if (!open) setDeleteDcTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除此設計變更？</AlertDialogTitle>
+            <AlertDialogDescription>
+              將<strong>永久刪除</strong>設計變更「{deleteDcTarget?.title}」的所有版本、審核紀錄與附加檔案，且無法復原。此操作與「撤銷」不同（撤銷會保留紀錄）。若只是想停止此變更，建議改用「撤銷」。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={doDeleteDesignChange}>確定刪除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 刪除單一檔案 */}
+      <AlertDialog open={!!deleteFileTarget} onOpenChange={(open) => { if (!open) setDeleteFileTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除此檔案？</AlertDialogTitle>
+            <AlertDialogDescription>
+              將刪除檔案「{deleteFileTarget?.doc.fileName}」，無法復原。若是上傳錯誤，刪除後可重新上傳正確檔案。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={doDeleteFile}>確定刪除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -693,7 +774,7 @@ function InlinePreview({ doc, watermarkBg, onFullScreen }: { doc: DcDocument; wa
   if (isText) {
     body = loadingText
       ? <div className="flex items-center justify-center py-10 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" />載入中…</div>
-      : <div className="prose prose-sm prose-neutral max-w-none text-sm"><ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown></div>
+      : <div className="prose prose-sm prose-neutral max-w-none text-sm prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-2 prose-th:py-1 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-2 prose-td:py-1"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }}>{text}</ReactMarkdown></div>
   } else if (isImg) {
     body = <img src={doc.fileUrl ?? ""} alt={doc.fileName} className="max-w-full rounded" />
   } else if (isPdf) {

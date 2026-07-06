@@ -99,3 +99,53 @@ export async function POST(
     return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
   }
 }
+
+// DELETE: 刪除設計變更的某個檔案 (?docId=...)；供管理者修正誤上傳的檔案
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; dcId: string }> }
+) {
+  try {
+    const auth = verifyRole(request, ["admin", "delivery"])
+    const { id, dcId } = await params
+    const docId = new URL(request.url).searchParams.get("docId")
+    if (!docId) return NextResponse.json({ error: "缺少 docId" }, { status: 400 })
+
+    const doc = await prisma.designChangeDocument.findUnique({
+      where: { id: docId },
+      include: {
+        revision: {
+          select: {
+            designChangeId: true,
+            designChange: { select: { demandId: true, status: true, seq: true, demand: { select: { organizationId: true } } } },
+          },
+        },
+      },
+    })
+    if (!doc || doc.revision.designChangeId !== dcId || doc.revision.designChange.demandId !== id) {
+      return NextResponse.json({ error: "檔案不存在" }, { status: 404 })
+    }
+    if (auth.role === "admin") {
+      const canWrite = await canAdminWrite(auth.userId, auth.adminScopeType, { id, organizationId: doc.revision.designChange.demand.organizationId })
+      if (!canWrite) return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
+    }
+    // 已通過的設計變更保留佐證，不可刪除文件
+    if (doc.revision.designChange.status === "APPROVED") {
+      return NextResponse.json({ error: "已通過的設計變更文件不可刪除" }, { status: 400 })
+    }
+
+    await prisma.designChangeDocument.delete({ where: { id: docId } })
+
+    logAudit({
+      userId: auth.userId, action: "DELETE", entity: "DEMAND", entityId: id, demandId: id,
+      details: { kind: "DESIGN_CHANGE_DOC", dcId, docId, fileName: doc.fileName },
+      request,
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    console.error("Design change document delete error:", error)
+    return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
+  }
+}
