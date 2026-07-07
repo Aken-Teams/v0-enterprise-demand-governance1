@@ -129,7 +129,7 @@ export async function POST(
     }
 
     if (!DESIGN_CHANGE_ALLOWED_PHASES.includes(demand.status as typeof DESIGN_CHANGE_ALLOWED_PHASES[number])) {
-      return NextResponse.json({ error: "設計變更僅能於 MVP / 開案 / 開發中 / 驗收 階段提出" }, { status: 400 })
+      return NextResponse.json({ error: "設計變更僅能於 開案 / 開發中 / 驗收 / 已結案 階段提出" }, { status: 400 })
     }
     // 需求窗口：預設沿用專案設定，可手動指定（須為本需求 REQUESTER 權限的使用者）
     let finalContactPersonId = demand.contactPersonId

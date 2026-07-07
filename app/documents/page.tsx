@@ -485,8 +485,7 @@ function SubsidiaryGuide() {
           <div className="border-t pt-3">
             <p className="font-medium text-foreground mb-1.5 sm:mb-2">可發起階段</p>
             <p className="leading-relaxed">
-              除「需求確認」外的各階段皆可發起設計變更：
-              <Badge className="ml-1 bg-amber-100 text-amber-700 text-[10px] sm:text-xs">MVP 架構確認</Badge>
+              可於以下階段發起設計變更：
               <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
               <Badge className="ml-1 bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
               <Badge className="ml-1 bg-cyan-100 text-cyan-700 text-[10px] sm:text-xs">驗收中</Badge>
@@ -865,8 +864,7 @@ function AdminDeliveryGuide() {
           <div className="border-t pt-3">
             <p className="font-medium text-foreground mb-1.5 sm:mb-2">可發起階段</p>
             <p className="leading-relaxed">
-              除「需求確認」外的各階段皆可發起：
-              <Badge className="ml-1 bg-amber-100 text-amber-700 text-[10px] sm:text-xs">MVP 架構確認</Badge>
+              可於以下階段發起：
               <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
               <Badge className="ml-1 bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
               <Badge className="ml-1 bg-cyan-100 text-cyan-700 text-[10px] sm:text-xs">驗收中</Badge>
@@ -1010,7 +1008,7 @@ function AdminDeliveryGuide() {
                     <span className="text-red-700">現有內容不符合 → 駁回</span>；
                     <span className="text-indigo-700">有新需求需要討論 → 設計變更</span>。
                   </p>
-                  <p>設計變更僅限 MVP 確認、開案確認、驗收中三個階段可發起。</p>
+                  <p>設計變更可於開案確認、開發中、驗收中、已結案階段發起。</p>
                 </div>
               </AccordionContent>
             </AccordionItem>

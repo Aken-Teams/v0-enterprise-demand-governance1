@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils"
 import {
   FileEdit, Plus, ChevronDown, ChevronRight, Check, X, Paperclip, Loader2,
-  CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban,
+  CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban, Save,
 } from "lucide-react"
 import { DESIGN_CHANGE_STATUS_MAP, CHECKLIST_MARK_MAP, STATUS_MAP } from "@/lib/constants/demand"
 import { DesignChangeEditorDialog } from "@/components/demand/design-change-editor-dialog"
@@ -100,8 +100,14 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
   const [deleteFileTarget, setDeleteFileTarget] = useState<{ dcId: string; doc: DcDocument } | null>(null)
   const [draft, setDraft] = useState<Record<string, DraftState>>({})
   const [submitting, setSubmitting] = useState<string | null>(null)
+  const [draftStatus, setDraftStatus] = useState<Record<string, "saving" | "saved">>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadTargetRef = useRef<string | null>(null)
+  // 暫存用：draftRef 讓非同步存檔讀到最新內容；seededRef 確保每筆只從伺服器還原一次
+  const draftRef = useRef<Record<string, DraftState>>({})
+  const seededRef = useRef<Set<string>>(new Set())
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  useEffect(() => { draftRef.current = draft }, [draft])
 
   const load = useCallback(async () => {
     if (!token) { setLoading(false); return }
@@ -109,16 +115,36 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
       const res = await fetch(`/api/demands/${demandId}/design-changes`, { headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) {
         const data = await res.json()
-        setChanges(data.designChanges ?? [])
+        const list: DesignChange[] = data.designChanges ?? []
+        setChanges(list)
         setCanPropose(!!data.canPropose)
         setExpanded((prev) => {
-          const list: DesignChange[] = data.designChanges ?? []
           if (list.length > 0 && Object.keys(prev).length === 0) return { [list[list.length - 1].id]: true }
           return prev
         })
+        // 從已暫存的回饋還原審核進度（每筆只還原一次，避免蓋掉編輯中的內容）
+        setDraft((prev) => {
+          const next = { ...prev }
+          for (const dc of list) {
+            const rev = dc.revisions[dc.revisions.length - 1]
+            if (!rev) continue
+            const minePending = rev.status === "PENDING" && rev.reviews.some((r) => r.reviewerId === currentUserId && r.decision === "PENDING")
+            if (minePending && !seededRef.current.has(dc.id)) {
+              const items: Record<string, { mark: Mark; comment: string }> = {}
+              for (const it of rev.items) {
+                const mine = it.feedback.find((f) => f.reviewerId === currentUserId)
+                if (mine && mine.mark !== "PENDING") items[it.id] = { mark: mine.mark, comment: mine.comment ?? "" }
+              }
+              const myRev = rev.reviews.find((r) => r.reviewerId === currentUserId)
+              next[dc.id] = { items, comment: myRev?.comment ?? "", files: [], itemFiles: {} }
+              seededRef.current.add(dc.id)
+            }
+          }
+          return next
+        })
       }
     } finally { setLoading(false) }
-  }, [demandId, token])
+  }, [demandId, token, currentUserId])
 
   useEffect(() => { load() }, [load])
 
@@ -182,10 +208,56 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
     setSubmitting(dc.id)
     try {
       const res = await fetch(`/api/demands/${demandId}/design-changes/${dc.id}/reviews`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })
-      if (res.ok) { setDraft((d) => ({ ...d, [dc.id]: emptyDraft() })); await load() }
+      if (res.ok) {
+        clearTimeout(saveTimers.current[dc.id])
+        seededRef.current.delete(dc.id)
+        setDraftStatus((s) => { const n = { ...s }; delete n[dc.id]; return n })
+        setDraft((d) => ({ ...d, [dc.id]: emptyDraft() }))
+        await load()
+      }
       else { const e = await res.json().catch(() => ({})); alert(e.error || "送出失敗") }
     } finally { setSubmitting(null) }
   }
+
+  // 暫存審核進度（不做最終裁決）。withFiles=true 會一併上傳目前附加的檔案。
+  const saveDraft = useCallback(async (dc: DesignChange, rev: Revision, withFiles: boolean) => {
+    if (!token) return
+    const cur = draftRef.current[dc.id] ?? emptyDraft()
+    const items = rev.items.map((it) => ({ itemId: it.id, mark: (cur.items[it.id]?.mark ?? "PENDING") as Mark, comment: cur.items[it.id]?.comment ?? "" }))
+    const fd = new FormData()
+    fd.append("revisionId", rev.id); fd.append("comment", cur.comment); fd.append("items", JSON.stringify(items))
+    if (withFiles) {
+      const ordered: { file: File; itemId: string }[] = []
+      cur.files.forEach((f) => ordered.push({ file: f, itemId: "" }))
+      Object.entries(cur.itemFiles).forEach(([itemId, arr]) => arr.forEach((f) => ordered.push({ file: f, itemId })))
+      ordered.forEach((o) => fd.append("files", o.file))
+      fd.append("fileItemIds", JSON.stringify(ordered.map((o) => o.itemId)))
+    }
+    setDraftStatus((s) => ({ ...s, [dc.id]: "saving" }))
+    try {
+      const res = await fetch(`/api/demands/${demandId}/design-changes/${dc.id}/reviews`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` }, body: fd })
+      if (res.ok) {
+        setDraftStatus((s) => ({ ...s, [dc.id]: "saved" }))
+        if (withFiles) {
+          // 已上傳的暫存檔清掉本地暫存，改由 load() 取回顯示
+          setDraft((d) => ({ ...d, [dc.id]: { ...(d[dc.id] ?? emptyDraft()), files: [], itemFiles: {} } }))
+          await load()
+        }
+      } else {
+        setDraftStatus((s) => { const n = { ...s }; delete n[dc.id]; return n })
+        if (withFiles) { const e = await res.json().catch(() => ({})); alert(e.error || "暫存失敗") }
+      }
+    } catch {
+      setDraftStatus((s) => { const n = { ...s }; delete n[dc.id]; return n })
+    }
+  }, [token, demandId, load])
+
+  // 逐條標記／說明變更時，延遲自動暫存（合併連續操作）
+  const scheduleAutoSave = useCallback((dc: DesignChange, rev: Revision) => {
+    if (!token) return
+    clearTimeout(saveTimers.current[dc.id])
+    saveTimers.current[dc.id] = setTimeout(() => { saveDraft(dc, rev, false) }, 1000)
+  }, [token, saveDraft])
 
   const openFilePicker = (target: string) => { uploadTargetRef.current = target; fileInputRef.current?.click() }
 
@@ -427,7 +499,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                                       {SEG.map((s, si) => {
                                         const active = myMark === s.m
                                         return (
-                                          <button key={s.m} onClick={() => setItemMark(dc.id, it.id, s.m)}
+                                          <button key={s.m} onClick={() => { setItemMark(dc.id, it.id, s.m); scheduleAutoSave(dc, rev) }}
                                             className={cn("px-2.5 py-1.5 flex items-center gap-1", si > 0 && "border-l", active ? s.active : "text-muted-foreground hover:bg-muted")}>
                                             <span className="font-bold">{s.icon}</span>{s.label}
                                           </button>
@@ -440,7 +512,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                                 {/* 疑慮/問題 → 說明 + 佐證附件（審核中可刪除） */}
                                 {iReview && hasIssue && (
                                   <div className="mt-2.5 space-y-2">
-                                    <Textarea value={cur.items[it.id]?.comment ?? ""} onChange={(e) => setItemComment(dc.id, it.id, e.target.value)}
+                                    <Textarea value={cur.items[it.id]?.comment ?? ""} onChange={(e) => { setItemComment(dc.id, it.id, e.target.value); scheduleAutoSave(dc, rev) }}
                                       placeholder={`說明${CHECKLIST_MARK_MAP[myMark].label}點（必填）...`} rows={2} className="text-sm" />
                                     {draftFiles.map((f, i) => (
                                       <div key={`${f.name}-${i}`} className="flex items-center gap-1.5 text-xs rounded bg-muted/40 border px-2 py-1">
@@ -454,10 +526,12 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                                   </div>
                                 )}
 
-                                {/* 已提交的需求方回應 + 綁定佐證文件 */}
-                                {(it.feedback.length > 0 || itemDocs.length > 0) && (
+                                {/* 已提交的需求方回應 + 綁定佐證文件（審核中隱藏自己的暫存標記，避免與上方按鈕重複） */}
+                                {(() => {
+                                const shownFeedback = it.feedback.filter((fb) => !(iReview && fb.reviewerId === currentUserId))
+                                return (shownFeedback.length > 0 || itemDocs.length > 0) ? (
                                   <div className="mt-2.5 pt-2.5 border-t space-y-1.5">
-                                    {it.feedback.map((fb) => {
+                                    {shownFeedback.map((fb) => {
                                       const fmk = CHECKLIST_MARK_MAP[fb.mark]
                                       return (
                                         <div key={fb.reviewerId} className="text-sm flex items-start gap-1.5">
@@ -478,7 +552,8 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                                       </div>
                                     ))}
                                   </div>
-                                )}
+                                ) : null
+                                })()}
                               </div>
                             )
                           })}
@@ -595,7 +670,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                       {iReview && (
                         <div className="border-t p-3 space-y-2 mt-auto">
                           <p className="text-[11px] font-semibold text-muted-foreground">審核</p>
-                          <Textarea value={cur.comment} onChange={(e) => setOverall(dc.id, e.target.value)} placeholder="回饋／總回應（選填；駁回請說明或標記問題項目）..." rows={2} className="text-xs" />
+                          <Textarea value={cur.comment} onChange={(e) => { setOverall(dc.id, e.target.value); scheduleAutoSave(dc, rev) }} placeholder="回饋／總回應（選填；駁回請說明或標記問題項目）..." rows={2} className="text-xs" />
                           {cur.files.length > 0 && (
                             <div className="space-y-1">
                               {cur.files.map((f, i) => (
@@ -612,11 +687,22 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                           {!canApprove && !iAmBoard && (
                             <p className="text-[11px] text-amber-600">需將全部檢查項目標記為「確認」才能通過（有疑慮/問題請駁回）。</p>
                           )}
-                          <div className="flex items-center justify-between gap-2">
-                            <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1" onClick={() => openFilePicker("review:" + dc.id)}>
-                              <Paperclip className="h-3.5 w-3.5" />附加檔案
-                            </button>
-                            <div className="flex gap-2">
+                          <p className="text-[11px] text-muted-foreground/80">不必一次審完 —— 標記或附加檔案都會自動暫存，可分次完成，最後再按通過／駁回送出。</p>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0" onClick={() => openFilePicker("review:" + dc.id)}>
+                                <Paperclip className="h-3.5 w-3.5" />附加檔案
+                              </button>
+                              {draftStatus[dc.id] === "saving" ? (
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />暫存中…</span>
+                              ) : draftStatus[dc.id] === "saved" ? (
+                                <span className="text-[11px] text-emerald-600 flex items-center gap-1"><Check className="h-3 w-3" />已暫存</span>
+                              ) : null}
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <Button size="sm" variant="outline" className="h-8 text-xs" disabled={submitting === dc.id} onClick={() => saveDraft(dc, rev, true)}>
+                                <Save className="h-3.5 w-3.5 mr-1" />暫存
+                              </Button>
                               <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" disabled={submitting === dc.id} onClick={() => submitReview(dc, rev, "REJECTED")}>
                                 {submitting === dc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <X className="h-3.5 w-3.5 mr-1" />}駁回
                               </Button>
@@ -669,8 +755,21 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           const target = uploadTargetRef.current
           e.target.value = ""; uploadTargetRef.current = null
           if (!picked.length || !target) return
-          if (target.startsWith("review:")) { addFiles(target.slice(7), picked); return }
-          if (target.startsWith("item:")) { const [, dcId, itemId] = target.split(":"); addItemFiles(dcId, itemId, picked); return }
+          if (target.startsWith("review:")) {
+            const dcId = target.slice(7)
+            addFiles(dcId, picked)
+            const dc = changes.find((c) => c.id === dcId)
+            // 延遲讓 state 落定後，連同附件一起暫存（不必等按通過／駁回）
+            if (dc) setTimeout(() => saveDraft(dc, latestRevOf(dc), true), 300)
+            return
+          }
+          if (target.startsWith("item:")) {
+            const [, dcId, itemId] = target.split(":")
+            addItemFiles(dcId, itemId, picked)
+            const dc = changes.find((c) => c.id === dcId)
+            if (dc) setTimeout(() => saveDraft(dc, latestRevOf(dc), true), 300)
+            return
+          }
           // 上傳到該版本的檔案（開發端）
           if (!token) return
           const fd = new FormData(); picked.forEach((f) => fd.append("files", f))

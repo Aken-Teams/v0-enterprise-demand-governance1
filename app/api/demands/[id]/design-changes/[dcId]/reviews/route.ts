@@ -196,3 +196,97 @@ export async function POST(
     return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
   }
 }
+
+// PATCH: 暫存審核進度 —— 儲存逐條標記／說明／附件，但「不」做最終裁決（維持待確認）。
+// 讓審核人可分次完成，不必一次確認完所有項目。
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; dcId: string }> }
+) {
+  try {
+    const auth = verifyAuth(request)
+    const { id, dcId } = await params
+
+    const formData = await request.formData()
+    const revisionId = formData.get("revisionId") as string
+    const overallComment = (formData.get("comment") as string | null) ?? ""
+    let items: ItemInput[] = []
+    try { items = JSON.parse((formData.get("items") as string) || "[]") } catch { items = [] }
+    let fileItemIds: string[] = []
+    try { fileItemIds = JSON.parse((formData.get("fileItemIds") as string) || "[]") } catch { fileItemIds = [] }
+    const rawFiles = formData.getAll("files") as File[]
+    const files = rawFiles.map((f, i) => ({ file: f, itemId: fileItemIds[i] || null })).filter((x) => x.file.size > 0)
+
+    if (!revisionId) return NextResponse.json({ error: "缺少版本" }, { status: 400 })
+    for (const { file } of files) {
+      if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: `檔案「${file.name}」超過 10MB 限制` }, { status: 400 })
+      if (!ALLOWED_MIME_TYPES.has(file.type)) return NextResponse.json({ error: `檔案「${file.name}」格式不支援` }, { status: 400 })
+      if (file.type === "application/octet-stream") {
+        const ext = file.name.split(".").pop()?.toLowerCase() || ""
+        if (!ALLOWED_EXTENSIONS.has(ext)) return NextResponse.json({ error: `檔案「${file.name}」格式不支援 (.${ext})` }, { status: 400 })
+      }
+    }
+
+    const revision = await prisma.designChangeRevision.findUnique({
+      where: { id: revisionId },
+      include: {
+        designChange: { select: { demandId: true, currentVersion: true } },
+        reviews: true,
+        items: { select: { id: true } },
+      },
+    })
+    if (!revision || revision.designChangeId !== dcId || revision.designChange.demandId !== id) {
+      return NextResponse.json({ error: "版本不存在" }, { status: 404 })
+    }
+    if (revision.status !== "PENDING") return NextResponse.json({ error: "此版本已完成審核" }, { status: 400 })
+    if (revision.version !== revision.designChange.currentVersion) {
+      return NextResponse.json({ error: "僅能暫存最新版本" }, { status: 400 })
+    }
+    const myReview = revision.reviews.find((r) => r.reviewerId === auth.userId)
+    if (!myReview) return NextResponse.json({ error: "您非此設計變更的指定審核人" }, { status: 403 })
+    if (myReview.decision !== "PENDING") return NextResponse.json({ error: "您已審核過此版本" }, { status: 400 })
+
+    const validItemIds = new Set(revision.items.map((it) => it.id))
+    await prisma.$transaction(async (tx) => {
+      for (const it of items) {
+        if (!validItemIds.has(it.itemId)) continue
+        if (it.mark === "PENDING") {
+          // 取消標記 → 移除既有暫存回饋
+          await tx.designChangeItemFeedback.deleteMany({ where: { itemId: it.itemId, reviewerId: auth.userId } })
+        } else {
+          await tx.designChangeItemFeedback.upsert({
+            where: { itemId_reviewerId: { itemId: it.itemId, reviewerId: auth.userId } },
+            create: { itemId: it.itemId, reviewerId: auth.userId, mark: it.mark, comment: it.comment?.trim() || null },
+            update: { mark: it.mark, comment: it.comment?.trim() || null },
+          })
+        }
+      }
+      // 暫存整體回應（維持待確認，不設 decidedAt）
+      await tx.designChangeReview.update({ where: { id: myReview.id }, data: { comment: overallComment.trim() || null } })
+    })
+
+    // 暫存附件（存為該版本的文件，uploadedBy = 審核人；可綁定 checklist 項目）
+    if (files.length > 0) {
+      const uploadDir = path.join(process.cwd(), "uploads", "demands", id)
+      await mkdir(uploadDir, { recursive: true })
+      for (const { file, itemId } of files) {
+        const buffer = Buffer.from(await file.arrayBuffer())
+        const safeFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._\-一-鿿]/g, "_")}`
+        await writeFile(path.join(uploadDir, safeFileName), buffer)
+        await prisma.designChangeDocument.create({
+          data: {
+            revisionId, fileName: file.name, fileUrl: `/api/uploads/demands/${id}/${safeFileName}`,
+            fileSize: file.size, docGroup: crypto.randomUUID(), fileVersion: 1, uploadedById: auth.userId,
+            checklistItemId: itemId && validItemIds.has(itemId) ? itemId : null,
+          },
+        })
+      }
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    console.error("Design change draft save error:", error)
+    return NextResponse.json({ error: "伺服器錯誤" }, { status: 500 })
+  }
+}
