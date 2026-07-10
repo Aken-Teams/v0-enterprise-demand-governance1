@@ -22,9 +22,11 @@ interface SpAllocationChartProps {
   estimatedSp?: number
   settlementType?: "override" | "adjustment" | null
   settlementReason?: string | null
+  /** 已終止（代簽直接結案）：只呈現結算金額，不把 SP 攤到各階段 */
+  terminated?: boolean
 }
 
-export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlementType, settlementReason }: SpAllocationChartProps) {
+export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlementType, settlementReason, terminated }: SpAllocationChartProps) {
   const hasSettlement = estimatedSp != null && estimatedSp !== totalSp
   const isOverride = hasSettlement && settlementType === "override"
   const ratio = isOverride && estimatedSp ? totalSp / estimatedSp : 1
@@ -32,6 +34,40 @@ export function SpAllocationChart({ phasePlans, totalSp, estimatedSp, settlement
 
   const isAdjustment = hasSettlement && settlementType === "adjustment"
   const hasOriginalData = isAdjustment && phasePlans.some((p) => p.originalPlannedSp != null)
+
+  // 已終止：不顯示各階段分配（避免誤會後段階段有完成），只呈現結算金額
+  if (terminated) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-center gap-4 py-2">
+          <div className="text-center">
+            <p className="text-[11px] text-muted-foreground">原規劃</p>
+            <p className="text-lg font-bold text-muted-foreground/50 line-through">{estimatedSp ?? totalSp}</p>
+          </div>
+          <div className="text-muted-foreground text-lg">→</div>
+          <div className="text-center">
+            <p className="text-[11px] text-muted-foreground">終止結算</p>
+            <p className="text-3xl font-bold text-primary leading-none">{totalSp}<span className="text-sm font-normal text-muted-foreground ml-1">SP</span></p>
+          </div>
+        </div>
+        {hasSettlement && (
+          <div className="rounded-lg border border-orange-200 bg-orange-50/50 px-4 py-2.5 text-sm">
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-muted-foreground line-through">{estimatedSp} SP</span>
+              <span className="text-muted-foreground">×</span>
+              <span className="font-semibold text-orange-600">{settlementRate}%</span>
+              <span className="text-muted-foreground">=</span>
+              <span className="font-semibold text-primary">{totalSp} SP</span>
+            </div>
+            {settlementReason && <p className="text-xs text-muted-foreground mt-1.5 text-center">{settlementReason}</p>}
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground/70 text-center leading-relaxed">
+          此為專案<span className="font-medium">終止時的結算金額</span>，非各階段實際完成的 SP 分配。
+        </p>
+      </div>
+    )
+  }
 
   const rawData = PIPELINE_STEPS
     .map((phase) => {

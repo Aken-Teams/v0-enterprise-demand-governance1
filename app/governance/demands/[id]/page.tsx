@@ -1851,6 +1851,7 @@ export default function DemandDetailPage() {
                       phasePlans={demand.phasePlans}
                       totalSp={demand.confirmedSp ?? demand.estimatedSp}
                       estimatedSp={demand.estimatedSp}
+                      terminated={demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated}
                       settlementType={demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp
                         ? (demand.phaseSignoffs?.some(s => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED") ? "override" : "adjustment")
                         : null}

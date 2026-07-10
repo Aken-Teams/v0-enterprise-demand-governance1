@@ -608,6 +608,12 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const isOverride = demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp
     && demand.phaseSignoffs?.some((s: any) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED")
   const isAdjustment = demand.confirmedSp != null && demand.confirmedSp !== demand.estimatedSp && !isOverride
+  const isTerminated = demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated
+  // 終止當下所在的階段（代簽結案前的 fromStatus）→ 用於階段進度只標到實際到達的階段
+  const terminatedFromStatus = isTerminated
+    ? (demand.statusHistory?.find((h: any) => h.toStatus === "CLOSED" && h.comment?.includes("SP_ADJUSTMENT"))?.fromStatus ?? null)
+    : null
+  const terminatedAtIdx = terminatedFromStatus ? PIPELINE_STEPS.indexOf(terminatedFromStatus as typeof PIPELINE_STEPS[number]) : -1
   const ratio = isOverride && demand.estimatedSp && demand.confirmedSp != null ? demand.confirmedSp / demand.estimatedSp : 1
 
   const hasOriginalData = isAdjustment && demand.phasePlans.some((p: any) => p.originalPlannedSp != null)
@@ -1140,7 +1146,35 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {spPieData.length > 0 ? (
+                    {isTerminated ? (
+                      /* 已終止：只呈現結算金額，不把 SP 攤到各階段（避免誤會後段階段有完成） */
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-center gap-4 py-2">
+                          <div className="text-center">
+                            <p className="text-[11px] text-muted-foreground">原規劃</p>
+                            <p className="text-lg font-bold text-muted-foreground/50 line-through">{demand.estimatedSp}</p>
+                          </div>
+                          <div className="text-muted-foreground text-lg">→</div>
+                          <div className="text-center">
+                            <p className="text-[11px] text-muted-foreground">終止結算</p>
+                            <p className="text-3xl font-bold text-primary leading-none">{demand.confirmedSp ?? sp}<span className="text-sm font-normal text-muted-foreground ml-1">SP</span></p>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-orange-200 bg-orange-50/50 px-4 py-2.5 text-sm">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-muted-foreground line-through">{demand.estimatedSp} SP</span>
+                            <span className="text-muted-foreground">×</span>
+                            <span className="font-semibold text-orange-600">{Math.round(((demand.confirmedSp ?? sp) / demand.estimatedSp) * 100)}%</span>
+                            <span className="text-muted-foreground">=</span>
+                            <span className="font-semibold text-primary">{demand.confirmedSp ?? sp} SP</span>
+                          </div>
+                          {settlementReason && <p className="text-xs text-muted-foreground mt-1.5 text-center">{settlementReason}</p>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground/70 text-center leading-relaxed">
+                          此為專案<span className="font-medium">終止時的結算金額</span>，非各階段實際完成的 SP 分配。
+                        </p>
+                      </div>
+                    ) : spPieData.length > 0 ? (
                       <div>
                         <div className="h-[160px]">
                           <ResponsiveContainer width="100%" height="100%">
@@ -1250,9 +1284,13 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       {PIPELINE_STEPS.map((phase, idx) => {
                         const plan = phasePlanMap[phase]
                         const phaseInfo = STATUS_MAP[phase]
-                        const isPast = currentStepIdx >= 0 && idx < currentStepIdx
-                        const isCurrent = idx === currentStepIdx && !isRejected
-                        const isFuture = currentStepIdx >= 0 ? idx > currentStepIdx : true
+                        const isClosedRow = phase === "CLOSED"
+                        const isTermRow = isTerminated && isClosedRow
+                        // 終止時：進度只標到實際到達的階段（reachedIdx），之後階段視為未進行
+                        const reachedIdx = isTerminated && terminatedAtIdx >= 0 ? terminatedAtIdx : currentStepIdx
+                        const isPast = isTerminated ? (idx <= reachedIdx && !isClosedRow) : (currentStepIdx >= 0 && idx < currentStepIdx)
+                        const isCurrent = isTerminated ? false : (idx === currentStepIdx && !isRejected)
+                        const isFuture = isTerminated ? (idx > reachedIdx && !isClosedRow) : (currentStepIdx >= 0 ? idx > currentStepIdx : true)
 
                         const dateRange =
                           plan?.plannedStart && plan?.plannedEnd
@@ -1269,7 +1307,9 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               isCurrent && "bg-primary/[0.04]",
                             )}
                           >
-                            {isPast ? (
+                            {isTermRow ? (
+                              <XCircle className="h-4 w-4 text-zinc-400 shrink-0" />
+                            ) : isPast ? (
                               <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
                             ) : isCurrent ? (
                               <div className="h-4 w-4 shrink-0 relative flex items-center justify-center">
@@ -1282,15 +1322,17 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
                             <span className={cn(
                               "text-sm flex-1 min-w-0",
+                              isTermRow && "font-medium text-zinc-600",
                               isCurrent && "font-semibold text-foreground",
                               isPast && "text-muted-foreground",
                               isFuture && "text-muted-foreground/50",
                             )}>
-                              {phaseInfo?.label}
+                              {isTermRow ? "已終止" : phaseInfo?.label}
+                              {isTerminated && terminatedFromStatus === phase && <span className="text-[11px] text-zinc-400 ml-1.5">· 終止於此</span>}
                               {isCurrent && dcHasPending && " - 設計變更"}
                             </span>
 
-                            {dateRange && (
+                            {dateRange && (!isTerminated || isPast) && (
                               <span className={cn(
                                 "text-[11px] shrink-0 hidden xl:inline",
                                 isCurrent ? "text-muted-foreground" : "text-muted-foreground/60",
@@ -1299,7 +1341,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               </span>
                             )}
 
-                            {(() => {
+                            {!isTerminated && (() => {
                               const currentSp = plan?.plannedSp ?? 0
                               const adjustedSp = isOverride ? Math.round(currentSp * ratio * 10) / 10 : currentSp
                               const origSp = isOverride ? currentSp
