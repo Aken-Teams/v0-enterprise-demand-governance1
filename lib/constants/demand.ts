@@ -8,6 +8,16 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
   CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
+  // 顯示用（非資料庫狀態）：經專案 Master 代簽直接結案 → 客戶認知為「已終止」
+  TERMINATED: { label: "已終止", color: "bg-zinc-200 text-zinc-700" },
+}
+
+/**
+ * 需求「顯示用」狀態鍵：CLOSED 且經代簽終止 → 顯示為 TERMINATED（已終止），其餘照原狀態。
+ * 供狀態徽章使用；實際資料庫狀態仍為 CLOSED（SP 結算、分析等不受影響）。
+ */
+export function demandStatusKey(status: string, isTerminated?: boolean | null): string {
+  return status === "CLOSED" && isTerminated ? "TERMINATED" : status
 }
 
 export const PIPELINE_STEPS = [

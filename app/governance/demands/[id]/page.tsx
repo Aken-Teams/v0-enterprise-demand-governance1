@@ -18,7 +18,7 @@ import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -728,7 +728,7 @@ export default function DemandDetailPage() {
     )
   }
 
-  const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+  const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
   const isOnHold = demand.status === "ON_HOLD"

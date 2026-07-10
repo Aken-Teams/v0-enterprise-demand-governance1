@@ -246,7 +246,15 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: Record<string, unknown> = {}
-    if (status && VALID_STATUSES.has(status)) {
+    if (status === "TERMINATED") {
+      // 顯示用狀態：代簽直接結案（狀態仍為 CLOSED）
+      where.status = "CLOSED"
+      where.isTerminated = true
+    } else if (status === "CLOSED") {
+      // 「已結案」排除已終止（兩者分開呈現）
+      where.status = "CLOSED"
+      where.isTerminated = false
+    } else if (status && VALID_STATUSES.has(status)) {
       where.status = status
     }
     if (organizationId) {
@@ -358,6 +366,12 @@ export async function GET(request: NextRequest) {
     for (const c of counts) {
       statusCounts[c.status] = c._count._all
     }
+    // 已終止（代簽直接結案）從已結案中拆出來單獨計數
+    const terminatedCount = await prisma.demand.count({
+      where: { AND: [finalCountWhere, { status: "CLOSED", isTerminated: true }] },
+    })
+    statusCounts["TERMINATED"] = terminatedCount
+    if (statusCounts["CLOSED"]) statusCounts["CLOSED"] = Math.max(0, statusCounts["CLOSED"] - terminatedCount)
 
     // SP wallet summary for organization-scoped queries (progressive consumption)
     let spSummary: { totalQuota: number; usedSp: number; byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number }[] } | undefined
@@ -417,6 +431,7 @@ export async function GET(request: NextRequest) {
           title: d.title,
           description: d.description,
           status: d.status,
+          isTerminated: (d as unknown as { isTerminated?: boolean }).isTerminated ?? false,
           vendor: d.vendor,
           priority: d.priority,
           estimatedSp: d.estimatedSp,

@@ -89,6 +89,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
   CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
+  TERMINATED: { label: "已終止", color: "bg-zinc-200 text-zinc-700" },
 }
 
 export default function InboxPage() {
@@ -704,7 +705,7 @@ function InboxContent() {
           <>
             <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3">
               {paginatedDemands.map((demand) => {
-                const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+                const statusInfo = STATUS_MAP[(demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated) ? "TERMINATED" : demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
                 const pc = demand.phaseCompletion
                 return (
                   <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">

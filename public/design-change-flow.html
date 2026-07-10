@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>設計變更流程示意圖</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #ffffff;
+      font-family: "Noto Sans TC", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #1e293b;
+      display: flex;
+      justify-content: center;
+      padding: 40px 24px 56px;
+    }
+    .card {
+      width: 100%;
+      max-width: 1100px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      letter-spacing: .5px;
+    }
+    .sub {
+      font-size: 13px;
+      color: #64748b;
+      margin: 0 0 24px;
+    }
+    .diagram {
+      display: flex;
+      justify-content: center;
+    }
+    .mermaid { font-size: 15px; }
+    .legend {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      font-size: 13px;
+      color: #475569;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .dot { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; }
+    .d-dev { background: #e0e7ff; border-color: #6366f1; }
+    .d-req { background: #fef9e7; border-color: #f59e0b; }
+    .d-rej { background: #fde8e8; border-color: #ef4444; }
+    .d-board { background: #ede9fe; border-color: #8b5cf6; }
+    .d-done { background: #e6f4ea; border-color: #22c55e; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>設計變更流程</h1>
+    <p class="sub">開案確認 / 開發中 / 驗收中 / 已結案 階段皆可發起</p>
+
+    <div class="diagram">
+      <pre class="mermaid">
+flowchart LR
+    A([設計變更發起]) --> B[需求方逐條確認]
+    B -->|全部確認| C{影響 SP?}
+    C -->|是| F[董事會審 SP]
+    F -->|通過| E([設計變更通過<br/>留為正式紀錄])
+    C -->|否| E
+    B -.有疑慮／問題.-> D[駁回<br/>修訂後重新送出]
+    F -.駁回.-> D
+
+    style A fill:#e0e7ff,stroke:#6366f1,color:#312e81
+    style B fill:#fef9e7,stroke:#f59e0b,color:#78350f
+    style C fill:#fdf6e3,stroke:#f59e0b,color:#78350f
+    style D fill:#fde8e8,stroke:#ef4444,color:#7f1d1d
+    style F fill:#ede9fe,stroke:#8b5cf6,color:#4c1d95
+    style E fill:#e6f4ea,stroke:#22c55e,color:#14532d
+      </pre>
+    </div>
+
+    <div class="legend">
+      <span><i class="dot d-dev"></i>設計變更發起（起點）</span>
+      <span><i class="dot d-req"></i>需求方確認 / 判斷影響 SP</span>
+      <span><i class="dot d-rej"></i>駁回・修訂重送</span>
+      <span><i class="dot d-board"></i>董事會審 SP</span>
+      <span><i class="dot d-done"></i>通過・留紀錄（終點）</span>
+    </div>
+  </div>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { curve: "basis" } })
+  </script>
+</body>
+</html>

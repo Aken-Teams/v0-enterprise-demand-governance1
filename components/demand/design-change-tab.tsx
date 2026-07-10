@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils"
 import {
   FileEdit, Plus, ChevronDown, ChevronRight, Check, X, Paperclip, Loader2,
-  CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban, Save,
+  CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban, Save, UserCheck,
 } from "lucide-react"
 import { DESIGN_CHANGE_STATUS_MAP, CHECKLIST_MARK_MAP, STATUS_MAP } from "@/lib/constants/demand"
 import { DesignChangeEditorDialog } from "@/components/demand/design-change-editor-dialog"
@@ -118,10 +118,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
         const list: DesignChange[] = data.designChanges ?? []
         setChanges(list)
         setCanPropose(!!data.canPropose)
-        setExpanded((prev) => {
-          if (list.length > 0 && Object.keys(prev).length === 0) return { [list[list.length - 1].id]: true }
-          return prev
-        })
+        // 預設全部收合（不自動展開）
         // 從已暫存的回饋還原審核進度（每筆只還原一次，避免蓋掉編輯中的內容）
         setDraft((prev) => {
           const next = { ...prev }
@@ -365,6 +362,23 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                 {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
                 <span className="font-mono text-xs text-muted-foreground shrink-0">DC-{String(dc.seq).padStart(2, "0")}</span>
                 <span className="font-medium text-sm truncate flex-1">{dc.title}</span>
+                {(() => {
+                  // 審核人標籤（中性色，只表明「是誰」，不與狀態徽章搶色）
+                  const pend = latest.reviews.filter((r) => r.decision === "PENDING")
+                  const shown = pend.length > 0 ? pend : latest.reviews
+                  if (shown.length === 0) return null
+                  const names = shown.map((r) => r.reviewer.name)
+                  const label = names.slice(0, 2).join("、") + (names.length > 2 ? ` +${names.length - 2}` : "")
+                  return (
+                    <span
+                      className="hidden sm:inline-flex items-center gap-1 shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs max-w-[220px]"
+                      title={`審核人：${names.join("、")}`}
+                    >
+                      <UserCheck className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate font-medium text-slate-700">{label}</span>
+                    </span>
+                  )
+                })()}
                 <Badge variant="outline" className="text-[10px] shrink-0 bg-slate-50">{STATUS_MAP[dc.phase]?.label ?? dc.phase} 提出</Badge>
                 {latest.affectsSp && <Badge className="bg-violet-100 text-violet-700 text-[10px] gap-0.5 shrink-0"><CircleDollarSign className="h-3 w-3" />影響SP</Badge>}
                 <Badge variant="outline" className="text-[10px] shrink-0">v{dc.currentVersion}</Badge>

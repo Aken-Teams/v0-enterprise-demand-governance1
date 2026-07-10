@@ -259,6 +259,7 @@ model Demand {
   desiredDate     DateTime? /// 希望完成時間
   expectedDate    DateTime? /// 預計完成時間
   completedDate   DateTime? /// 實際完成時間
+  isTerminated    Boolean        @default(false) /// 經專案 Master 代簽直接結案 → 客戶認知為「已終止」（狀態仍為 CLOSED）
   rejectReason    String?        @db.Text
   holdReason      String?        @db.Text /// 暫緩原因
   vendor          String         @default("JV") /// 開發商名稱

@@ -263,6 +263,7 @@ export async function PATCH(
               status: "CLOSED",
               completedDate: now,
               confirmedSp: settledSp,
+              isTerminated: true, // 代簽直接結案 → 客戶認知為「已終止」
             },
           })
           await tx.demandStatusHistory.create({

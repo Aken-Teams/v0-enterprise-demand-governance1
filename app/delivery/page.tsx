@@ -30,6 +30,7 @@ import {
   PIPELINE_STEPS,
   PHASE_DOCUMENT_MAP,
   DOCUMENT_TYPE_LABELS,
+  demandStatusKey,
 } from "@/lib/constants/demand"
 
 interface DemandDocument {
@@ -435,7 +436,7 @@ export default function DeliveryDashboardPage() {
                 ).length
                 const missingDocs = getMissingDocs(demand)
                 const taskWarnings = getTaskWarnings(demand.subTasks)
-                const statusInfo = STATUS_MAP[demand.status]
+                const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)]
                 const isExpanded = expandedIds.has(demand.id)
                 const hasEdits = hasPendingEdits(demand.id)
                 const isSaving = savingDemand === demand.id

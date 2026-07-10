@@ -41,7 +41,7 @@ import {
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { DesignChangeTab } from "@/components/demand/design-change-tab"
@@ -550,7 +550,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
     )
   }
 
-  const statusInfo = STATUS_MAP[demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+  const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
   const sp = demand.confirmedSp ?? demand.estimatedSp
   const isRejected = demand.status === "REJECTED"
   const isCancelled = demand.status === "CANCELLED"
