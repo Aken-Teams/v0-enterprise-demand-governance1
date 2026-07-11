@@ -148,15 +148,36 @@ export async function POST(
       let finalType: string = docType
       let finalPhase: DemandStatus | null = phase ? (phase as DemandStatus) : null
       if (group) {
-        const latest = await prisma.demandDocument.findFirst({
-          where: { demandId: id, docGroup: group },
-          orderBy: { version: "desc" },
-          select: { version: true, type: true, phase: true },
-        })
-        if (!latest) return NextResponse.json({ error: "找不到要更新的文件版本群組" }, { status: 400 })
-        version = latest.version + 1
-        finalType = latest.type
-        finalPhase = latest.phase
+        if (group.startsWith("solo:")) {
+          // 舊資料（docGroup=null）→ 先納入版本群組
+          const soloId = group.slice(5)
+          const soloDoc = await prisma.demandDocument.findFirst({
+            where: { id: soloId, demandId: id },
+            select: { id: true, version: true, type: true, phase: true, docGroup: true },
+          })
+          if (!soloDoc) return NextResponse.json({ error: "找不到要更新的文件" }, { status: 400 })
+          const realGroup = soloDoc.docGroup ?? soloDoc.id
+          if (!soloDoc.docGroup) {
+            await prisma.demandDocument.update({
+              where: { id: soloDoc.id },
+              data: { docGroup: realGroup, version: soloDoc.version || 1 },
+            })
+          }
+          group = realGroup
+          version = (soloDoc.version || 1) + 1
+          finalType = soloDoc.type
+          finalPhase = soloDoc.phase
+        } else {
+          const latest = await prisma.demandDocument.findFirst({
+            where: { demandId: id, docGroup: group },
+            orderBy: { version: "desc" },
+            select: { version: true, type: true, phase: true },
+          })
+          if (!latest) return NextResponse.json({ error: "找不到要更新的文件版本群組" }, { status: 400 })
+          version = latest.version + 1
+          finalType = latest.type
+          finalPhase = latest.phase
+        }
       } else {
         group = randomUUID()
       }
@@ -209,7 +230,7 @@ export async function POST(
     const formData = await request.formData()
     const phase = formData.get("phase") as string | null
     const docType = (formData.get("type") as string) || "ATTACHMENT"
-    const docGroup = (formData.get("docGroup") as string | null) || null
+    let docGroup = (formData.get("docGroup") as string | null) || null
     const changeNote = ((formData.get("changeNote") as string | null) || "").trim() || null
     const designChangeId = (formData.get("designChangeId") as string | null) || null
 
@@ -227,15 +248,36 @@ export async function POST(
     let groupType: DocumentType | null = null
     let groupPhase: DemandStatus | null = null
     if (docGroup) {
-      const latest = await prisma.demandDocument.findFirst({
-        where: { demandId: id, docGroup },
-        orderBy: { version: "desc" },
-        select: { version: true, type: true, phase: true },
-      })
-      if (!latest) return NextResponse.json({ error: "找不到要更新的文件版本群組" }, { status: 400 })
-      baseVersion = latest.version
-      groupType = latest.type
-      groupPhase = latest.phase
+      // 舊資料 docGroup 為 null，前端以 solo:<docId> 傳入 → 先把該筆文件納入版本群組
+      if (docGroup.startsWith("solo:")) {
+        const soloId = docGroup.slice(5)
+        const soloDoc = await prisma.demandDocument.findFirst({
+          where: { id: soloId, demandId: id },
+          select: { id: true, version: true, type: true, phase: true, docGroup: true },
+        })
+        if (!soloDoc) return NextResponse.json({ error: "找不到要更新的文件" }, { status: 400 })
+        const realGroup = soloDoc.docGroup ?? soloDoc.id
+        if (!soloDoc.docGroup) {
+          await prisma.demandDocument.update({
+            where: { id: soloDoc.id },
+            data: { docGroup: realGroup, version: soloDoc.version || 1 },
+          })
+        }
+        docGroup = realGroup
+        baseVersion = soloDoc.version || 1
+        groupType = soloDoc.type
+        groupPhase = soloDoc.phase
+      } else {
+        const latest = await prisma.demandDocument.findFirst({
+          where: { demandId: id, docGroup },
+          orderBy: { version: "desc" },
+          select: { version: true, type: true, phase: true },
+        })
+        if (!latest) return NextResponse.json({ error: "找不到要更新的文件版本群組" }, { status: 400 })
+        baseVersion = latest.version
+        groupType = latest.type
+        groupPhase = latest.phase
+      }
     }
 
     const files = formData.getAll("files") as File[]
