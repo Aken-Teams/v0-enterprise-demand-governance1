@@ -166,6 +166,9 @@ export default function MyDemandsPage() {
   const filteredDemands = useMemo(() => {
     if (activeTab === "all") return demands
     if (activeTab === "signoff") return demands.filter((d) => d.status !== "CLOSED" && d.status !== "REJECTED" && pendingSignoffIds.has(d.id))
+    // 已終止：狀態仍為 CLOSED，需靠 isTerminated 區分；已結案則排除已終止
+    if (activeTab === "TERMINATED") return demands.filter((d) => d.status === "CLOSED" && (d as unknown as { isTerminated?: boolean }).isTerminated)
+    if (activeTab === "CLOSED") return demands.filter((d) => d.status === "CLOSED" && !(d as unknown as { isTerminated?: boolean }).isTerminated)
     return demands.filter((d) => d.status === activeTab)
   }, [demands, activeTab, pendingSignoffIds])
 
