@@ -242,24 +242,18 @@ export function ZhiheQuoteCard({
             </div>
 
             {isReviewed ? (
-              <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex items-center gap-1.5 text-sm text-emerald-700 bg-emerald-50 rounded-md px-2.5 py-2">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
                 已由 <span className="font-medium">{quoteReviewedBy?.name ?? "強合管理者"}</span> 審核通過 · {fmt(quoteReviewedAt)}
-                <span className="text-emerald-600/70 ml-auto shrink-0">下載限強合管理者</span>
               </div>
             ) : canApproveQuote ? (
-              <div className="flex items-center justify-between gap-2 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
-                <span>請審核此報價單，通過後即可由您下載</span>
-                <Button size="sm" className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" onClick={() => setShowApprove(true)} disabled={approving}>
-                  <Check className="h-3 w-3 mr-0.5" />審核通過
+              <div className="flex items-center justify-between gap-2 text-sm text-amber-700 bg-amber-50 rounded-md px-2.5 py-2">
+                <span className="font-medium">請審核此報價單，通過後即可由您下載</span>
+                <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" onClick={() => setShowApprove(true)} disabled={approving}>
+                  <Check className="h-3.5 w-3.5 mr-1" />審核通過
                 </Button>
               </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
-                <Lock className="h-3.5 w-3.5 shrink-0" />
-                待強合管理者審核；報價單下載僅限強合管理者。
-              </div>
-            )}
+            ) : null}
           </>
         )}
       </CardContent>

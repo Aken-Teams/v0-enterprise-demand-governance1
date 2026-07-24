@@ -22,9 +22,15 @@ export async function DELETE(
       return NextResponse.json({ error: "文件不存在" }, { status: 404 })
     }
 
-    // 報價單僅管理者可刪除
-    if (doc.type === "ZHIHE_QUOTE" && auth.role !== "admin") {
-      return NextResponse.json({ error: "僅管理者可刪除報價單" }, { status: 403 })
+    // 報價單：僅管理者可刪除，且強合管理者不可刪除（由智合提供／刪除）
+    if (doc.type === "ZHIHE_QUOTE") {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可刪除報價單" }, { status: 403 })
+      }
+      const me = await prisma.user.findUnique({ where: { id: auth.userId }, select: { managerCompany: true } })
+      if (me?.managerCompany === "QIANGHE") {
+        return NextResponse.json({ error: "強合管理者不可刪除報價單" }, { status: 403 })
+      }
     }
 
     // Admin write permission check

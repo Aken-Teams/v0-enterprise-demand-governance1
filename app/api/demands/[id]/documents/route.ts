@@ -240,9 +240,15 @@ export async function POST(
     if (!VALID_DOC_TYPES.has(docType)) {
       return NextResponse.json({ error: "無效的文件類型" }, { status: 400 })
     }
-    // 報價單僅管理者可上傳
-    if (docType === "ZHIHE_QUOTE" && auth.role !== "admin") {
-      return NextResponse.json({ error: "僅管理者可上傳報價單" }, { status: 403 })
+    // 報價單由智合提供：僅管理者可上傳，且強合管理者不可上傳／變更
+    if (docType === "ZHIHE_QUOTE") {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可上傳報價單" }, { status: 403 })
+      }
+      const me = await prisma.user.findUnique({ where: { id: auth.userId }, select: { managerCompany: true } })
+      if (me?.managerCompany === "QIANGHE") {
+        return NextResponse.json({ error: "強合管理者不可上傳／變更報價單（由智合提供）" }, { status: 403 })
+      }
     }
     const dcCheck = await validateDesignChange(id, designChangeId)
     if (!dcCheck.ok) return NextResponse.json({ error: "無效的關聯設計變更" }, { status: 400 })

@@ -2280,7 +2280,7 @@ export default function DemandDetailPage() {
                     })()}
                     quoteReviewedBy={(demand as unknown as { quoteReviewedBy: { name: string } | null }).quoteReviewedBy ?? null}
                     quoteReviewedAt={(demand as unknown as { quoteReviewedAt: string | null }).quoteReviewedAt ?? null}
-                    canManage={isAdminWithWrite}
+                    canManage={isAdminWithWrite && !canApproveQuote}
                     canApproveQuote={canApproveQuote}
                     onPreview={() => { const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE"); if (q) setSelectedDoc(q) }}
                     onRefresh={fetchDemand}
