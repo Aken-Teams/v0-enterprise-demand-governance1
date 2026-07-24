@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   FileText,
   KeyRound,
+  ReceiptText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -77,6 +78,7 @@ const navSections: NavSection[] = [
     roles: ["admin"],
     items: [
       { title: "需求看板", href: "/governance/inbox", icon: Inbox, roles: ["admin"] },
+      { title: "報價單審核", href: "/governance/quote-review", icon: ReceiptText, roles: ["admin"] },
       { title: "報表分析", href: "/governance/analytics", icon: BarChart3, roles: ["admin"] },
     ],
   },
@@ -139,6 +141,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
   const [showNotifCenter, setShowNotifCenter] = React.useState(false)
 
   const [pendingSignoffCount, setPendingSignoffCount] = React.useState(0)
+  const [pendingQuoteCount, setPendingQuoteCount] = React.useState(0)
 
   // Fetch notifications from API
   const fetchNotifications = React.useCallback(() => {
@@ -209,6 +212,21 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
         .catch(() => {})
     }
   }, [user?.role, user?.boardExemptFromSignoff])
+
+  // Fetch pending quote count for 強合管理者 (紅點)
+  React.useEffect(() => {
+    if (user?.role !== "admin" || user?.managerCompany !== "QIANGHE") return
+    const token = localStorage.getItem("auth_token")
+    if (!token) return
+    fetch("/api/quote-review?countOnly=true", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.count === "number") setPendingQuoteCount(data.count)
+      })
+      .catch(() => {})
+  }, [user?.role, user?.managerCompany, pathname])
 
   const toggleCollapsed = React.useCallback(() => {
     setSidebarCollapsed((prev) => {
@@ -299,6 +317,8 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                   if (!item.roles.includes(detectedRole)) return false
                   // Hide 開案審核 for board members exempt from signoff
                   if (item.href === "/board/sp-review" && user?.boardExemptFromSignoff) return false
+                  // 報價單審核僅限強合管理者
+                  if (item.href === "/governance/quote-review" && user?.managerCompany !== "QIANGHE") return false
                   return true
                 })
                 if (visibleItems.length === 0) return null
@@ -320,6 +340,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                         )
                         const isActive = matches && !hasMoreSpecific
                         const showSignoffBadge = (item.href === "/subsidiary/demands" || item.href === "/board/sp-review") && pendingSignoffCount > 0
+                        const showQuoteDot = item.href === "/governance/quote-review" && pendingQuoteCount > 0
                         const linkEl = (
                           <Link
                             key={item.href}
@@ -340,11 +361,20 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
                                   {pendingSignoffCount}
                                 </span>
                               )}
+                              {effectiveCollapsed && showQuoteDot && (
+                                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-sidebar" />
+                              )}
                             </span>
                             {!effectiveCollapsed && item.title}
                             {!effectiveCollapsed && showSignoffBadge && (
                               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-medium text-white">
                                 {pendingSignoffCount}
+                              </span>
+                            )}
+                            {!effectiveCollapsed && showQuoteDot && (
+                              <span className="ml-auto flex items-center gap-1.5 text-[10px] font-medium text-red-500">
+                                <span className="h-2 w-2 rounded-full bg-red-500" />
+                                {pendingQuoteCount}
                               </span>
                             )}
                           </Link>

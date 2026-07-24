@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
         adminScopeType: user.role === "admin" ? (user.adminScopeType || "all") : undefined,
         boardExemptFromSignoff: user.role === "viewer" ? user.boardExemptFromSignoff : undefined,
         canViewFinancial: (user.role === "viewer" || user.role === "admin") ? user.canViewFinancial : undefined,
+        managerCompany: user.role === "admin" ? (user.managerCompany || null) : undefined,
       },
     })
   } catch (error) {

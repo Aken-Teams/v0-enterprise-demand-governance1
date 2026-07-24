@@ -16,6 +16,7 @@ interface User {
   adminScopeType?: string // "all" | "organization" | "project"
   boardExemptFromSignoff?: boolean
   canViewFinancial?: boolean
+  managerCompany?: string | null // "ZHIHE" | "QIANGHE"（僅 admin）
 }
 
 interface AuthContextType {
