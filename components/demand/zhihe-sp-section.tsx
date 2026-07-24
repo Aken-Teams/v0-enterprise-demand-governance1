@@ -117,14 +117,15 @@ export function ZhiheSpField({
  * 文件分頁用：智合報價單卡（上傳／預覽／審核／下載）
  * ───────────────────────────────────────────── */
 export function ZhiheQuoteCard({
-  demandId, token, quote, quoteReviewedBy, quoteReviewedAt, canManage, canApproveQuote, onPreview, onRefresh,
+  demandId, token, quote, quoteReviewedBy, quoteReviewedAt, canManage, canApproveQuote, canDownload, onPreview, onRefresh,
 }: {
   demandId: string; token: string | null
   quote: QuoteDoc | null
   quoteReviewedBy: { name: string } | null
   quoteReviewedAt: string | null
-  canManage: boolean
-  canApproveQuote: boolean
+  canManage: boolean       // 智合管理者：上傳／刪除
+  canApproveQuote: boolean  // 強合管理者：審核
+  canDownload: boolean      // 可下載（智合隨時／強合審核後）
   onPreview?: () => void
   onRefresh: () => void
 }) {
@@ -225,14 +226,14 @@ export function ZhiheQuoteCard({
                 {onPreview && (
                   <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8" title="預覽" onClick={onPreview}><Eye className="h-3 w-3 sm:h-4 sm:w-4" /></Button>
                 )}
-                {/* 下載僅限強合管理者，且須審核通過 */}
-                {canApproveQuote && (isReviewed ? (
+                {/* 下載：智合隨時、強合審核後；強合未審核顯示灰色提示，其他人不顯示 */}
+                {canDownload ? (
                   <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8" title="下載" onClick={download} disabled={downloading}>
                     {downloading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <Download className="h-3 w-3 sm:h-4 sm:w-4" />}
                   </Button>
-                ) : (
+                ) : canApproveQuote ? (
                   <span title="審核通過後可下載" className="inline-flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center"><Download className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground/30" /></span>
-                ))}
+                ) : null}
                 {canManage && (
                   <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/40 hover:text-destructive" title="刪除" onClick={() => setShowDelete(true)} disabled={deleting}>
                     {deleting ? <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" /> : <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}

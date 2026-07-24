@@ -235,10 +235,12 @@ export async function GET(
       ? { seq: myDcReview.revision.designChange.seq, title: myDcReview.revision.designChange.title, role: myDcReview.role, affectsSp: myDcReview.revision.affectsSp }
       : null
 
-    // 智合移轉 SP / 報價單：管理者一律可見；非管理者需帳號權限 canViewSpTransfer；審核僅強合管理者
+    // 智合移轉 SP / 報價單：管理者一律可見；非管理者需帳號權限 canViewSpTransfer
+    // 上傳／刪除＝智合管理者；審核＝強合管理者；下載＝智合（隨時）或強合（審核後）
     const cu = await prisma.user.findUnique({ where: { id: auth.userId }, select: { canViewSpTransfer: true, managerCompany: true } })
     const canSeeQuote = auth.role === "admin" || !!cu?.canViewSpTransfer
     const canApproveQuote = auth.role === "admin" && cu?.managerCompany === "QIANGHE"
+    const isZhiheManager = auth.role === "admin" && cu?.managerCompany === "ZHIHE"
     const demandOut: Record<string, unknown> = { ...demandRest, contactPerson: contactPersonUser, myDesignChangeReview }
     if (!canSeeQuote) {
       demandOut.zhiheSpTaken = null
@@ -258,6 +260,7 @@ export async function GET(
       adminCanWrite,
       canSeeQuote,
       canApproveQuote,
+      isZhiheManager,
     })
   } catch (error) {
     if (error instanceof AuthError) {

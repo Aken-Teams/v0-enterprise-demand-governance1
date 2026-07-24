@@ -375,6 +375,15 @@ export default function DemandDetailPage() {
   const router = useRouter()
   const demandId = params.id as string
 
+  // 返回列表：優先用瀏覽器上一頁，保留原本的篩選條件；無歷史紀錄才退回列表頁
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back()
+    } else {
+      router.push("/governance/inbox")
+    }
+  }
+
   const [demand, setDemand] = useState<DemandDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string; organizationId?: string | null }[]>([])
@@ -427,6 +436,7 @@ export default function DemandDetailPage() {
   const [adminCanWrite, setAdminCanWrite] = useState(true)
   const [canSeeQuote, setCanSeeQuote] = useState(false)
   const [canApproveQuote, setCanApproveQuote] = useState(false)
+  const [isZhiheManager, setIsZhiheManager] = useState(false)
 
   const isFullAdmin = user?.role === "admin" && (!user?.adminScopeType || user.adminScopeType === "all")
   const isAdminWithWrite = user?.role === "admin" && (isFullAdmin || adminCanWrite)
@@ -472,6 +482,7 @@ export default function DemandDetailPage() {
         if (typeof data.adminCanWrite === "boolean") setAdminCanWrite(data.adminCanWrite)
         setCanSeeQuote(!!data.canSeeQuote)
         setCanApproveQuote(!!data.canApproveQuote)
+        setIsZhiheManager(!!data.isZhiheManager)
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
@@ -806,8 +817,8 @@ export default function DemandDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                <Link href="/governance/inbox"><ArrowLeft className="h-4 w-4" /></Link>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={goBack}>
+                <ArrowLeft className="h-4 w-4" />
               </Button>
               <span className="text-xs sm:text-sm font-mono text-muted-foreground shrink-0">{demand.demandNumber}</span>
               <Badge variant="secondary" className={cn("text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 shrink-0", statusInfo.color)}>
@@ -2280,8 +2291,9 @@ export default function DemandDetailPage() {
                     })()}
                     quoteReviewedBy={(demand as unknown as { quoteReviewedBy: { name: string } | null }).quoteReviewedBy ?? null}
                     quoteReviewedAt={(demand as unknown as { quoteReviewedAt: string | null }).quoteReviewedAt ?? null}
-                    canManage={isAdminWithWrite && !canApproveQuote}
+                    canManage={isZhiheManager}
                     canApproveQuote={canApproveQuote}
+                    canDownload={isZhiheManager || (canApproveQuote && (demand as unknown as { quoteReviewedAt: string | null }).quoteReviewedAt != null)}
                     onPreview={() => { const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE"); if (q) setSelectedDoc(q) }}
                     onRefresh={fetchDemand}
                   />
