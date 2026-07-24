@@ -9,7 +9,7 @@ import {
   ArrowLeft, Building2, User, Calendar, FileText, Code2,
   Loader2, Pencil, Trash2, Check, ChevronDown,
   BarChart3, GanttChart, FolderOpen,
-  AlertCircle, CircleDot, Info, UserPlus,
+  AlertCircle, CircleDot, Info, UserPlus, Ban,
   Clock, SkipForward, ClipboardCheck, Share2, Copy, Link2, Package,
   FileEdit, Mail, ShieldCheck, Maximize2,
 } from "lucide-react"
@@ -734,6 +734,15 @@ export default function DemandDetailPage() {
   const isOnHold = demand.status === "ON_HOLD"
   const isCancelled = demand.status === "CANCELLED"
   const isClosed = demand.status === "CLOSED"
+  const isTerminated = isClosed && (demand as unknown as { isTerminated?: boolean }).isTerminated
+  // 終止（代簽結案）說明：取結案歷史中的結算原因
+  const terminatedReason = isTerminated
+    ? (() => {
+        const h = demand.statusHistory?.find((x) => x.toStatus === "CLOSED" && (x.comment ?? "").includes("SP_ADJUSTMENT"))
+        if (!h?.comment) return null
+        try { return JSON.parse(h.comment).reason || null } catch { return null }
+      })()
+    : null
   // When CLOSED, only admin with write retains modification rights
   const effectiveCanManage = canManage && (!isClosed || isAdminWithWrite)
 
@@ -1320,27 +1329,27 @@ export default function DemandDetailPage() {
             })()}
 
             {isRejected && (
-              <div className="mt-3 text-center">
-                <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">已駁回</Badge>
-                {demand.rejectReason && (
-                  <p className="text-xs text-muted-foreground mt-1">原因：{demand.rejectReason}</p>
-                )}
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-center">
+                <p className="font-semibold text-sm text-red-700 inline-flex items-center gap-1.5"><AlertCircle className="h-4 w-4" />已駁回</p>
+                {demand.rejectReason && <p className="text-xs text-red-700/80 mt-1 whitespace-pre-line break-words">原因：{demand.rejectReason}</p>}
               </div>
             )}
             {isOnHold && (
-              <div className="mt-3 text-center">
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 text-xs">暫緩中</Badge>
-                {demand.holdReason && (
-                  <p className="text-xs text-muted-foreground mt-1">暫緩原因：{demand.holdReason}</p>
-                )}
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-center">
+                <p className="font-semibold text-sm text-amber-700 inline-flex items-center gap-1.5"><Clock className="h-4 w-4" />暫緩中</p>
+                {demand.holdReason && <p className="text-xs text-amber-700/80 mt-1 whitespace-pre-line break-words">暫緩原因：{demand.holdReason}</p>}
               </div>
             )}
             {isCancelled && (
-              <div className="mt-3 text-center">
-                <Badge variant="secondary" className="bg-slate-200 text-slate-600 text-xs">已取消</Badge>
-                {demand.holdReason && (
-                  <p className="text-xs text-muted-foreground mt-1">取消原因：{demand.holdReason}</p>
-                )}
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+                <p className="font-semibold text-sm text-slate-700 inline-flex items-center gap-1.5"><Ban className="h-4 w-4" />已取消</p>
+                {demand.holdReason && <p className="text-xs text-slate-600 mt-1 whitespace-pre-line break-words">取消原因：{demand.holdReason}</p>}
+              </div>
+            )}
+            {isTerminated && (
+              <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-center">
+                <p className="font-semibold text-sm text-zinc-700 inline-flex items-center gap-1.5"><Ban className="h-4 w-4" />已終止</p>
+                <p className="text-xs text-zinc-600 mt-1 whitespace-pre-line break-words">此專案經專案 Master 代簽終止結算{terminatedReason ? `（${terminatedReason}）` : ""}。</p>
               </div>
             )}
             {/* Step Navigation */}

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
-  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -386,11 +386,28 @@ function InboxContent() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部狀態</SelectItem>
-                {Object.entries(STATUS_MAP).map(([key, info]) => (
-                  <SelectItem key={key} value={key}>
-                    {info.label} ({getCount(key)})
-                  </SelectItem>
-                ))}
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />流程階段
+                  </SelectLabel>
+                  {["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED"].map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {STATUS_MAP[key].label} ({getCount(key)})
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />已結束 / 非進行中
+                  </SelectLabel>
+                  {["REJECTED", "ON_HOLD", "CANCELLED", "TERMINATED"].map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {STATUS_MAP[key].label} ({getCount(key)})
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
             {canSeeAll && orgOptions.length > 0 && (
@@ -741,17 +758,17 @@ function InboxContent() {
 
                       {/* Hold reason */}
                       {demand.status === "ON_HOLD" && demand.holdReason && (
-                        <div className="flex items-start gap-1.5 text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1">
-                          <PauseCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          <span className="line-clamp-2">{demand.holdReason}</span>
+                        <div className="flex items-center gap-1.5 text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1" title={demand.holdReason}>
+                          <PauseCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate min-w-0">{demand.holdReason}</span>
                         </div>
                       )}
 
                       {/* Cancel reason */}
                       {demand.status === "CANCELLED" && demand.holdReason && (
-                        <div className="flex items-start gap-1.5 text-xs text-slate-600 bg-slate-100 rounded px-2 py-1">
-                          <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          <span className="line-clamp-2">{demand.holdReason}</span>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-100 rounded px-2 py-1" title={demand.holdReason}>
+                          <XCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate min-w-0">{demand.holdReason}</span>
                         </div>
                       )}
 
