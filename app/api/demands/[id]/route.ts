@@ -66,6 +66,7 @@ export async function GET(
           orderBy: { requestedAt: "desc" },
         },
         designChanges: { select: { id: true, seq: true, title: true, status: true } },
+        quoteReviewedBy: { select: { id: true, name: true } },
       },
     })
 
@@ -234,11 +235,29 @@ export async function GET(
       ? { seq: myDcReview.revision.designChange.seq, title: myDcReview.revision.designChange.title, role: myDcReview.role, affectsSp: myDcReview.revision.affectsSp }
       : null
 
+    // 智合移轉 SP / 報價單：管理者一律可見；非管理者需帳號權限 canViewSpTransfer；審核僅強合管理者
+    const cu = await prisma.user.findUnique({ where: { id: auth.userId }, select: { canViewSpTransfer: true, managerCompany: true } })
+    const canSeeQuote = auth.role === "admin" || !!cu?.canViewSpTransfer
+    const canApproveQuote = auth.role === "admin" && cu?.managerCompany === "QIANGHE"
+    const demandOut: Record<string, unknown> = { ...demandRest, contactPerson: contactPersonUser, myDesignChangeReview }
+    if (!canSeeQuote) {
+      demandOut.zhiheSpTaken = null
+      demandOut.zhiheSpNote = null
+      demandOut.quoteReviewedBy = null
+      demandOut.quoteReviewedById = null
+      demandOut.quoteReviewedAt = null
+      if (Array.isArray(demandOut.documents)) {
+        demandOut.documents = (demandOut.documents as { type: string }[]).filter((d) => d.type !== "ZHIHE_QUOTE")
+      }
+    }
+
     return NextResponse.json({
-      demand: { ...demandRest, contactPerson: contactPersonUser, myDesignChangeReview },
+      demand: demandOut,
       mySignoffRole,
       accessUsers,
       adminCanWrite,
+      canSeeQuote,
+      canApproveQuote,
     })
   } catch (error) {
     if (error instanceof AuthError) {
@@ -273,6 +292,46 @@ export async function PATCH(
       if (!canWrite) {
         return NextResponse.json({ error: "此管理員無修改權限" }, { status: 403 })
       }
+    }
+
+    // 智合移轉強合授權 SP：記錄移轉的 SP + 說明（僅管理者）
+    if (body.action === "setZhiheSp") {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可記錄移轉授權 SP" }, { status: 403 })
+      }
+      const raw = body.zhiheSpTaken
+      const zhiheSpTaken = (raw === null || raw === "" || raw === undefined) ? null : Number(raw)
+      if (zhiheSpTaken !== null && (!Number.isFinite(zhiheSpTaken) || zhiheSpTaken < 0)) {
+        return NextResponse.json({ error: "移轉授權 SP 需為非負數字" }, { status: 400 })
+      }
+      const total = demand.confirmedSp ?? demand.estimatedSp
+      if (zhiheSpTaken !== null && zhiheSpTaken > total) {
+        return NextResponse.json({ error: `移轉授權 SP 不可超過專案總 SP（${total}）` }, { status: 400 })
+      }
+      await prisma.demand.update({
+        where: { id },
+        data: { zhiheSpTaken, zhiheSpNote: ((body.zhiheSpNote as string) ?? "").trim() || null },
+      })
+      logAudit({ userId: auth.userId, action: "UPDATE", entity: "DEMAND", entityId: id, demandId: id, details: { field: "zhiheSpTaken", value: zhiheSpTaken }, request })
+      return NextResponse.json({ success: true })
+    }
+
+    // 報價單審核通過（僅強合管理者，通過後才可下載）
+    if (body.action === "approveQuote") {
+      if (auth.role !== "admin") {
+        return NextResponse.json({ error: "僅管理者可審核報價單" }, { status: 403 })
+      }
+      const me = await prisma.user.findUnique({ where: { id: auth.userId }, select: { managerCompany: true, name: true } })
+      if (me?.managerCompany !== "QIANGHE") {
+        return NextResponse.json({ error: "僅強合管理者可審核報價單" }, { status: 403 })
+      }
+      const quote = await prisma.demandDocument.findFirst({ where: { demandId: id, type: "ZHIHE_QUOTE" }, orderBy: { createdAt: "desc" }, select: { id: true } })
+      if (!quote) {
+        return NextResponse.json({ error: "尚未上傳報價單，無法審核" }, { status: 400 })
+      }
+      await prisma.demand.update({ where: { id }, data: { quoteReviewedById: auth.userId, quoteReviewedAt: new Date() } })
+      logAudit({ userId: auth.userId, action: "STATUS_CHANGE", entity: "DEMAND", entityId: id, demandId: id, details: { kind: "QUOTE_APPROVE" }, request })
+      return NextResponse.json({ success: true, reviewedBy: me.name })
     }
 
     // Handle assignment update (managerId / developerId) — admin only

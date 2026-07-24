@@ -78,10 +78,15 @@ export async function GET(
       contactPerson: contactPersonUser,
       adminNotes: null,
       rejectReason: null,
+      // 智合抽成/報價單為內部機密，分享頁一律隱藏
+      zhiheSpTaken: null,
+      zhiheSpNote: null,
+      quoteReviewedById: null,
+      quoteReviewedAt: null,
       // Filter out internal comments
       comments: demand.comments.filter((c) => !c.isInternal),
-      // Filter out GITHUB_REPO documents
-      documents: demand.documents.filter((d) => d.type !== "GITHUB_REPO"),
+      // Filter out GITHUB_REPO + 報價單 documents
+      documents: demand.documents.filter((d) => d.type !== "GITHUB_REPO" && d.type !== "ZHIHE_QUOTE"),
     }
 
     return NextResponse.json({

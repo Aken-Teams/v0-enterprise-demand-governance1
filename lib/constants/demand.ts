@@ -82,6 +82,7 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   SECURITY_REPORT: "資安報告",
   SECURITY_FIX_REPORT: "資安修正報告",
   OPERATION_MANUAL: "操作手冊",
+  ZHIHE_QUOTE: "智合報價單",
 }
 
 /** 各階段簡要說明，讓管理者了解該階段的工作重點 */

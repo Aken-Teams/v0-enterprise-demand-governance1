@@ -41,7 +41,9 @@ export async function GET(request: NextRequest) {
       restrictBoardViewToOrg: u.restrictBoardViewToOrg,
       boardExemptFromSignoff: u.boardExemptFromSignoff,
       canViewFinancial: u.canViewFinancial,
+      canViewSpTransfer: u.canViewSpTransfer,
       adminScopeType: u.adminScopeType,
+      managerCompany: u.managerCompany,
       accessCount: u._count.demandAccessGrants,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
     const auth = verifyRole(request, ["admin"])
     verifyAdminFull(auth)
     const body = await request.json()
-    const { name, email, password, role, organizationId, ldapUsername, ldapDomain, isOrgAccount, restrictBoardToOrg, restrictBoardViewToOrg, boardExemptFromSignoff, canViewFinancial, adminScopeType } = body
+    const { name, email, password, role, organizationId, ldapUsername, ldapDomain, isOrgAccount, restrictBoardToOrg, restrictBoardViewToOrg, boardExemptFromSignoff, canViewFinancial, canViewSpTransfer, adminScopeType, managerCompany } = body
 
     if (!name || !email || !role) {
       return NextResponse.json({ error: "姓名、電子郵件、角色皆為必填" }, { status: 400 })
@@ -117,8 +119,10 @@ export async function POST(request: NextRequest) {
           restrictBoardViewToOrg: role === "viewer" ? !!restrictBoardViewToOrg : false,
           boardExemptFromSignoff: role === "viewer" ? !!boardExemptFromSignoff : false,
           canViewFinancial: !!canViewFinancial,
+          canViewSpTransfer: !!canViewSpTransfer,
           isOrgAccount: !!isOrgAccount,
           adminScopeType: role === "admin" ? (adminScopeType || "all") : "all",
+          managerCompany: role === "admin" ? (managerCompany || null) : null,
         },
         include: { organization: { select: { name: true } } },
       })
@@ -172,7 +176,7 @@ export async function PATCH(request: NextRequest) {
     const auth = verifyRole(request, ["admin"])
     verifyAdminFull(auth)
     const body = await request.json()
-    const { id, name, email, role, isActive, organizationId, password, adminPassword, ldapUsername, ldapDomain, isOrgAccount, restrictBoardToOrg, restrictBoardViewToOrg, boardExemptFromSignoff, canViewFinancial, adminScopeType } = body
+    const { id, name, email, role, isActive, organizationId, password, adminPassword, ldapUsername, ldapDomain, isOrgAccount, restrictBoardToOrg, restrictBoardViewToOrg, boardExemptFromSignoff, canViewFinancial, canViewSpTransfer, adminScopeType, managerCompany } = body
 
     if (!id) {
       return NextResponse.json({ error: "缺少使用者 ID" }, { status: 400 })
@@ -194,7 +198,9 @@ export async function PATCH(request: NextRequest) {
     if (restrictBoardViewToOrg !== undefined) data.restrictBoardViewToOrg = !!restrictBoardViewToOrg
     if (boardExemptFromSignoff !== undefined) data.boardExemptFromSignoff = !!boardExemptFromSignoff
     if (canViewFinancial !== undefined) data.canViewFinancial = !!canViewFinancial
+    if (canViewSpTransfer !== undefined) data.canViewSpTransfer = !!canViewSpTransfer
     if (adminScopeType !== undefined) data.adminScopeType = adminScopeType
+    if (managerCompany !== undefined) data.managerCompany = managerCompany || null
 
     // Password reset — requires admin's own password for verification
     if (password && typeof password === "string" && password.length > 0) {

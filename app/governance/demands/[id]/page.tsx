@@ -25,6 +25,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
+import { ZhiheSpSection } from "@/components/demand/zhihe-sp-section"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
@@ -424,6 +425,8 @@ export default function DemandDetailPage() {
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState<string | null>(null)
   const [adminCanWrite, setAdminCanWrite] = useState(true)
+  const [canSeeQuote, setCanSeeQuote] = useState(false)
+  const [canApproveQuote, setCanApproveQuote] = useState(false)
 
   const isFullAdmin = user?.role === "admin" && (!user?.adminScopeType || user.adminScopeType === "all")
   const isAdminWithWrite = user?.role === "admin" && (isFullAdmin || adminCanWrite)
@@ -467,6 +470,8 @@ export default function DemandDetailPage() {
         setDemand(data.demand)
         if (data.accessUsers) setAccessUsers(data.accessUsers)
         if (typeof data.adminCanWrite === "boolean") setAdminCanWrite(data.adminCanWrite)
+        setCanSeeQuote(!!data.canSeeQuote)
+        setCanApproveQuote(!!data.canApproveQuote)
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
@@ -1876,6 +1881,27 @@ export default function DemandDetailPage() {
                   </CardContent>
                 </Card>
 
+                {/* 智合抽成 + 報價單（僅管理者／董事會可見） */}
+                {canSeeQuote && (
+                  <ZhiheSpSection
+                    demandId={demand.id}
+                    token={token}
+                    totalSp={demand.confirmedSp ?? demand.estimatedSp}
+                    zhiheSpTaken={(demand as unknown as { zhiheSpTaken: number | null }).zhiheSpTaken ?? null}
+                    zhiheSpNote={(demand as unknown as { zhiheSpNote: string | null }).zhiheSpNote ?? null}
+                    quote={(() => {
+                      const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE")
+                      return q ? { id: q.id, fileName: q.fileName, fileUrl: q.fileUrl, fileSize: q.fileSize } : null
+                    })()}
+                    quoteReviewedBy={(demand as unknown as { quoteReviewedBy: { name: string } | null }).quoteReviewedBy ?? null}
+                    quoteReviewedAt={(demand as unknown as { quoteReviewedAt: string | null }).quoteReviewedAt ?? null}
+                    canManage={isAdminWithWrite}
+                    canApproveQuote={canApproveQuote}
+                    onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}
+                    onRefresh={fetchDemand}
+                  />
+                )}
+
               </div>
             </div>
           </TabsContent>
@@ -2232,7 +2258,7 @@ export default function DemandDetailPage() {
                   <CardContent className="px-4 sm:px-6">
                     <PhaseDocuments
                       key={`${demand.status}-${docPhaseKey}`}
-                      documents={demand.documents}
+                      documents={demand.documents.filter((d) => (d as unknown as { type: string }).type !== "ZHIHE_QUOTE")}
                       currentPhase={demand.status}
                       demandId={demand.id}
                       canUpload={effectiveCanManage}

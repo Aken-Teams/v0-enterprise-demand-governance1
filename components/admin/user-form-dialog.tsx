@@ -41,6 +41,7 @@ interface UserRow {
   restrictBoardViewToOrg: boolean
   boardExemptFromSignoff: boolean
   canViewFinancial: boolean
+  canViewSpTransfer?: boolean
   adminScopeType?: string
   accessCount: number
   createdAt: string
@@ -73,6 +74,7 @@ interface BasicForm {
   restrictBoardViewToOrg: boolean
   boardExemptFromSignoff: boolean
   canViewFinancial: boolean
+  canViewSpTransfer: boolean
   // Password reset (edit only)
   adminPassword: string
   // LDAP binding metadata (create only)
@@ -92,6 +94,7 @@ const EMPTY_FORM: BasicForm = {
   restrictBoardViewToOrg: false,
   boardExemptFromSignoff: false,
   canViewFinancial: false,
+  canViewSpTransfer: false,
   adminPassword: "",
   ldapUsername: "",
   ldapDomain: "",
@@ -122,6 +125,7 @@ export function UserFormDialog({
 
   // Step 2 state (admin scope)
   const [adminScopeType, setAdminScopeType] = useState<string>("all")
+  const [managerCompany, setManagerCompany] = useState<string>("") // "" | "QIANGHE" | "ZHIHE"
   const [adminEntries, setAdminEntries] = useState<{ organizationId?: string; demandId?: string; permission: string }[]>([])
   const [adminEntriesLoading, setAdminEntriesLoading] = useState(false)
 
@@ -140,6 +144,7 @@ export function UserFormDialog({
           restrictBoardViewToOrg: initialUser.restrictBoardViewToOrg ?? false,
           boardExemptFromSignoff: initialUser.boardExemptFromSignoff ?? false,
           canViewFinancial: initialUser.canViewFinancial ?? false,
+          canViewSpTransfer: initialUser.canViewSpTransfer ?? false,
           adminPassword: "",
           ldapUsername: initialUser.ldapUsername || "",
           ldapDomain: initialUser.ldapDomain || "",
@@ -149,10 +154,12 @@ export function UserFormDialog({
         const roleNeedsStep2 = initialUser.role === "subsidiary" || initialUser.role === "viewer" || initialUser.role === "admin"
         setStep(initialStep === 2 && !roleNeedsStep2 ? 1 : initialStep)
         setAdminScopeType(initialUser.adminScopeType || "all")
+        setManagerCompany((initialUser as unknown as { managerCompany?: string | null }).managerCompany || "")
       } else {
         setForm(EMPTY_FORM)
         setStep(initialStep)
         setAdminScopeType("all")
+        setManagerCompany("")
       }
       setAssignments([])
       setAllDemands([])
@@ -351,7 +358,9 @@ export function UserFormDialog({
             restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
             boardExemptFromSignoff: form.role === "viewer" ? form.boardExemptFromSignoff : false,
             canViewFinancial: form.canViewFinancial,
+            canViewSpTransfer: form.canViewSpTransfer,
             adminScopeType: form.role === "admin" ? adminScopeType : undefined,
+            managerCompany: form.role === "admin" ? (managerCompany || null) : null,
             assignments: assignments.map((a) => ({
               demandId: a.demandId,
               signoffRole: a.signoffRole,
@@ -389,7 +398,9 @@ export function UserFormDialog({
           restrictBoardViewToOrg: form.role === "viewer" ? form.restrictBoardViewToOrg : false,
           boardExemptFromSignoff: form.role === "viewer" ? form.boardExemptFromSignoff : false,
           canViewFinancial: form.canViewFinancial,
+          canViewSpTransfer: form.canViewSpTransfer,
           adminScopeType: form.role === "admin" ? adminScopeType : undefined,
+          managerCompany: form.role === "admin" ? (managerCompany || null) : null,
         }
         if (form.password) {
           if (!form.adminPassword) {
@@ -859,6 +870,20 @@ export function UserFormDialog({
                     <p className="text-[10px] sm:text-xs text-muted-foreground">勾選後可在報表分析中查看 SP 對應金額資訊</p>
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3">
+                  <input
+                    type="checkbox"
+                    id="canViewSpTransfer"
+                    checked={form.canViewSpTransfer}
+                    onChange={(e) => setForm({ ...form, canViewSpTransfer: e.target.checked })}
+                    className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <Label htmlFor="canViewSpTransfer" className="cursor-pointer text-xs sm:text-sm">可查看智合移轉 SP</Label>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">勾選後可<strong>檢視</strong>「智合移轉強合授權 SP」與報價單（機密，請限縮人數）；新增／上傳／審核等操作仍僅限管理者。</p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -880,6 +905,19 @@ export function UserFormDialog({
                       <SelectItem value="project">依專案</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-1 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">所屬公司（報價單審核用，選填）</Label>
+                  <Select value={managerCompany || "none"} onValueChange={(v) => setManagerCompany(v === "none" ? "" : v)}>
+                    <SelectTrigger className="h-8 sm:h-10 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">未設定</SelectItem>
+                      <SelectItem value="QIANGHE">強合管理者</SelectItem>
+                      <SelectItem value="ZHIHE">智合管理者</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">設為「強合管理者」才能審核放行報價單下載。</p>
                 </div>
 
                 {adminScopeType === "all" && (

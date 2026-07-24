@@ -75,6 +75,7 @@ enum DocumentType {
   SECURITY_REPORT     // 資安報告
   SECURITY_FIX_REPORT // 資安修正報告
   OPERATION_MANUAL    // 操作手冊
+  ZHIHE_QUOTE         // 智合報價單（僅管理者/董事會可見，審核通過後才可下載）
 }
 
 enum SubTaskStatus {
@@ -169,8 +170,10 @@ model User {
   restrictBoardViewToOrg Boolean       @default(false) @map("restrict_board_view_to_org") /// true = 僅能查看自己組織的專案
   boardExemptFromSignoff Boolean       @default(false) @map("board_exempt_from_signoff") /// true = 不需要參與開案審核
   canViewFinancial       Boolean       @default(false) @map("can_view_financial")         /// true = 可查看金額報表
+  canViewSpTransfer      Boolean       @default(false) @map("can_view_sp_transfer")        /// true = 可查看「智合移轉強合授權 SP」與報價單
   isOrgAccount           Boolean       @default(false) @map("is_org_account")            /// 組織帳號（唯讀，不可簽核）
   adminScopeType         String        @default("all") @map("admin_scope_type")          /// "all" | "organization" | "project"
+  managerCompany         String?       @map("manager_company")                            /// 管理者所屬公司："QIANGHE"(強合) | "ZHIHE"(智合)，供報價單審核區分
   ldapUsername    String?       /// AD 工號 (e.g. 90770)
   ldapDomain     String?       /// AD domain (e.g. PANJIT)
   organizationId String?
@@ -201,6 +204,7 @@ model User {
   designReviews          DesignChangeReview[]       @relation("DCReviewer")
   designDocsUploaded     DesignChangeDocument[]     @relation("DCDocUploader")
   createdShares      DemandShare[]
+  quoteReviews       Demand[]        @relation("QuoteReviewer")
   auditLogs          AuditLog[]
   sentMailLogs       MailLog[]
   apiKeys            ApiKey[]
@@ -260,6 +264,12 @@ model Demand {
   expectedDate    DateTime? /// 預計完成時間
   completedDate   DateTime? /// 實際完成時間
   isTerminated    Boolean        @default(false) /// 經專案 Master 代簽直接結案 → 客戶認知為「已終止」（狀態仍為 CLOSED）
+  // ── 智合抽成（內部：僅管理者/董事會可見）──
+  zhiheSpTaken      Float? /// 智合自本專案抽取的 SP（選填，通常結案才記錄）
+  zhiheSpNote       String?   @db.Text /// 抽成說明
+  quoteReviewedById String? /// 報價單審核通過者（強合管理者）
+  quoteReviewedBy   User?     @relation("QuoteReviewer", fields: [quoteReviewedById], references: [id])
+  quoteReviewedAt   DateTime? /// 報價單審核通過時間
   rejectReason    String?        @db.Text
   holdReason      String?        @db.Text /// 暫緩原因
   vendor          String         @default("JV") /// 開發商名稱

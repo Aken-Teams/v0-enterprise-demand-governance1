@@ -240,6 +240,10 @@ export async function POST(
     if (!VALID_DOC_TYPES.has(docType)) {
       return NextResponse.json({ error: "無效的文件類型" }, { status: 400 })
     }
+    // 報價單僅管理者可上傳
+    if (docType === "ZHIHE_QUOTE" && auth.role !== "admin") {
+      return NextResponse.json({ error: "僅管理者可上傳報價單" }, { status: 403 })
+    }
     const dcCheck = await validateDesignChange(id, designChangeId)
     if (!dcCheck.ok) return NextResponse.json({ error: "無效的關聯設計變更" }, { status: 400 })
 
@@ -347,18 +351,23 @@ export async function POST(
       savedDocuments.push(doc)
     }
 
-    // Fire-and-forget: notification + audit for uploaded files
-    const stakeholderIds2 = getDemandStakeholderIds(id)
-    const orgUserIds2 = getOrgSubsidiaryUserIds(demand.organizationId)
-    Promise.all([stakeholderIds2, orgUserIds2]).then(([sIds, oIds]) => {
-      const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
-      notifyUsers(recipients, {
-        type: "DOCUMENT",
-        title: "新文件已上傳",
-        message: `需求 ${demand.demandNumber}「${demand.title}」有 ${savedDocuments.length} 個新文件上傳。`,
-        linkUrl: `/demands/${id}`,
+    // 報價單為機密：新上傳需重新審核，且不通知子公司
+    if (docType === "ZHIHE_QUOTE") {
+      await prisma.demand.update({ where: { id }, data: { quoteReviewedById: null, quoteReviewedAt: null } })
+    } else {
+      // Fire-and-forget: notification + audit for uploaded files
+      const stakeholderIds2 = getDemandStakeholderIds(id)
+      const orgUserIds2 = getOrgSubsidiaryUserIds(demand.organizationId)
+      Promise.all([stakeholderIds2, orgUserIds2]).then(([sIds, oIds]) => {
+        const recipients = [...new Set([...sIds, ...oIds])].filter(uid => uid !== auth.userId)
+        notifyUsers(recipients, {
+          type: "DOCUMENT",
+          title: "新文件已上傳",
+          message: `需求 ${demand.demandNumber}「${demand.title}」有 ${savedDocuments.length} 個新文件上傳。`,
+          linkUrl: `/demands/${id}`,
+        })
       })
-    })
+    }
     for (const doc of savedDocuments) {
       logAudit({
         userId: auth.userId,
