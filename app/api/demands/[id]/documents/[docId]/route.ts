@@ -22,6 +22,11 @@ export async function DELETE(
       return NextResponse.json({ error: "文件不存在" }, { status: 404 })
     }
 
+    // 報價單僅管理者可刪除
+    if (doc.type === "ZHIHE_QUOTE" && auth.role !== "admin") {
+      return NextResponse.json({ error: "僅管理者可刪除報價單" }, { status: 403 })
+    }
+
     // Admin write permission check
     if (auth.role === "admin") {
       const demand = await prisma.demand.findUnique({ where: { id }, select: { organizationId: true } })
@@ -49,6 +54,11 @@ export async function DELETE(
     }
 
     await prisma.demandDocument.delete({ where: { id: docId } })
+
+    // 刪除報價單 → 清除審核狀態
+    if (doc.type === "ZHIHE_QUOTE") {
+      await prisma.demand.update({ where: { id }, data: { quoteReviewedById: null, quoteReviewedAt: null } })
+    }
 
     logAudit({
       userId: auth.userId,

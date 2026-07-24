@@ -5,54 +5,55 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Coins, Lock, Upload, FileText, Download, Eye, Check, Loader2, Pencil, ShieldCheck } from "lucide-react"
+import { Coins, Lock, Upload, FileText, Download, Eye, Check, Loader2, Pencil, ShieldCheck, Trash2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
-interface QuoteDoc { id: string; fileName: string; fileUrl: string | null; fileSize: number | null }
-
-interface Props {
-  demandId: string
-  token: string | null
-  totalSp: number
-  zhiheSpTaken: number | null
-  zhiheSpNote: string | null
-  quote: QuoteDoc | null
-  quoteReviewedBy: { name: string } | null
-  quoteReviewedAt: string | null
-  canManage: boolean          // 管理者可編輯抽成、上傳報價單
-  canApproveQuote: boolean     // 強合管理者可審核
-  onPreviewDoc?: (doc: { id: string; type: string; fileName: string; fileUrl: string | null; fileSize: number | null }) => void
-  onRefresh: () => void
-}
+interface QuoteDoc { id: string; fileName: string; fileUrl: string | null; fileSize: number | null; createdAt?: string | null }
 
 function fmt(d: string | null) {
   if (!d) return ""
   const x = new Date(d)
   return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getDate()).padStart(2, "0")} ${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}`
 }
+function fmtDate(d: string | null | undefined) {
+  if (!d) return ""
+  const x = new Date(d)
+  return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getDate()).padStart(2, "0")}`
+}
+function formatFileSize(b: number) {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`
+}
 
-export function ZhiheSpSection({
-  demandId, token, totalSp, zhiheSpTaken, zhiheSpNote, quote,
-  quoteReviewedBy, quoteReviewedAt, canManage, canApproveQuote, onPreviewDoc, onRefresh,
-}: Props) {
-  const [editing, setEditing] = useState(false)
-  const [spInput, setSpInput] = useState(zhiheSpTaken != null ? String(zhiheSpTaken) : "")
-  const [noteInput, setNoteInput] = useState(zhiheSpNote ?? "")
+/* ─────────────────────────────────────────────
+ * 基本資訊用：移轉授權 SP 欄位（含編輯對話框）
+ * ───────────────────────────────────────────── */
+export function ZhiheSpField({
+  demandId, token, totalSp, zhiheSpTaken, zhiheSpNote, canManage, onRefresh,
+}: {
+  demandId: string; token: string | null; totalSp: number
+  zhiheSpTaken: number | null; zhiheSpNote: string | null
+  canManage: boolean; onRefresh: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [spInput, setSpInput] = useState("")
+  const [noteInput, setNoteInput] = useState("")
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [approving, setApproving] = useState(false)
-  const [downloading, setDownloading] = useState(false)
-  const [showApprove, setShowApprove] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
-  const isReviewed = !!quoteReviewedAt
+  const openEdit = () => {
+    setSpInput(zhiheSpTaken != null ? String(zhiheSpTaken) : "")
+    setNoteInput(zhiheSpNote ?? "")
+    setOpen(true)
+  }
 
-  const saveSp = async () => {
+  const save = async () => {
     if (!token) return
     const val = spInput.trim() === "" ? null : Number(spInput)
     if (val !== null && (!Number.isFinite(val) || val < 0)) { toast.error("移轉授權 SP 需為非負數字"); return }
@@ -63,9 +64,87 @@ export function ZhiheSpSection({
         method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ action: "setZhiheSp", zhiheSpTaken: val, zhiheSpNote: noteInput.trim() || null }),
       })
-      if (res.ok) { setEditing(false); onRefresh() }
+      if (res.ok) { setOpen(false); onRefresh() }
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || "儲存失敗") }
     } finally { setSaving(false) }
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 text-xs sm:text-sm">
+        <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 shrink-0" />
+        <span className="text-muted-foreground w-14 sm:w-16 shrink-0">移轉 SP</span>
+        {zhiheSpTaken != null ? (
+          <span className="font-medium">{zhiheSpTaken}<span className="text-muted-foreground font-normal ml-1">/ {totalSp} SP</span></span>
+        ) : (
+          <span className="text-muted-foreground/50">尚未記錄</span>
+        )}
+        <Lock className="h-3 w-3 text-muted-foreground/30 shrink-0" aria-label="僅內部可見" />
+        {canManage && (
+          <Button size="icon" variant="ghost" className="h-6 w-6 ml-auto shrink-0 text-muted-foreground hover:text-foreground" onClick={openEdit} title="編輯移轉授權 SP">
+            <Pencil className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+      {zhiheSpNote && (
+        <p className="ml-6 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 whitespace-pre-line break-words">{zhiheSpNote}</p>
+      )}
+
+      <Dialog open={open} onOpenChange={(o) => { if (!saving) setOpen(o) }}>
+        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base"><Coins className="h-4 w-4 text-amber-600" />智合移轉強合授權 SP</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Input type="number" min={0} step="0.5" value={spInput} onChange={(e) => setSpInput(e.target.value)} placeholder="移轉 SP" className="h-9 w-32" autoFocus />
+              <span className="text-sm text-muted-foreground">/ {totalSp} SP</span>
+            </div>
+            <Textarea value={noteInput} onChange={(e) => setNoteInput(e.target.value)} placeholder="移轉說明（選填）…" rows={2} className="text-sm" />
+            <p className="text-[11px] text-muted-foreground">留空即清除紀錄。填寫後可於「文件」分頁上傳報價單。</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>取消</Button>
+            <Button onClick={save} disabled={saving}>{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}儲存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+/* ─────────────────────────────────────────────
+ * 文件分頁用：智合報價單卡（上傳／預覽／審核／下載）
+ * ───────────────────────────────────────────── */
+export function ZhiheQuoteCard({
+  demandId, token, quote, quoteReviewedBy, quoteReviewedAt, canManage, canApproveQuote, onPreview, onRefresh,
+}: {
+  demandId: string; token: string | null
+  quote: QuoteDoc | null
+  quoteReviewedBy: { name: string } | null
+  quoteReviewedAt: string | null
+  canManage: boolean
+  canApproveQuote: boolean
+  onPreview?: () => void
+  onRefresh: () => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [approving, setApproving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showApprove, setShowApprove] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const isReviewed = !!quoteReviewedAt
+
+  const doDelete = async () => {
+    if (!token || !quote) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/documents/${quote.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) { setShowDelete(false); toast.success("報價單已刪除"); onRefresh() }
+      else { const e = await res.json().catch(() => ({})); toast.error(e.error || "刪除失敗") }
+    } finally { setDeleting(false) }
   }
 
   const uploadQuote = async (file: File) => {
@@ -109,104 +188,75 @@ export function ZhiheSpSection({
   }
 
   return (
-    <Card>
-      <CardHeader className="px-4 sm:px-6 pb-3">
+    <Card className="border-amber-200/70">
+      <CardHeader className="pb-3">
         <CardTitle className="text-sm sm:text-base flex items-center gap-2">
           <Coins className="h-4 w-4 text-amber-600" />
-          智合移轉強合授權 SP
-          <Lock className="h-3.5 w-3.5 text-muted-foreground/40 ml-auto" aria-label="受限存取" />
+          智合報價單
+          <Lock className="h-3.5 w-3.5 text-muted-foreground/40" aria-label="機密" />
+          {canManage && (
+            <>
+              <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadQuote(f) }} />
+              <Button size="sm" variant="outline" className="h-7 text-xs ml-auto" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Upload className="h-3 w-3 mr-1" />}
+                {quote ? "重新上傳" : "上傳報價單"}
+              </Button>
+            </>
+          )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-4 sm:px-6 space-y-3">
-        {/* 抽 SP 數字 */}
-        {!editing ? (
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">移轉授權 SP</p>
-              <p className="text-lg font-bold">
-                {zhiheSpTaken != null ? zhiheSpTaken : <span className="text-muted-foreground/50 text-sm font-normal">尚未記錄</span>}
-                {zhiheSpTaken != null && <span className="text-xs font-normal text-muted-foreground ml-1">/ 總 {totalSp} SP</span>}
-              </p>
-              {zhiheSpNote && <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line break-words">{zhiheSpNote}</p>}
-            </div>
-            {canManage && (
-              <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => { setSpInput(zhiheSpTaken != null ? String(zhiheSpTaken) : ""); setNoteInput(zhiheSpNote ?? ""); setEditing(true) }}>
-                <Pencil className="h-3 w-3 mr-1" />編輯
-              </Button>
-            )}
-          </div>
+      <CardContent className="space-y-2.5">
+        {!quote ? (
+          <p className="text-xs text-muted-foreground/60 py-2 text-center">尚未上傳報價單</p>
         ) : (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Input type="number" min={0} step="0.5" value={spInput} onChange={(e) => setSpInput(e.target.value)} placeholder="移轉 SP" className="h-8 w-28 text-sm" />
-              <span className="text-xs text-muted-foreground">/ 總 {totalSp} SP</span>
-            </div>
-            <Textarea value={noteInput} onChange={(e) => setNoteInput(e.target.value)} placeholder="移轉說明（選填）…" rows={2} className="text-xs" />
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(false)} disabled={saving}>取消</Button>
-              <Button size="sm" className="h-7 text-xs" onClick={saveSp} disabled={saving}>
-                {saving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}儲存
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* 報價單 */}
-        <div className="border-t pt-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs font-medium text-muted-foreground">報價單</p>
-            {canManage && (
-              <>
-                <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadQuote(f) }} />
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                  {uploading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Upload className="h-3 w-3 mr-1" />}
-                  {quote ? "重新上傳" : "上傳報價單"}
-                </Button>
-              </>
-            )}
-          </div>
-
-          {!quote ? (
-            <p className="text-xs text-muted-foreground/50">尚未上傳報價單</p>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 rounded-md border px-2.5 py-2">
-                <FileText className="h-4 w-4 text-blue-500 shrink-0" />
-                <span className="text-sm truncate flex-1">{quote.fileName}</span>
-                {onPreviewDoc && (
-                  <Button size="icon" variant="ghost" className="h-7 w-7" title="預覽" onClick={() => onPreviewDoc({ id: quote.id, type: "ZHIHE_QUOTE", fileName: quote.fileName, fileUrl: quote.fileUrl, fileSize: quote.fileSize })}>
-                    <Eye className="h-4 w-4" />
-                  </Button>
+          <>
+            <div className="flex items-center justify-between rounded-md border px-2.5 sm:px-3 py-1.5 sm:py-2.5 overflow-hidden">
+              <div className={cn("flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1", onPreview && "cursor-pointer")} onClick={onPreview}>
+                <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-blue-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm font-medium truncate">{quote.fileName}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                    報價單{quote.fileSize ? ` · ${formatFileSize(quote.fileSize)}` : ""}{quote.createdAt ? ` · ${fmtDate(quote.createdAt)}` : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-0 sm:gap-0.5 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
+                {onPreview && (
+                  <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8" title="預覽" onClick={onPreview}><Eye className="h-3 w-3 sm:h-4 sm:w-4" /></Button>
                 )}
                 {isReviewed ? (
-                  <Button size="icon" variant="ghost" className="h-7 w-7" title="下載" onClick={download} disabled={downloading}>
-                    {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8" title="下載" onClick={download} disabled={downloading}>
+                    {downloading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <Download className="h-3 w-3 sm:h-4 sm:w-4" />}
                   </Button>
                 ) : (
-                  <span title="審核通過後才可下載"><Download className="h-4 w-4 text-muted-foreground/30" /></span>
+                  <span title="審核通過後才可下載" className="inline-flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center"><Download className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground/30" /></span>
+                )}
+                {canManage && (
+                  <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/40 hover:text-destructive" title="刪除" onClick={() => setShowDelete(true)} disabled={deleting}>
+                    {deleting ? <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" /> : <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                  </Button>
                 )}
               </div>
-
-              {/* 審核狀態 */}
-              {isReviewed ? (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                  已由 <span className="font-medium">{quoteReviewedBy?.name ?? "強合管理者"}</span> 審核通過 · {fmt(quoteReviewedAt)}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-2 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
-                  <span>待強合管理者審核，通過後才可下載</span>
-                  {canApproveQuote && (
-                    <Button size="sm" className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" onClick={() => setShowApprove(true)} disabled={approving}>
-                      <Check className="h-3 w-3 mr-0.5" />審核通過
-                    </Button>
-                  )}
-                </div>
-              )}
             </div>
-          )}
-        </div>
+
+            {isReviewed ? (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                已由 <span className="font-medium">{quoteReviewedBy?.name ?? "強合管理者"}</span> 審核通過 · {fmt(quoteReviewedAt)}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
+                <span>待強合管理者審核，通過後才可下載</span>
+                {canApproveQuote && (
+                  <Button size="sm" className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" onClick={() => setShowApprove(true)} disabled={approving}>
+                    <Check className="h-3 w-3 mr-0.5" />審核通過
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </CardContent>
 
       <AlertDialog open={showApprove} onOpenChange={setShowApprove}>
@@ -214,13 +264,30 @@ export function ZhiheSpSection({
           <AlertDialogHeader>
             <AlertDialogTitle>確認審核報價單？</AlertDialogTitle>
             <AlertDialogDescription>
-              審核通過後，此報價單即可由管理者／董事會下載，且系統會記錄由您審核通過。請確認已檢視內容無誤。
+              審核通過後，此報價單即可由具權限者下載，且系統會記錄由您審核通過。請確認已檢視內容無誤。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={approving}>取消</AlertDialogCancel>
             <AlertDialogAction className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={approve} disabled={approving}>
               {approving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}確認通過
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除報價單？</AlertDialogTitle>
+            <AlertDialogDescription>
+              將刪除報價單「{quote?.fileName}」，無法復原。若已審核通過，刪除後審核狀態也會一併清除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={doDelete} disabled={deleting}>
+              {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}確定刪除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

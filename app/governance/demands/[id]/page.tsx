@@ -25,7 +25,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
-import { ZhiheSpSection } from "@/components/demand/zhihe-sp-section"
+import { ZhiheSpField, ZhiheQuoteCard } from "@/components/demand/zhihe-sp-section"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { StepNavigation } from "@/components/demand/step-navigation"
@@ -1796,6 +1796,21 @@ export default function DemandDetailPage() {
                         ) : null
                       } catch { return null }
                     })()}
+                    {/* 智合移轉強合授權 SP（僅具權限者可見） */}
+                    {canSeeQuote && (
+                      <>
+                        <hr className="border-border/60" />
+                        <ZhiheSpField
+                          demandId={demand.id}
+                          token={token}
+                          totalSp={demand.confirmedSp ?? demand.estimatedSp}
+                          zhiheSpTaken={(demand as unknown as { zhiheSpTaken: number | null }).zhiheSpTaken ?? null}
+                          zhiheSpNote={(demand as unknown as { zhiheSpNote: string | null }).zhiheSpNote ?? null}
+                          canManage={isAdminWithWrite}
+                          onRefresh={fetchDemand}
+                        />
+                      </>
+                    )}
                     <hr className="border-border/60" />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div className="flex items-center gap-1.5 text-xs sm:text-sm">
@@ -1880,27 +1895,6 @@ export default function DemandDetailPage() {
                     />
                   </CardContent>
                 </Card>
-
-                {/* 智合抽成 + 報價單（僅管理者／董事會可見） */}
-                {canSeeQuote && (
-                  <ZhiheSpSection
-                    demandId={demand.id}
-                    token={token}
-                    totalSp={demand.confirmedSp ?? demand.estimatedSp}
-                    zhiheSpTaken={(demand as unknown as { zhiheSpTaken: number | null }).zhiheSpTaken ?? null}
-                    zhiheSpNote={(demand as unknown as { zhiheSpNote: string | null }).zhiheSpNote ?? null}
-                    quote={(() => {
-                      const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE")
-                      return q ? { id: q.id, fileName: q.fileName, fileUrl: q.fileUrl, fileSize: q.fileSize } : null
-                    })()}
-                    quoteReviewedBy={(demand as unknown as { quoteReviewedBy: { name: string } | null }).quoteReviewedBy ?? null}
-                    quoteReviewedAt={(demand as unknown as { quoteReviewedAt: string | null }).quoteReviewedAt ?? null}
-                    canManage={isAdminWithWrite}
-                    canApproveQuote={canApproveQuote}
-                    onPreviewDoc={(d) => setFullScreenDoc(d as unknown as NonNullable<typeof fullScreenDoc>)}
-                    onRefresh={fetchDemand}
-                  />
-                )}
 
               </div>
             </div>
@@ -2242,7 +2236,7 @@ export default function DemandDetailPage() {
               </div>
 
               {/* Document list */}
-              <div className={cn("lg:col-span-2 order-1 lg:order-2 min-w-0", selectedDoc && "hidden lg:block")}>
+              <div className={cn("lg:col-span-2 order-1 lg:order-2 min-w-0 space-y-4", selectedDoc && "hidden lg:block")}>
                 <Card>
                   <CardHeader className="px-4 sm:px-6 pb-3">
                     <div className="flex items-center justify-between">
@@ -2274,6 +2268,24 @@ export default function DemandDetailPage() {
                     />
                   </CardContent>
                 </Card>
+
+                {/* 智合報價單（需先填移轉授權 SP，且僅具權限者可見） */}
+                {canSeeQuote && (demand as unknown as { zhiheSpTaken: number | null }).zhiheSpTaken != null && (
+                  <ZhiheQuoteCard
+                    demandId={demand.id}
+                    token={token}
+                    quote={(() => {
+                      const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE")
+                      return q ? { id: q.id, fileName: q.fileName, fileUrl: q.fileUrl, fileSize: q.fileSize, createdAt: (q as unknown as { createdAt?: string }).createdAt ?? null } : null
+                    })()}
+                    quoteReviewedBy={(demand as unknown as { quoteReviewedBy: { name: string } | null }).quoteReviewedBy ?? null}
+                    quoteReviewedAt={(demand as unknown as { quoteReviewedAt: string | null }).quoteReviewedAt ?? null}
+                    canManage={isAdminWithWrite}
+                    canApproveQuote={canApproveQuote}
+                    onPreview={() => { const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE"); if (q) setSelectedDoc(q) }}
+                    onRefresh={fetchDemand}
+                  />
+                )}
               </div>
             </div>
           </TabsContent>
