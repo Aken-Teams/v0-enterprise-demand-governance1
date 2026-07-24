@@ -44,16 +44,15 @@ export async function GET(
       return NextResponse.json({ error: "文件不存在" }, { status: 404 })
     }
 
-    // 報價單：管理者或被授權檢視者可下載，且須經強合管理者審核通過
+    // 報價單：僅強合管理者可下載，且須已審核通過（其他人只能檢視）
     if (doc.type === "ZHIHE_QUOTE") {
-      const me = await prisma.user.findUnique({ where: { id: auth.userId }, select: { canViewSpTransfer: true } })
-      const isPrivileged = auth.role === "admin" || !!me?.canViewSpTransfer
-      if (!isPrivileged) {
-        return NextResponse.json({ error: "無權下載報價單" }, { status: 403 })
+      const me = await prisma.user.findUnique({ where: { id: auth.userId }, select: { managerCompany: true } })
+      if (auth.role !== "admin" || me?.managerCompany !== "QIANGHE") {
+        return NextResponse.json({ error: "僅強合管理者可下載報價單" }, { status: 403 })
       }
       const dem = await prisma.demand.findUnique({ where: { id }, select: { quoteReviewedAt: true } })
       if (!dem?.quoteReviewedAt) {
-        return NextResponse.json({ error: "報價單尚未經強合管理者審核通過，無法下載" }, { status: 403 })
+        return NextResponse.json({ error: "報價單尚未審核通過，無法下載" }, { status: 403 })
       }
     }
 

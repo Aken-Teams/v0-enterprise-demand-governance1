@@ -225,13 +225,14 @@ export function ZhiheQuoteCard({
                 {onPreview && (
                   <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8" title="預覽" onClick={onPreview}><Eye className="h-3 w-3 sm:h-4 sm:w-4" /></Button>
                 )}
-                {isReviewed ? (
+                {/* 下載僅限強合管理者，且須審核通過 */}
+                {canApproveQuote && (isReviewed ? (
                   <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8" title="下載" onClick={download} disabled={downloading}>
                     {downloading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <Download className="h-3 w-3 sm:h-4 sm:w-4" />}
                   </Button>
                 ) : (
-                  <span title="審核通過後才可下載" className="inline-flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center"><Download className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground/30" /></span>
-                )}
+                  <span title="審核通過後可下載" className="inline-flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center"><Download className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground/30" /></span>
+                ))}
                 {canManage && (
                   <Button size="icon" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/40 hover:text-destructive" title="刪除" onClick={() => setShowDelete(true)} disabled={deleting}>
                     {deleting ? <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" /> : <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
@@ -244,15 +245,19 @@ export function ZhiheQuoteCard({
               <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                 已由 <span className="font-medium">{quoteReviewedBy?.name ?? "強合管理者"}</span> 審核通過 · {fmt(quoteReviewedAt)}
+                <span className="text-emerald-600/70 ml-auto shrink-0">下載限強合管理者</span>
+              </div>
+            ) : canApproveQuote ? (
+              <div className="flex items-center justify-between gap-2 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
+                <span>請審核此報價單，通過後即可由您下載</span>
+                <Button size="sm" className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" onClick={() => setShowApprove(true)} disabled={approving}>
+                  <Check className="h-3 w-3 mr-0.5" />審核通過
+                </Button>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-2 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
-                <span>待強合管理者審核，通過後才可下載</span>
-                {canApproveQuote && (
-                  <Button size="sm" className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" onClick={() => setShowApprove(true)} disabled={approving}>
-                    <Check className="h-3 w-3 mr-0.5" />審核通過
-                  </Button>
-                )}
+              <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+                待強合管理者審核；報價單下載僅限強合管理者。
               </div>
             )}
           </>
@@ -264,7 +269,7 @@ export function ZhiheQuoteCard({
           <AlertDialogHeader>
             <AlertDialogTitle>確認審核報價單？</AlertDialogTitle>
             <AlertDialogDescription>
-              審核通過後，此報價單即可由具權限者下載，且系統會記錄由您審核通過。請確認已檢視內容無誤。
+              審核通過後，此報價單即可由<strong>強合管理者</strong>下載（其他人僅能檢視），且系統會記錄由您審核通過。請確認已檢視內容無誤。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
