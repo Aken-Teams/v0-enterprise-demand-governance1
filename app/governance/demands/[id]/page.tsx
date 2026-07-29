@@ -14,6 +14,7 @@ import {
   FileEdit, Mail, ShieldCheck, Maximize2,
 } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
@@ -68,6 +69,7 @@ interface DemandDetail {
   completedDate: string | null
   rejectReason: string | null
   holdReason: string | null
+  heldFromStatus: string | null
   adminNotes: string | null
   contactPersonId: string | null
   contactPerson: { id: string; name: string } | null
@@ -618,12 +620,16 @@ export default function DemandDetailPage() {
         }),
       })
       if (res.ok) {
+        toast.success("已發起代簽，將通知專案 Master 確認")
         setBoardOverrideOpen(false)
         setBoardOverrideComment("")
         setBoardOverrideTargetStatus("")
         fetchDemand()
+      } else {
+        const e = await res.json().catch(() => ({}))
+        toast.error(e.error || "發起代簽失敗")
       }
-    } catch { /* ignore */ } finally {
+    } catch { toast.error("發起代簽失敗") } finally {
       setBoardOverrideSubmitting(false)
     }
   }
@@ -762,6 +768,11 @@ export default function DemandDetailPage() {
   // When CLOSED, only admin with write retains modification rights
   const effectiveCanManage = canManage && (!isClosed || isAdminWithWrite)
 
+  // 可用「專案 Master 代簽 + 直接結案」把已進入開發/驗收的專案結算掉（暫緩／駁回時以暫緩前階段為準；更早的階段請用「取消」）
+  const TERMINABLE_PHASES = ["DEVELOPING", "ACCEPTANCE"]
+  const effectivePhase = (isOnHold || isRejected) ? (demand.heldFromStatus || demand.status) : demand.status
+  const canTerminate = canManage && !isClosed && !isCancelled && !isRejected && TERMINABLE_PHASES.includes(effectivePhase)
+
   // Latest round of signoffs for current phase (ignore historical rounds)
   // Exclude orphan signoffs (no assigned user) regardless of status
   // Only include PHASE signoffs (exclude DESIGN_CHANGE)
@@ -802,6 +813,8 @@ export default function DemandDetailPage() {
     s => new Date(s.requestedAt).getTime() === latestDcRoundTime
   )
   const dcHasPending = currentDesignChangeSignoffs.some(s => s.status === "PENDING")
+  // 可終止階段（如開發中）沒有待簽核 → 代簽必須選結算比例（代簽本身沒有其他可略過的簽核）
+  const boardOverrideMustSettle = canTerminate && !curHasPending && !dcHasPending
   const dcNonOverride = currentDesignChangeSignoffs.filter(s => s.targetRole !== "BOARD_OVERRIDE")
   const dcAllApproved = currentDesignChangeSignoffs.length > 0
     && (currentDesignChangeSignoffs.every(s => s.status === "APPROVED")
@@ -1167,7 +1180,7 @@ export default function DemandDetailPage() {
               const myDcReview = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; affectsSp: boolean } | null }).myDesignChangeReview
               const dcRoleLabel = myDcReview ? (myDcReview.role === "BOARD" ? "董事會" : myDcReview.role === "MANAGER" ? "需求主管" : "需求窗口") : ""
 
-              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange && !myDcReview) return null
+              if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange && !myDcReview && !(canManage && canTerminate)) return null
 
               return (
                 <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 sm:p-3">
@@ -1232,7 +1245,7 @@ export default function DemandDetailPage() {
                       </div>
                     </div>
                     </div>
-                    {((canManage && curHasPending) || (canManage && (curHasPending || dcHasPending) && !curHasPendingOverride)) && (
+                    {((canManage && curHasPending) || (canManage && (curHasPending || dcHasPending || canTerminate) && !curHasPendingOverride)) && (
                       <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 ml-6 sm:ml-0 sm:shrink-0">
                         <TooltipProvider>
                         {canManage && curHasPending && (
@@ -1256,7 +1269,7 @@ export default function DemandDetailPage() {
                             <TooltipContent className="sm:hidden">通知簽核人</TooltipContent>
                           </Tooltip>
                         )}
-                        {canManage && (curHasPending || dcHasPending) && !curHasPendingOverride && (
+                        {canManage && (curHasPending || dcHasPending || canTerminate) && !curHasPendingOverride && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -1315,6 +1328,7 @@ export default function DemandDetailPage() {
                     demandId={demand.id}
                     token={token}
                     onComplete={fetchDemand}
+                    effectiveSp={demand.confirmedSp ?? demand.estimatedSp}
                     blocked={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
                     blockedMessage={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? "有待確認的設計變更，需通過後才能進行此階段確認。" : "設計變更已駁回，等待開發端修訂後重新送出，目前無法進行此階段確認。"}
                     onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
@@ -2448,9 +2462,10 @@ export default function DemandDetailPage() {
             onChange={(e) => setBoardOverrideComment(e.target.value)}
           />
           {boardOverrideKind === "PHASE" && demand && (() => {
-            const curIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
+            // 以「有效階段」（暫緩前階段）為基準；無待簽核（如開發中）時允許結算在當前階段（等於依當下進度結算）
+            const baseIdx = PIPELINE_STEPS.indexOf(effectivePhase as typeof PIPELINE_STEPS[number])
             const settlementStatuses = (["DEVELOPING", "ACCEPTANCE", "CLOSED"] as const)
-              .filter((s) => PIPELINE_STEPS.indexOf(s) > curIdx)
+              .filter((s) => boardOverrideMustSettle ? PIPELINE_STEPS.indexOf(s) >= baseIdx : PIPELINE_STEPS.indexOf(s) > baseIdx)
             if (settlementStatuses.length === 0) return null
             const sp = demand.confirmedSp ?? demand.estimatedSp
             const previewRate = boardOverrideTargetStatus ? (SP_PROGRESS_RATE[boardOverrideTargetStatus] ?? 0) : null
@@ -2466,12 +2481,14 @@ export default function DemandDetailPage() {
                   onValueChange={(v) => setBoardOverrideTargetStatus(v === "NONE" ? "" : v)}
                 >
                   <SelectTrigger className="w-full bg-background">
-                    <SelectValue />
+                    <SelectValue placeholder="請選擇結算比例" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NONE">
-                      <span className="text-muted-foreground">維持流程（不直接結算）</span>
-                    </SelectItem>
+                    {!boardOverrideMustSettle && (
+                      <SelectItem value="NONE">
+                        <span className="text-muted-foreground">維持流程（不直接結算）</span>
+                      </SelectItem>
+                    )}
                     {settlementStatuses.map((s) => (
                       <SelectItem key={s} value={s}>
                         <span className="flex items-center gap-2">
@@ -2504,6 +2521,8 @@ export default function DemandDetailPage() {
                       </span>
                     </div>
                   </div>
+                ) : boardOverrideMustSettle ? (
+                  <p className="text-xs text-muted-foreground leading-relaxed">請選擇結算比例；Master 確認後即依此比例結算並結案。</p>
                 ) : (
                   <p className="text-xs text-muted-foreground leading-relaxed">不選則照原流程推進，僅完成本階段簽核、不直接結算。</p>
                 )}
@@ -2513,7 +2532,7 @@ export default function DemandDetailPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!boardOverrideComment.trim() || boardOverrideSubmitting}
+              disabled={!boardOverrideComment.trim() || boardOverrideSubmitting || (boardOverrideMustSettle && !boardOverrideTargetStatus)}
               onClick={(e) => { e.preventDefault(); handleBoardOverride() }}
               className="bg-orange-600 hover:bg-orange-700"
             >

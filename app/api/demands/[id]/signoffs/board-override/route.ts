@@ -4,9 +4,15 @@ import { verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
-import { DESIGN_CHANGE_ALLOWED_PHASES, PIPELINE_STEPS } from "@/lib/constants/demand"
+import { DESIGN_CHANGE_ALLOWED_PHASES, PIPELINE_STEPS, STATUS_MAP } from "@/lib/constants/demand"
 
-const PHASE_OVERRIDE_ALLOWED: string[] = ["PRD_REVIEW", "ACCEPTANCE"]
+const PHASE_OVERRIDE_ALLOWED: string[] = ["PRD_REVIEW", "DEVELOPING", "ACCEPTANCE"]
+
+/** 暫緩／駁回時，以暫緩前的階段為「有效階段」（代簽終止結算依此判定） */
+function effectivePhaseOf(status: string, heldFromStatus?: string | null): string {
+  if (status === "ON_HOLD" || status === "REJECTED") return heldFromStatus || status
+  return status
+}
 
 /** 代簽結算可選的目標狀態（有消耗比例、可直接落點的狀態） */
 const SETTLEMENT_STATUSES: string[] = ["DEVELOPING", "ACCEPTANCE", "CLOSED"]
@@ -45,6 +51,7 @@ export async function POST(
       select: {
         id: true,
         status: true,
+        heldFromStatus: true,
         organizationId: true,
         demandNumber: true,
         title: true,
@@ -55,10 +62,13 @@ export async function POST(
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
 
+    // 暫緩／駁回時以暫緩前的階段作為代簽落點（讓開發中／暫緩也能發起終止結算）
+    const effectivePhase = effectivePhaseOf(demand.status, demand.heldFromStatus)
+
     // Validate phase
-    if (kind === "PHASE" && !PHASE_OVERRIDE_ALLOWED.includes(demand.status)) {
+    if (kind === "PHASE" && !PHASE_OVERRIDE_ALLOWED.includes(effectivePhase)) {
       return NextResponse.json(
-        { error: `目前階段（${demand.status}）不支援代簽` },
+        { error: `目前階段（${STATUS_MAP[demand.status]?.label ?? demand.status}）不支援代簽` },
         { status: 400 }
       )
     }
@@ -69,12 +79,12 @@ export async function POST(
       )
     }
 
-    // Settlement target must be a forward status (can't settle backwards)
+    // Settlement target: 不可低於目前（有效）階段的結算比例；允許結算在當前階段（終止）或往後
     if (targetStatus !== null) {
-      const curIdx = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
+      const curIdx = PIPELINE_STEPS.indexOf(effectivePhase as typeof PIPELINE_STEPS[number])
       const tgtIdx = PIPELINE_STEPS.indexOf(targetStatus as typeof PIPELINE_STEPS[number])
-      if (curIdx < 0 || tgtIdx < 0 || tgtIdx <= curIdx) {
-        return NextResponse.json({ error: "結算狀態必須在目前階段之後" }, { status: 400 })
+      if (curIdx < 0 || tgtIdx < 0 || tgtIdx < curIdx) {
+        return NextResponse.json({ error: "結算狀態不可低於目前階段" }, { status: 400 })
       }
     }
 
@@ -82,14 +92,15 @@ export async function POST(
     const pendingSignoffs = await prisma.phaseSignoff.findMany({
       where: {
         demandId: id,
-        phase: demand.status as DemandStatus,
+        phase: effectivePhase as DemandStatus,
         kind,
         status: "PENDING",
         targetRole: { not: "BOARD_OVERRIDE" },
       },
     })
 
-    if (pendingSignoffs.length === 0) {
+    // 一般階段代簽需有待確認簽核；但「終止結算」（帶結算狀態）即使無待簽核也可發起（如開發中）
+    if (pendingSignoffs.length === 0 && !targetStatus) {
       return NextResponse.json({ error: "沒有待確認的簽核可以代簽" }, { status: 409 })
     }
 
@@ -97,7 +108,7 @@ export async function POST(
     const existingOverride = await prisma.phaseSignoff.findFirst({
       where: {
         demandId: id,
-        phase: demand.status as DemandStatus,
+        phase: effectivePhase as DemandStatus,
         kind,
         targetRole: "BOARD_OVERRIDE",
         status: "PENDING",
@@ -122,8 +133,8 @@ export async function POST(
       return NextResponse.json({ error: "找不到可代簽的專案 Master" }, { status: 404 })
     }
 
-    // Use the round timestamp from existing signoffs
-    const roundTime = pendingSignoffs[0].requestedAt
+    // Use the round timestamp from existing signoffs（終止結算可能無待簽核 → 用現在時間）
+    const roundTime = pendingSignoffs[0]?.requestedAt ?? new Date()
 
     // Delegating to 代簽 supersedes the original signers (需求者/主管) — once a
     // 代簽 is initiated, only the 代簽人 should be asked. Skip their pending
@@ -132,7 +143,7 @@ export async function POST(
       await tx.phaseSignoff.updateMany({
         where: {
           demandId: id,
-          phase: demand.status as DemandStatus,
+          phase: effectivePhase as DemandStatus,
           kind,
           status: "PENDING",
           targetRole: { not: "BOARD_OVERRIDE" },
@@ -152,7 +163,7 @@ export async function POST(
           await tx.phaseSignoff.create({
             data: {
               demandId: id,
-              phase: demand.status as DemandStatus,
+              phase: effectivePhase as DemandStatus,
               kind,
               status: "PENDING",
               targetUserId: member.id,
@@ -183,7 +194,7 @@ export async function POST(
       entity: "SIGNOFF",
       entityId: created[0].id,
       demandId: id,
-      details: { phase: demand.status, kind, comment, targetStatus, targetMembers: eligibleMembers.map(m => m.name) },
+      details: { phase: effectivePhase, kind, comment, targetStatus, targetMembers: eligibleMembers.map(m => m.name) },
       request,
     })
 

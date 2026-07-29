@@ -131,6 +131,10 @@ function SpReviewCard({ item, token, onComplete }: {
   const isSettlement = item.signoff.targetRole === "BOARD_OVERRIDE" && !!item.signoff.overrideTargetStatus
   const approveLabel = isSettlement ? "確認結算" : "確認通過"
   const rejectLabel = isSettlement ? "需求繼續" : "退回修改"
+  // 結算：依所選階段比例算出最終收取的 SP
+  const settlementRate = item.signoff.overrideTargetStatus ? (SP_PROGRESS_RATE[item.signoff.overrideTargetStatus] ?? 0) : 0
+  const settlementPct = Math.round(settlementRate * 100)
+  const settledSp = Math.round(sp * settlementRate)
 
   // ── Action state ──
   const [actionLoading, setActionLoading] = useState(false)
@@ -215,9 +219,9 @@ function SpReviewCard({ item, token, onComplete }: {
             {STATUS_MAP[item.signoff.phase]?.label || item.signoff.phase}
           </Badge>
           {item.signoff.targetRole === "BOARD_OVERRIDE" && (
-            <Badge className="text-[10px] sm:text-xs bg-orange-50 text-orange-600 border border-orange-200 gap-0.5">
+            <Badge className={`text-[10px] sm:text-xs gap-0.5 border ${isSettlement ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-orange-50 text-orange-600 border-orange-200"}`}>
               <ShieldCheck className="h-3 w-3" />
-              代簽
+              {isSettlement ? "結算結案" : "代簽"}
             </Badge>
           )}
         </div>
@@ -245,13 +249,24 @@ function SpReviewCard({ item, token, onComplete }: {
               <ShieldCheck className="h-3.5 w-3.5 text-orange-500 mt-0.5 shrink-0" />
               <div className="space-y-1 min-w-0">
                 <span className="text-xs font-medium text-orange-700">
-                  {item.signoff.overrideTargetStatus ? "提前結算" : "代為確認"}
+                  {item.signoff.overrideTargetStatus ? "提前結算並結案" : "代為確認（不結案）"}
                 </span>
-                <p className="text-[11px] sm:text-xs text-orange-600/80 leading-relaxed">
-                  {item.signoff.overrideTargetStatus
-                    ? `管理者已決定將此需求提前結算，依目前進度按 ${(SP_PROGRESS_RATE[item.signoff.overrideTargetStatus] ?? 0) * 100}% 比例計算 SP`
-                    : "需求者目前無法簽核，管理者申請由您代為確認，通過後維持原流程繼續進行"}
-                </p>
+                {item.signoff.overrideTargetStatus ? (
+                  <>
+                    <p className="text-[11px] sm:text-xs text-orange-600/80 leading-relaxed">
+                      管理者決定將此需求提前結算並直接結案，依目前進度（{STATUS_MAP[item.signoff.overrideTargetStatus]?.label ?? item.signoff.overrideTargetStatus}）按 {settlementPct}% 計算。
+                    </p>
+                    <div className="mt-1 flex items-baseline gap-1.5 rounded-md bg-orange-100/70 px-2 py-1 text-xs">
+                      <span className="text-orange-700/70">最終收取</span>
+                      <span className="font-semibold text-orange-800">{settledSp} SP</span>
+                      <span className="text-orange-600/60">（原估 {sp} SP × {settlementPct}%）</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[11px] sm:text-xs text-orange-600/80 leading-relaxed">
+                    需求者目前無法簽核，管理者申請由您代為確認，通過後<span className="font-medium">維持原流程繼續進行</span>（不結案、SP 不變）。
+                  </p>
+                )}
                 {item.signoff.requestComment && (
                   <p className="text-[11px] sm:text-xs text-orange-600/70">原因：{item.signoff.requestComment}</p>
                 )}
@@ -340,16 +355,23 @@ function SpReviewCard({ item, token, onComplete }: {
                   <div className="flex items-center gap-1.5">
                     <ShieldCheck className="h-4 w-4 text-orange-500" />
                     <span className="text-sm font-medium text-orange-700">
-                      {item.signoff.overrideTargetStatus ? "提前結算審核" : "代簽審核"}
+                      {item.signoff.overrideTargetStatus ? "提前結算並結案審核" : "代簽審核（不結案）"}
                     </span>
                   </div>
                   {item.signoff.overrideTargetStatus ? (
-                    <p className="text-sm text-orange-600/80 leading-relaxed">
-                      管理者已決定將此需求提前結算，依目前進度按 <span className="font-semibold text-orange-700">{(SP_PROGRESS_RATE[item.signoff.overrideTargetStatus] ?? 0) * 100}%</span> 比例計算 SP。請確認是否同意此結算方案。
-                    </p>
+                    <>
+                      <p className="text-sm text-orange-600/80 leading-relaxed">
+                        管理者已決定將此需求提前結算並<span className="font-medium text-orange-700">直接結案</span>，依目前進度（{STATUS_MAP[item.signoff.overrideTargetStatus]?.label ?? item.signoff.overrideTargetStatus}）按 <span className="font-semibold text-orange-700">{settlementPct}%</span> 計算。請確認是否同意此結算方案。
+                      </p>
+                      <div className="flex items-baseline gap-2 rounded-md bg-orange-100/70 px-3 py-2 text-sm">
+                        <span className="text-orange-700/70">最終收取</span>
+                        <span className="text-base font-semibold text-orange-800">{settledSp} SP</span>
+                        <span className="text-xs text-orange-600/60">原估 {sp} SP × {settlementPct}%</span>
+                      </div>
+                    </>
                   ) : (
                     <p className="text-sm text-orange-600/80 leading-relaxed">
-                      需求者目前無法簽核，管理者申請由您代為確認，通過後維持原流程繼續進行。
+                      需求者目前無法簽核，管理者申請由您代為確認，通過後<span className="font-medium">維持原流程繼續進行</span>（不結案、SP 不變）。
                     </p>
                   )}
                   {item.signoff.requestComment && (

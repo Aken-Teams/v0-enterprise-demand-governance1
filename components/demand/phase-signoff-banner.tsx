@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, MessageSquare, Download, ShieldCheck } from "lucide-react"
+import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, Download, ShieldCheck } from "lucide-react"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
@@ -23,6 +23,8 @@ interface PhaseSignoffBannerProps {
   demandId: string
   token: string | null
   onComplete: () => void
+  /** 需求目前的有效 SP（confirmedSp ?? estimatedSp）— 用於顯示結算後的實際 SP */
+  effectiveSp?: number | null
   /** Render only the action buttons without the outer wrapper/header */
   inline?: boolean
   /** "PHASE" (default) or "DESIGN_CHANGE" */
@@ -44,6 +46,7 @@ export function PhaseSignoffBanner({
   demandId,
   token,
   onComplete,
+  effectiveSp,
   inline,
   kind = "PHASE",
   blocked = false,
@@ -63,7 +66,7 @@ export function PhaseSignoffBanner({
   const isSettlement = isBoardOverride && !!signoff.overrideTargetStatus
 
   const titleText = isBoardOverride
-    ? `專案 Master 代簽 —「${phaseLabel}」階段等待您的確認`
+    ? "專案 Master 代簽"
     : isDesignChange
     ? "「設計變更」等待您的確認"
     : `「${phaseLabel}」階段等待您的確認`
@@ -151,7 +154,7 @@ export function PhaseSignoffBanner({
           </div>
           <p className={cn("text-xs mt-1 leading-relaxed", subTextClass)}>
             由 {signoff.requestedBy.name} 於 {new Date(signoff.requestedAt).toLocaleDateString("zh-TW")}
-            {isDesignChange ? ` 在「${phaseLabel}」階段發起設計變更` : ` 發起簽核請求`}
+            {isDesignChange ? ` 在「${phaseLabel}」階段發起設計變更` : ""}
           </p>
         </>
       )}
@@ -161,32 +164,28 @@ export function PhaseSignoffBanner({
         <div className="mt-3 space-y-2">
           {signoff.requestComment && (
             <div className={cn("rounded-md bg-white/80 border p-2.5 sm:p-3", isBoardOverride ? "border-orange-200" : "border-indigo-200")}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <MessageSquare className={cn("h-3.5 w-3.5", isBoardOverride ? "text-orange-500" : "text-indigo-500")} />
-                <span className={cn("text-xs font-medium", isBoardOverride ? "text-orange-700" : "text-indigo-700")}>
-                  {isBoardOverride ? "代簽原因" : "提出說明"}
-                </span>
-              </div>
               <p className={cn("text-[13px] sm:text-sm whitespace-pre-line break-words leading-relaxed", isBoardOverride ? "text-orange-900/80" : "text-indigo-900/80")}>
+                <span className={cn("font-medium", isBoardOverride ? "text-orange-700" : "text-indigo-700")}>{isBoardOverride ? "代簽原因：" : "提出說明："}</span>
                 {signoff.requestComment}
               </p>
             </div>
           )}
 
-          {isBoardOverride && signoff.overrideTargetStatus && (
-            <div className="rounded-md bg-orange-100/70 border border-orange-300 p-2.5 sm:p-3">
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-orange-600" />
-                <span className="text-xs font-medium text-orange-800">
-                  您確認後將直接結算
-                </span>
+          {isBoardOverride && signoff.overrideTargetStatus && (() => {
+            const pct = Math.round((SP_PROGRESS_RATE[signoff.overrideTargetStatus] ?? 0) * 100)
+            const settled = effectiveSp != null ? Math.round(effectiveSp * (SP_PROGRESS_RATE[signoff.overrideTargetStatus] ?? 0)) : null
+            return (
+              <div className="rounded-md bg-orange-100/70 border border-orange-300 p-2.5 sm:p-3 flex items-start gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-orange-600 mt-0.5 shrink-0" />
+                <p className="text-[13px] sm:text-sm text-orange-900/80 leading-relaxed">
+                  確認後<span className="font-medium">直接結案</span>，
+                  {settled != null
+                    ? <>結算 <span className="font-semibold">{settled} SP</span>（原 {effectiveSp} × {pct}%）。</>
+                    : <>依目前進度消耗 <span className="font-semibold">{pct}%</span> SP。</>}
+                </p>
               </div>
-              <p className="text-[13px] sm:text-sm text-orange-900/80 mt-1 leading-relaxed">
-                通過後需求將直接設為「{STATUS_MAP[signoff.overrideTargetStatus]?.label ?? signoff.overrideTargetStatus}」，
-                SP 消耗 <span className="font-semibold">{Math.round((SP_PROGRESS_RATE[signoff.overrideTargetStatus] ?? 0) * 100)}%</span>。
-              </p>
-            </div>
-          )}
+            )
+          })()}
 
           {dcDocs.length > 0 && (
             <div className="space-y-1">

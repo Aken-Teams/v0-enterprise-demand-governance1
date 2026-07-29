@@ -242,11 +242,14 @@ export async function PATCH(
       const settlementTier = signoff.overrideTargetStatus as DemandStatus
       const dem = await prisma.demand.findUnique({
         where: { id },
-        select: { status: true, confirmedSp: true, estimatedSp: true, organizationId: true, vendor: true, demandNumber: true, title: true },
+        select: { status: true, heldFromStatus: true, confirmedSp: true, estimatedSp: true, organizationId: true, vendor: true, demandNumber: true, title: true },
       })
       if (dem && dem.status !== "CLOSED") {
         const now = new Date()
-        const fromStatus = dem.status
+        // 暫緩／駁回時，結算基準為暫緩前的階段（heldFromStatus），而非 ON_HOLD 本身
+        const fromStatus = ((dem.status === "ON_HOLD" || dem.status === "REJECTED")
+          ? (dem.heldFromStatus || dem.status)
+          : dem.status) as DemandStatus
         const effectiveSp = dem.confirmedSp ?? dem.estimatedSp
         const settlementRate = SP_PROGRESS_RATE[settlementTier] ?? 0
         const settledSp = Math.round(effectiveSp * settlementRate)
