@@ -325,6 +325,7 @@ export async function GET(request: NextRequest) {
             select: {
               id: true, phase: true, status: true, kind: true,
               requestedAt: true, targetUserId: true,
+              targetRole: true, overrideTargetStatus: true,
             },
           },
         },
@@ -404,6 +405,7 @@ export async function GET(request: NextRequest) {
         type SignoffRow = {
           phase: string; status: string; kind: string;
           requestedAt: Date; targetUserId: string | null;
+          targetRole: string | null; overrideTargetStatus: string | null;
         }
         const signoffs = d.phaseSignoffs as unknown as SignoffRow[]
         // Only show rejection if the LATEST round of signoffs has a REJECTED entry
@@ -452,6 +454,10 @@ export async function GET(request: NextRequest) {
           ),
           hasCurrentPhaseReject,
           hasCurrentPhaseApproved,
+          // 有待客戶 Master 確認的代簽終止結算 → 前端顯示「終止簽核中」
+          hasPendingSettlement: signoffs.some(
+            (s) => s.targetRole === "BOARD_OVERRIDE" && s.status === "PENDING" && !!s.overrideTargetStatus,
+          ),
           holdReason: (d as unknown as { holdReason: string | null }).holdReason || null,
           phaseCompletion: { missingDocs, pendingSignoffs, totalSignoffs },
         }

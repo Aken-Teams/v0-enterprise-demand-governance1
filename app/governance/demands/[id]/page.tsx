@@ -750,7 +750,13 @@ export default function DemandDetailPage() {
     )
   }
 
-  const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+  // 有待客戶 Master 確認的「代簽終止結算」→ 顯示為「終止簽核中」，讓大家知道這件正在被終止
+  const hasPendingSettlement = (demand.phaseSignoffs ?? []).some(
+    (s) => s.targetRole === "BOARD_OVERRIDE" && s.status === "PENDING" && !!s.overrideTargetStatus
+  )
+  const statusInfo = hasPendingSettlement
+    ? (STATUS_MAP.TERMINATING ?? { label: "終止簽核中", color: "bg-orange-100 text-orange-700" })
+    : (STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)] || { label: demand.status, color: "bg-gray-100 text-gray-700" })
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
   const isOnHold = demand.status === "ON_HOLD"

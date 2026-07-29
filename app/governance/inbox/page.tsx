@@ -59,6 +59,7 @@ interface Demand {
   hasPendingDesignChange: boolean
   hasCurrentPhaseReject: boolean
   hasCurrentPhaseApproved: boolean
+  hasPendingSettlement?: boolean
   holdReason: string | null
   phaseCompletion?: {
     missingDocs: string[]
@@ -722,7 +723,9 @@ function InboxContent() {
           <>
             <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3">
               {paginatedDemands.map((demand) => {
-                const statusInfo = STATUS_MAP[(demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated) ? "TERMINATED" : demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+                const statusInfo = demand.hasPendingSettlement
+                  ? (STATUS_MAP.TERMINATING ?? { label: "終止簽核中", color: "bg-orange-100 text-orange-700" })
+                  : (STATUS_MAP[(demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated) ? "TERMINATED" : demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" })
                 const pc = demand.phaseCompletion
                 return (
                   <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">

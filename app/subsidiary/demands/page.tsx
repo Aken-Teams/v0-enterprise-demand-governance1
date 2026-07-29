@@ -25,6 +25,7 @@ interface Demand {
   manager: string | null
   developer: string | null
   hasPendingDesignChange: boolean
+  hasPendingSettlement?: boolean
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; badge: string }> = {
@@ -38,6 +39,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; badge: string }
   ON_HOLD: { label: "暫緩", color: "bg-yellow-500 text-white", badge: "bg-yellow-50 text-yellow-700 ring-yellow-200" },
   CANCELLED: { label: "已取消", color: "bg-slate-500 text-white", badge: "bg-slate-100 text-slate-600 ring-slate-200" },
   TERMINATED: { label: "已終止", color: "bg-zinc-500 text-white", badge: "bg-zinc-100 text-zinc-700 ring-zinc-200" },
+  TERMINATING: { label: "終止簽核中", color: "bg-orange-500 text-white", badge: "bg-orange-50 text-orange-700 ring-orange-200" },
 }
 
 const STATUS_KEYS = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED", "TERMINATED", "REJECTED"]
@@ -48,7 +50,9 @@ function formatDateReadable(dateStr: string) {
 }
 
 function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingSignoff?: boolean }) {
-  const statusInfo = STATUS_MAP[(demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated) ? "TERMINATED" : demand.status] || { label: demand.status, color: "bg-gray-400 text-white", badge: "bg-gray-50 text-gray-600 ring-gray-200" }
+  const statusInfo = demand.hasPendingSettlement
+    ? (STATUS_MAP.TERMINATING ?? { label: "終止簽核中", color: "bg-orange-500 text-white", badge: "bg-orange-50 text-orange-700 ring-orange-200" })
+    : (STATUS_MAP[(demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated) ? "TERMINATED" : demand.status] || { label: demand.status, color: "bg-gray-400 text-white", badge: "bg-gray-50 text-gray-600 ring-gray-200" })
   const sp = demand.confirmedSp ?? demand.estimatedSp
 
   const ownerInfo = (() => {

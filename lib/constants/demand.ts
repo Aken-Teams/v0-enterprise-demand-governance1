@@ -10,6 +10,8 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
   // 顯示用（非資料庫狀態）：經專案 Master 代簽直接結案 → 客戶認知為「已終止」
   TERMINATED: { label: "已終止", color: "bg-zinc-200 text-zinc-700" },
+  // 顯示用（非資料庫狀態）：有待客戶 Master 確認的「代簽終止結算」→ 終止簽核中
+  TERMINATING: { label: "終止簽核中", color: "bg-orange-100 text-orange-700" },
 }
 
 /**
