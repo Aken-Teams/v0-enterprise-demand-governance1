@@ -2449,6 +2449,7 @@ export default function DemandDetailPage() {
         pendingSignoffs={currentPhaseSignoffs.filter((s) => s.status === "PENDING")}
         organizationId={demand.organizationId}
         shareUrl={notifyShareUrl}
+        effectiveSp={demand.confirmedSp ?? demand.estimatedSp}
       />
 
       {/* Board override dialog */}

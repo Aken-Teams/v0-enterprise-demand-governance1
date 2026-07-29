@@ -11,12 +11,14 @@ import { Loader2, Send, Eye, Code, X, Plus, Network } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 import { signoffNotificationTemplate } from "@/lib/mail-templates"
+import { SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import { LdapTreePicker, type LdapSelectedMember } from "@/components/admin/ldap-tree-picker"
 
 interface PendingSignoff {
   targetUserId: string | null
   targetUser: { id: string; name: string; email?: string } | null
   targetRole: string | null
+  overrideTargetStatus?: string | null
 }
 
 interface NotifySignersDialogProps {
@@ -29,6 +31,8 @@ interface NotifySignersDialogProps {
   pendingSignoffs: PendingSignoff[]
   organizationId: string
   shareUrl?: string
+  /** 需求有效 SP（confirmedSp ?? estimatedSp）— 用於終止結算金額 */
+  effectiveSp?: number | null
 }
 
 export function NotifySignersDialog({
@@ -41,6 +45,7 @@ export function NotifySignersDialog({
   pendingSignoffs,
   organizationId,
   shareUrl,
+  effectiveSp,
 }: NotifySignersDialogProps) {
   const { token } = useAuth()
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -106,7 +111,19 @@ export function NotifySignersDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      const defaultSubject = `[${demandNumber}] 請確認簽核 - ${demandTitle}`
+      // 終止結算代簽：改用終止相關主旨與內文
+      const settleSignoff = pendingSignoffs.find((s) => s.targetRole === "BOARD_OVERRIDE" && !!s.overrideTargetStatus)
+      const isTermination = !!settleSignoff
+      const settlementPct = settleSignoff?.overrideTargetStatus
+        ? Math.round((SP_PROGRESS_RATE[settleSignoff.overrideTargetStatus] ?? 0) * 100)
+        : undefined
+      const settledSp = settleSignoff?.overrideTargetStatus && effectiveSp != null
+        ? Math.round(effectiveSp * (SP_PROGRESS_RATE[settleSignoff.overrideTargetStatus] ?? 0))
+        : null
+
+      const defaultSubject = isTermination
+        ? `[${demandNumber}] 請確認是否終止專案 - ${demandTitle}`
+        : `[${demandNumber}] 請確認簽核 - ${demandTitle}`
       setSubject(defaultSubject)
 
       const link = shareUrl || `${typeof window !== "undefined" ? window.location.origin : ""}/governance/demands/${demandId}`
@@ -116,6 +133,10 @@ export function NotifySignersDialog({
         phaseLabel,
         shareUrl: link,
         signerNames: toNames,
+        isTermination,
+        settlementPct,
+        settledSp,
+        effectiveSp,
       })
       setBody(html)
       setEditMode(false) // default to preview

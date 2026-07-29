@@ -2,19 +2,39 @@
  * HTML email templates for the demand governance system.
  */
 
-/** 簽核通知信 HTML 模板 */
+/** 簽核通知信 HTML 模板（含「終止結算」變體） */
 export function signoffNotificationTemplate(params: {
   demandNumber: string
   demandTitle: string
   phaseLabel: string
   shareUrl: string
   signerNames?: string[]
+  /** 終止結算代簽：改用終止相關文案與橘色主題 */
+  isTermination?: boolean
+  settlementPct?: number
+  settledSp?: number | null
+  effectiveSp?: number | null
 }): string {
-  const { demandNumber, demandTitle, phaseLabel, shareUrl, signerNames } = params
+  const { demandNumber, demandTitle, phaseLabel, shareUrl, signerNames, isTermination, settlementPct, settledSp, effectiveSp } = params
 
   const greeting = signerNames?.length
     ? `${signerNames.join("、")} 您好，`
     : "您好，"
+
+  const isTerm = !!isTermination
+  const headerTitle = isTerm ? "JV 需求管理系統 — 專案終止確認" : "JV 需求管理系統 — 簽核通知"
+  const themeColor = isTerm ? "#ea580c" : "#2563eb"
+  const btnLabel = isTerm ? "查看並確認終止" : "查看需求並簽核"
+  const ctaLine = isTerm ? "請點擊下方按鈕查看需求詳情並確認是否終止：" : "請點擊下方按鈕查看需求詳情並進行簽核："
+  const phaseBadge = `<span style="display:inline-block;background:${isTerm ? "#ffedd5" : "#dbeafe"};color:${isTerm ? "#c2410c" : "#1d4ed8"};padding:2px 8px;border-radius:4px;font-size:13px;font-weight:600;">${phaseLabel}</span>`
+
+  const settlementText = settledSp != null
+    ? `結算 <strong>${settledSp} SP</strong>（原 ${effectiveSp} × ${settlementPct}%）`
+    : `消耗 <strong>${settlementPct}%</strong> SP`
+
+  const bodyPara = isTerm
+    ? `需求 <strong>${demandNumber} — ${demandTitle}</strong>（目前 ${phaseBadge} 階段）由管理者申請<strong style="color:#c2410c;">終止此專案並直接結算</strong>，需要您（專案 Master）確認。通過後將依目前進度${settlementText}並結案。`
+    : `需求 <strong>${demandNumber} — ${demandTitle}</strong> 目前處於 ${phaseBadge} 階段，需要您進行簽核確認。`
 
   return `<!DOCTYPE html>
 <html>
@@ -25,29 +45,25 @@ export function signoffNotificationTemplate(params: {
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
         <!-- Header -->
         <tr>
-          <td style="background:#2563eb;padding:24px 32px;">
-            <h2 style="margin:0;color:#ffffff;font-size:18px;">JV 需求管理系統 — 簽核通知</h2>
+          <td style="background:${themeColor};padding:24px 32px;">
+            <h2 style="margin:0;color:#ffffff;font-size:18px;">${headerTitle}</h2>
           </td>
         </tr>
         <!-- Body -->
         <tr>
           <td style="padding:32px;">
             <p style="margin:0 0 16px;font-size:15px;color:#1f2937;">${greeting}</p>
-            <p style="margin:0 0 16px;font-size:15px;color:#1f2937;">
-              需求 <strong>${demandNumber} — ${demandTitle}</strong> 目前處於
-              <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:4px;font-size:13px;font-weight:600;">
-                ${phaseLabel}
-              </span>
-              階段，需要您進行簽核確認。
+            <p style="margin:0 0 16px;font-size:15px;color:#1f2937;line-height:1.7;">
+              ${bodyPara}
             </p>
             <p style="margin:0 0 24px;font-size:15px;color:#1f2937;">
-              請點擊下方按鈕查看需求詳情並進行簽核：
+              ${ctaLine}
             </p>
             <table cellpadding="0" cellspacing="0">
               <tr>
-                <td style="background:#2563eb;border-radius:6px;">
+                <td style="background:${themeColor};border-radius:6px;">
                   <a href="${shareUrl}" target="_blank" style="display:inline-block;padding:12px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;">
-                    查看需求並簽核
+                    ${btnLabel}
                   </a>
                 </td>
               </tr>

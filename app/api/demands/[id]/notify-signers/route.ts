@@ -45,7 +45,7 @@ export async function POST(
         status: true,
         phaseSignoffs: {
           where: { status: "PENDING" },
-          select: { targetUserId: true },
+          select: { targetUserId: true, targetRole: true, overrideTargetStatus: true },
         },
       },
     })
@@ -77,10 +77,15 @@ export async function POST(
 
     if (targetUserIds.length > 0) {
       const uniqueIds = [...new Set(targetUserIds)]
+      const isTermination = demand.phaseSignoffs.some(
+        (s) => s.targetRole === "BOARD_OVERRIDE" && !!s.overrideTargetStatus,
+      )
       notifyUsers(uniqueIds, {
         type: "SIGNOFF",
-        title: "簽核通知",
-        message: `需求 ${demand.demandNumber} - ${demand.title} 需要您進行簽核確認`,
+        title: isTermination ? "專案終止確認" : "簽核通知",
+        message: isTermination
+          ? `需求 ${demand.demandNumber} - ${demand.title} 申請終止結算，需要您確認`
+          : `需求 ${demand.demandNumber} - ${demand.title} 需要您進行簽核確認`,
         linkUrl: `/governance/demands/${id}`,
       }).catch(console.error)
     }
