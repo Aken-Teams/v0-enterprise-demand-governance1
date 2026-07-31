@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, ChevronLeft, ChevronRight, Loader2, Inbox, ClipboardCheck } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight, Loader2, Inbox, ClipboardCheck, PauseCircle, XCircle, Ban } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -26,6 +26,9 @@ interface Demand {
   developer: string | null
   hasPendingDesignChange: boolean
   hasPendingSettlement?: boolean
+  isTerminated?: boolean
+  holdReason?: string | null
+  terminatedReason?: string | null
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; badge: string }> = {
@@ -42,7 +45,9 @@ const STATUS_MAP: Record<string, { label: string; color: string; badge: string }
   TERMINATING: { label: "終止簽核中", color: "bg-orange-500 text-white", badge: "bg-orange-50 text-orange-700 ring-orange-200" },
 }
 
-const STATUS_KEYS = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED", "TERMINATED", "REJECTED"]
+const STATUS_KEYS = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED"]
+// 已終止 / 已取消 / 暫緩 合併成一個篩選（子公司不需要「已駁回」）
+const ENDED_TAB = { key: "ENDED", label: "已終止/取消/暫緩" }
 
 function formatDateReadable(dateStr: string) {
   const d = new Date(dateStr)
@@ -88,6 +93,26 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
       <h3 className="font-semibold text-foreground text-xs sm:text-sm leading-snug mb-1.5 sm:mb-2 group-hover:text-primary transition-colors line-clamp-2">
         {demand.title}
       </h3>
+
+      {/* 暫緩 / 取消 / 終止 原因 */}
+      {demand.status === "ON_HOLD" && demand.holdReason && (
+        <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2 text-[11px] text-yellow-700 bg-yellow-50 rounded px-2 py-1" title={demand.holdReason}>
+          <PauseCircle className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate min-w-0">{demand.holdReason}</span>
+        </div>
+      )}
+      {demand.status === "CANCELLED" && demand.holdReason && (
+        <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2 text-[11px] text-slate-600 bg-slate-100 rounded px-2 py-1" title={demand.holdReason}>
+          <XCircle className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate min-w-0">{demand.holdReason}</span>
+        </div>
+      )}
+      {demand.status === "CLOSED" && demand.isTerminated && demand.terminatedReason && (
+        <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2 text-[11px] text-zinc-600 bg-zinc-100 rounded px-2 py-1" title={demand.terminatedReason}>
+          <Ban className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate min-w-0">{demand.terminatedReason}</span>
+        </div>
+      )}
 
       {/* Bottom: owner + date + SP */}
       <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-border/60 text-[10px] sm:text-[11px] text-muted-foreground">
@@ -170,9 +195,10 @@ export default function MyDemandsPage() {
   const filteredDemands = useMemo(() => {
     if (activeTab === "all") return demands
     if (activeTab === "signoff") return demands.filter((d) => d.status !== "CLOSED" && d.status !== "REJECTED" && pendingSignoffIds.has(d.id))
-    // 已終止：狀態仍為 CLOSED，需靠 isTerminated 區分；已結案則排除已終止
-    if (activeTab === "TERMINATED") return demands.filter((d) => d.status === "CLOSED" && (d as unknown as { isTerminated?: boolean }).isTerminated)
-    if (activeTab === "CLOSED") return demands.filter((d) => d.status === "CLOSED" && !(d as unknown as { isTerminated?: boolean }).isTerminated)
+    // 已終止/取消/暫緩 合併：暫緩(ON_HOLD)、取消(CANCELLED)、終止(CLOSED+isTerminated)
+    if (activeTab === "ENDED") return demands.filter((d) => d.status === "ON_HOLD" || d.status === "CANCELLED" || (d.status === "CLOSED" && d.isTerminated))
+    // 已結案：CLOSED 但排除已終止
+    if (activeTab === "CLOSED") return demands.filter((d) => d.status === "CLOSED" && !d.isTerminated)
     return demands.filter((d) => d.status === activeTab)
   }, [demands, activeTab, pendingSignoffIds])
 
@@ -191,6 +217,7 @@ export default function MyDemandsPage() {
   const getCount = (key: string) => {
     if (key === "all") return demands.length
     if (key === "signoff") return activeSignoffCount
+    if (key === "ENDED") return (statusCounts["ON_HOLD"] || 0) + (statusCounts["CANCELLED"] || 0) + (statusCounts["TERMINATED"] || 0)
     return statusCounts[key] || 0
   }
 
@@ -267,6 +294,7 @@ export default function MyDemandsPage() {
               { key: "all", label: "全部" },
               ...(activeSignoffCount > 0 ? [{ key: "signoff", label: "待簽核" }] : []),
               ...STATUS_KEYS.map((k) => ({ key: k, label: STATUS_MAP[k].label })),
+              ENDED_TAB,
             ].map((tab) => {
               const count = getCount(tab.key)
               const isActive = activeTab === tab.key

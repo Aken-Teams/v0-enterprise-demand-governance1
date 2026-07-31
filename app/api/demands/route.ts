@@ -325,7 +325,7 @@ export async function GET(request: NextRequest) {
             select: {
               id: true, phase: true, status: true, kind: true,
               requestedAt: true, targetUserId: true,
-              targetRole: true, overrideTargetStatus: true,
+              targetRole: true, overrideTargetStatus: true, requestComment: true,
             },
           },
         },
@@ -406,6 +406,7 @@ export async function GET(request: NextRequest) {
           phase: string; status: string; kind: string;
           requestedAt: Date; targetUserId: string | null;
           targetRole: string | null; overrideTargetStatus: string | null;
+          requestComment: string | null;
         }
         const signoffs = d.phaseSignoffs as unknown as SignoffRow[]
         // Only show rejection if the LATEST round of signoffs has a REJECTED entry
@@ -458,6 +459,10 @@ export async function GET(request: NextRequest) {
           hasPendingSettlement: signoffs.some(
             (s) => s.targetRole === "BOARD_OVERRIDE" && s.status === "PENDING" && !!s.overrideTargetStatus,
           ),
+          // 已終止原因：取通過的代簽（BOARD_OVERRIDE）之申請說明
+          terminatedReason: (d as unknown as { isTerminated?: boolean }).isTerminated
+            ? (signoffs.find((s) => s.targetRole === "BOARD_OVERRIDE" && s.status === "APPROVED" && s.requestComment)?.requestComment ?? null)
+            : null,
           holdReason: (d as unknown as { holdReason: string | null }).holdReason || null,
           phaseCompletion: { missingDocs, pendingSignoffs, totalSignoffs },
         }

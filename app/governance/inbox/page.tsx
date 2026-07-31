@@ -28,7 +28,7 @@ import {
   Paperclip, User, MoreHorizontal, Eye, Trash2,
   ClipboardList, Code2, CircleCheckBig, ChevronLeft, ChevronRight,
   ChevronsUpDown, Check, PauseCircle, PlayCircle, AlertTriangle,
-  SlidersHorizontal, X, XCircle,
+  SlidersHorizontal, X, XCircle, Ban,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -60,6 +60,7 @@ interface Demand {
   hasCurrentPhaseReject: boolean
   hasCurrentPhaseApproved: boolean
   hasPendingSettlement?: boolean
+  terminatedReason?: string | null
   holdReason: string | null
   phaseCompletion?: {
     missingDocs: string[]
@@ -772,6 +773,14 @@ function InboxContent() {
                         <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-100 rounded px-2 py-1" title={demand.holdReason}>
                           <XCircle className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate min-w-0">{demand.holdReason}</span>
+                        </div>
+                      )}
+
+                      {/* Terminated reason */}
+                      {demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated && demand.terminatedReason && (
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-600 bg-zinc-100 rounded px-2 py-1" title={demand.terminatedReason}>
+                          <Ban className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate min-w-0">{demand.terminatedReason}</span>
                         </div>
                       )}
 
