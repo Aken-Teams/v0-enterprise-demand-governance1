@@ -214,6 +214,20 @@ export async function GET(
       signoffRole: g.signoffRole,
     }))
 
+    // 可指派為需求窗口／主管的董事會成員（可代表需求者簽核）— 本組織適用者
+    const boardMembers = await prisma.user.findMany({
+      where: {
+        isBoardMember: true,
+        isActive: true,
+        OR: [
+          { restrictBoardToOrg: false },
+          { restrictBoardToOrg: true, organizationId: demand.organizationId },
+        ],
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    })
+
     // For limited admins, check write permission for this demand
     let adminCanWrite = true
     if (auth.role === "admin" && auth.adminScopeType && auth.adminScopeType !== "all") {
@@ -257,6 +271,7 @@ export async function GET(
       demand: demandOut,
       mySignoffRole,
       accessUsers,
+      boardMembers,
       adminCanWrite,
       canSeeQuote,
       canApproveQuote,

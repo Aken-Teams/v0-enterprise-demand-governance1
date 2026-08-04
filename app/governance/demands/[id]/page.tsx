@@ -390,6 +390,7 @@ export default function DemandDetailPage() {
   const [loading, setLoading] = useState(true)
   const [staffUsers, setStaffUsers] = useState<{ id: string; name: string; role?: string; organizationId?: string | null }[]>([])
   const [accessUsers, setAccessUsers] = useState<{ id: string; name: string; signoffRole: string }[]>([])
+  const [boardMembers, setBoardMembers] = useState<{ id: string; name: string }[]>([])
   const [vendorOptions, setVendorOptions] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined") {
@@ -481,6 +482,7 @@ export default function DemandDetailPage() {
       if (res.ok) {
         setDemand(data.demand)
         if (data.accessUsers) setAccessUsers(data.accessUsers)
+        if (data.boardMembers) setBoardMembers(data.boardMembers)
         if (typeof data.adminCanWrite === "boolean") setAdminCanWrite(data.adminCanWrite)
         setCanSeeQuote(!!data.canSeeQuote)
         setCanApproveQuote(!!data.canApproveQuote)
@@ -773,6 +775,16 @@ export default function DemandDetailPage() {
     : null
   // When CLOSED, only admin with write retains modification rights
   const effectiveCanManage = canManage && (!isClosed || isAdminWithWrite)
+
+  // 需求窗口／需求主管可指派對象：原本的存取簽核人 + 董事會成員（指派後即以需求者身分簽核）
+  const boardMemberIdSet = new Set(boardMembers.map((b) => b.id))
+  const buildAssigneeOptions = (role: "REQUESTER" | "MANAGER") => {
+    const merged: { id: string; name: string }[] = accessUsers
+      .filter((u) => u.signoffRole === role)
+      .map((u) => ({ id: u.id, name: u.name }))
+    boardMembers.forEach((b) => { if (!merged.some((u) => u.id === b.id)) merged.push({ id: b.id, name: b.name }) })
+    return merged
+  }
 
   // 可用「專案 Master 代簽 + 直接結案」把已進入開發/驗收的專案結算掉（暫緩／駁回時以暫緩前階段為準；更早的階段請用「取消」）
   const TERMINABLE_PHASES = ["DEVELOPING", "ACCEPTANCE"]
@@ -1764,8 +1776,8 @@ export default function DemandDetailPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">尚未指派</SelectItem>
-                            {accessUsers.filter((u) => u.signoffRole === "REQUESTER").map((u) => (
-                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            {buildAssigneeOptions("REQUESTER").map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}{boardMemberIdSet.has(u.id) ? "（董事會）" : ""}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1788,8 +1800,8 @@ export default function DemandDetailPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">尚未指派</SelectItem>
-                            {accessUsers.filter((u) => u.signoffRole === "MANAGER").map((u) => (
-                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            {buildAssigneeOptions("MANAGER").map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}{boardMemberIdSet.has(u.id) ? "（董事會）" : ""}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
