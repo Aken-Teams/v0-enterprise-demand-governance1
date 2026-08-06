@@ -330,14 +330,16 @@ function PrototypeFrame({
         ))}
         {dev.w > 0 && <span className="ml-auto text-[10px] text-muted-foreground">{dev.w}px</span>}
       </div>
-      {/* 可雙向捲動的預覽容器 */}
+      {/* 可雙向捲動的預覽容器（固定寬度裝置給高畫布，外層同時捲動 X/Y，避免 iframe 內建捲軸被推到畫面外） */}
       <div className="relative min-h-0 flex-1 overflow-auto bg-muted/30">
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
         <iframe
           title="原型預覽"
           srcDoc={html}
-          className="mx-auto block h-full border-0 bg-white shadow-sm"
-          style={dev.w > 0 ? { width: dev.w, minWidth: dev.w } : { width: "100%" }}
+          className="mx-auto block border-0 bg-white shadow-sm"
+          style={dev.w > 0
+            ? { width: dev.w, minWidth: dev.w, height: 1600, minHeight: 1600 }
+            : { width: "100%", height: "100%" }}
           sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
         />
       </div>

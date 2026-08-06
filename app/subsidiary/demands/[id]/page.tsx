@@ -43,7 +43,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
-import { PrototypePanel } from "@/components/demand/prototype-panel"
+import { PrototypePanel, PrototypeInlinePreview, PrototypePreviewModal, type Prototype } from "@/components/demand/prototype-panel"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { SignoffHistory } from "@/components/demand/signoff-history"
@@ -378,6 +378,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   // Document preview states
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [docActivePhase, setDocActivePhase] = useState<string | null>(null)
+  const [protoPreview, setProtoPreview] = useState<{ proto: Prototype; screenId: string } | null>(null)
+  const [protoMax, setProtoMax] = useState(false)
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
   const [excelReady, setExcelReady] = useState(false)
@@ -1448,7 +1450,17 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
               <div className="lg:col-span-3">
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
-                    {selectedDoc ? (
+                    {protoPreview ? (
+                      <PrototypeInlinePreview
+                        demandId={demand.id}
+                        proto={protoPreview.proto}
+                        screenId={protoPreview.screenId}
+                        token={token}
+                        onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
+                        onMaximize={() => setProtoMax(true)}
+                        onClose={() => setProtoPreview(null)}
+                      />
+                    ) : selectedDoc ? (
                       <div className={cn("relative h-full flex flex-col", isPreviewEmpty ? "min-h-[120px]" : "min-h-[300px] sm:min-h-[520px]")}>
                         {/* Preview toolbar */}
                         <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20 shrink-0">
@@ -1713,7 +1725,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       canDownload={false}
                       token={token}
                       onRefresh={fetchDemand}
-                      onDocumentSelect={setSelectedDoc}
+                      onDocumentSelect={(d) => { setProtoPreview(null); setSelectedDoc(d) }}
                       onActivePhaseChange={setDocActivePhase}
                       selectedDocId={selectedDoc?.id}
                       userRole="subsidiary"
@@ -1724,7 +1736,12 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                 {/* 原型 Prototype — 只有點進「MVP 架構確認」階段時才出現（唯讀） */}
                 {docActivePhase === "PRD_REVIEW" && (
                   <div className="mt-4">
-                    <PrototypePanel demandId={demand.id} token={token} canManage={false} />
+                    <PrototypePanel
+                      demandId={demand.id}
+                      token={token}
+                      canManage={false}
+                      onPreview={(proto, screenId) => { setSelectedDoc(null); setProtoPreview({ proto, screenId }) }}
+                    />
                   </div>
                 )}
               </div>
@@ -1788,6 +1805,18 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
         doc={fullScreenDoc}
         watermarkBg={watermarkBg}
       />
+
+      {/* 原型放大預覽 */}
+      {protoMax && protoPreview && (
+        <PrototypePreviewModal
+          demandId={demand.id}
+          proto={protoPreview.proto}
+          screenId={protoPreview.screenId}
+          token={token}
+          onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
+          onClose={() => setProtoMax(false)}
+        />
+      )}
 
       {/* Image zoom overlay */}
       {zoomedImg && (
