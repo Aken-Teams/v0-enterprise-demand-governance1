@@ -29,7 +29,7 @@ import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
 import { ZhiheSpField, ZhiheQuoteCard } from "@/components/demand/zhihe-sp-section"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
-import { PrototypePanel } from "@/components/demand/prototype-panel"
+import { PrototypePanel, PrototypeInlinePreview, PrototypePreviewModal, type Prototype } from "@/components/demand/prototype-panel"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
@@ -405,6 +405,9 @@ export default function DemandDetailPage() {
   const [spPlanDialogOpen, setSpPlanDialogOpen] = useState(false)
   const [subTasksOpen, setSubTasksOpen] = useState<boolean | null>(null)
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [protoPreview, setProtoPreview] = useState<{ proto: Prototype; screenId: string } | null>(null)
+  const [protoMax, setProtoMax] = useState(false)
+  const [docActivePhase, setDocActivePhase] = useState<string | null>(null)
   const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [docLinkCopied, setDocLinkCopied] = useState(false)
   const [textContent, setTextContent] = useState("")
@@ -2022,10 +2025,20 @@ export default function DemandDetailPage() {
           <TabsContent value="documents" className="mt-3 sm:mt-4">
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
               {/* Preview pane (hidden on mobile until doc selected) */}
-              <div className={cn("lg:col-span-3 order-2 lg:order-1 min-w-0", !selectedDoc && "hidden lg:block")}>
+              <div className={cn("lg:col-span-3 order-2 lg:order-1 min-w-0", !selectedDoc && !protoPreview && "hidden lg:block")}>
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
-                    {selectedDoc ? (
+                    {protoPreview ? (
+                      <PrototypeInlinePreview
+                        demandId={demand.id}
+                        proto={protoPreview.proto}
+                        screenId={protoPreview.screenId}
+                        token={token}
+                        onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
+                        onMaximize={() => setProtoMax(true)}
+                        onClose={() => setProtoPreview(null)}
+                      />
+                    ) : selectedDoc ? (
                       <div className={cn("relative h-full flex flex-col", isPreviewEmpty ? "min-h-[120px]" : "min-h-[300px] sm:min-h-[520px]")}>
                         {/* Preview toolbar */}
                         <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 border-b bg-muted/20 shrink-0">
@@ -2280,7 +2293,7 @@ export default function DemandDetailPage() {
               </div>
 
               {/* Document list */}
-              <div className={cn("lg:col-span-2 order-1 lg:order-2 min-w-0 space-y-4", selectedDoc && "hidden lg:block")}>
+              <div className={cn("lg:col-span-2 order-1 lg:order-2 min-w-0 space-y-4", (selectedDoc || protoPreview) && "hidden lg:block")}>
                 <Card>
                   <CardHeader className="px-4 sm:px-6 pb-3">
                     <div className="flex items-center justify-between">
@@ -2304,7 +2317,8 @@ export default function DemandDetailPage() {
                       token={token}
                       onRefresh={fetchDemand}
                       uploadTriggerSelector="#doc-upload-trigger"
-                      onDocumentSelect={setSelectedDoc}
+                      onDocumentSelect={(d) => { setProtoPreview(null); setSelectedDoc(d) }}
+                      onActivePhaseChange={setDocActivePhase}
                       selectedDocId={selectedDoc?.id}
                       userId={user?.id}
                       userRole={user?.role}
@@ -2327,17 +2341,20 @@ export default function DemandDetailPage() {
                     canManage={isZhiheManager}
                     canApproveQuote={canApproveQuote}
                     canDownload={isZhiheManager || (canApproveQuote && (demand as unknown as { quoteReviewedAt: string | null }).quoteReviewedAt != null)}
-                    onPreview={() => { const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE"); if (q) setSelectedDoc(q) }}
+                    onPreview={() => { const q = demand.documents.find((d) => (d as unknown as { type: string }).type === "ZHIHE_QUOTE"); if (q) { setProtoPreview(null); setSelectedDoc(q) } }}
                     onRefresh={fetchDemand}
                   />
                 )}
 
-                {/* 原型 Prototype（MVP 可上傳 HTML 畫面供互動預覽，選填、分版本） */}
-                <PrototypePanel
-                  demandId={demand.id}
-                  token={token}
-                  canManage={effectiveCanManage}
-                />
+                {/* 原型 Prototype — 只有點進「MVP 架構確認」階段時才出現，放在階段文件下方 */}
+                {docActivePhase === "PRD_REVIEW" && (
+                  <PrototypePanel
+                    demandId={demand.id}
+                    token={token}
+                    canManage={effectiveCanManage}
+                    onPreview={(proto, screenId) => { setSelectedDoc(null); setProtoPreview({ proto, screenId }) }}
+                  />
+                )}
               </div>
             </div>
           </TabsContent>
@@ -2457,6 +2474,18 @@ export default function DemandDetailPage() {
         doc={fullScreenDoc}
         watermarkBg={watermarkBg}
       />
+
+      {/* 原型放大預覽 */}
+      {protoMax && protoPreview && (
+        <PrototypePreviewModal
+          demandId={demand.id}
+          proto={protoPreview.proto}
+          screenId={protoPreview.screenId}
+          token={token}
+          onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
+          onClose={() => setProtoMax(false)}
+        />
+      )}
 
       {/* Notify signers dialog */}
       <NotifySignersDialog

@@ -63,6 +63,8 @@ interface PhaseDocumentsProps {
   userRole?: string
   /** 供「關聯設計變更」下拉選單使用（選填綁定） */
   designChanges?: DesignChangeOption[]
+  /** 目前檢視（點進）的階段變動時通知父層；回到階段清單為 null */
+  onActivePhaseChange?: (phase: string | null) => void
 }
 
 /** 版本群組：同一份邏輯文件的多個版本 */
@@ -125,6 +127,7 @@ function groupDocs(docs: Document[]): DocGroup[] {
 export function PhaseDocuments({
   documents,
   currentPhase,
+  onActivePhaseChange,
   demandId,
   canUpload,
   canDownload = true,
@@ -147,6 +150,7 @@ export function PhaseDocuments({
   const [appResultUrl, setAppResultUrl] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [activePhase, setActivePhase] = useState<string | null>(null)
+  useEffect(() => { onActivePhaseChange?.(activePhase) }, [activePhase]) // eslint-disable-line react-hooks/exhaustive-deps
   // 版本更新相關
   const [changeNote, setChangeNote] = useState("")
   const [uploadDcId, setUploadDcId] = useState<string>("")

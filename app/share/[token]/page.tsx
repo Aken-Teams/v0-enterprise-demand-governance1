@@ -577,6 +577,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
   const [activeTab, setActiveTab] = useState("overview")
   // Document preview states
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [docActivePhase, setDocActivePhase] = useState<string | null>(null)
   const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
@@ -1626,16 +1627,19 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                       token={authToken}
                       onRefresh={fetchDemand}
                       onDocumentSelect={setSelectedDoc}
+                      onActivePhaseChange={setDocActivePhase}
                       selectedDocId={selectedDoc?.id}
                       userRole="subsidiary"
                     />
                   </CardContent>
                 </Card>
 
-                {/* 原型 Prototype（互動預覽，唯讀；透過分享連結授權） */}
-                <div className="mt-4">
-                  <PrototypePanel demandId={demand.id} shareToken={shareToken} canManage={false} />
-                </div>
+                {/* 原型 Prototype — 只有點進「MVP 架構確認」階段時才出現（唯讀；分享連結授權） */}
+                {docActivePhase === "PRD_REVIEW" && (
+                  <div className="mt-4">
+                    <PrototypePanel demandId={demand.id} shareToken={shareToken} canManage={false} />
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>

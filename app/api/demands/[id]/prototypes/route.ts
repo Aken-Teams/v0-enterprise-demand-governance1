@@ -66,22 +66,14 @@ export async function POST(
 
     const form = await request.formData()
     const note = ((form.get("note") as string | null) || "").trim() || null
-    const htmlFiles = form.getAll("html").filter((f): f is File => f instanceof File)
-    const shotFiles = form.getAll("screenshot").filter((f): f is File => f instanceof File)
-
-    if (htmlFiles.length === 0) {
+    // 明確的逐畫面契約：count + html_i（必填）+ name_i（畫面名）+ shot_i（選填截圖）
+    const count = Number(form.get("count") || 0)
+    if (!count || count < 1) {
       return NextResponse.json({ error: "請至少上傳一個 HTML 畫面" }, { status: 400 })
-    }
-    if (!htmlFiles.every((f) => /\.html?$/i.test(f.name))) {
-      return NextResponse.json({ error: "原型畫面僅接受 .html 檔" }, { status: 400 })
     }
 
     const uploadDir = path.join(process.cwd(), "uploads", "demands", id)
     await mkdir(uploadDir, { recursive: true })
-
-    // 依「檔名（去副檔名）」配對截圖
-    const shotByBase = new Map<string, File>()
-    for (const s of shotFiles) shotByBase.set(baseName(s.name).toLowerCase(), s)
 
     const last = await prisma.prototype.findFirst({
       where: { demandId: id },
@@ -94,23 +86,33 @@ export async function POST(
       data: { demandId: id, version, note, uploadedBy: auth.userId },
     })
 
-    let order = 0
-    for (const hf of htmlFiles) {
-      const base = baseName(hf.name)
+    let saved = 0
+    for (let i = 0; i < count; i++) {
+      const hf = form.get(`html_${i}`)
+      if (!(hf instanceof File)) continue
+      if (!/\.html?$/i.test(hf.name)) continue
+      const name = ((form.get(`name_${i}`) as string | null) || baseName(hf.name)).trim() || baseName(hf.name)
+
       const htmlName = `proto-${proto.id}-${randomUUID()}.html`
       await writeFile(path.join(uploadDir, htmlName), Buffer.from(await hf.arrayBuffer()))
 
       let shotName: string | null = null
-      const shot = shotByBase.get(base.toLowerCase())
-      if (shot) {
+      const shot = form.get(`shot_${i}`)
+      if (shot instanceof File && shot.size > 0) {
         const ext = (path.extname(shot.name) || ".png").toLowerCase()
         shotName = `proto-${proto.id}-${randomUUID()}${ext}`
         await writeFile(path.join(uploadDir, shotName), Buffer.from(await shot.arrayBuffer()))
       }
 
       await prisma.prototypeScreen.create({
-        data: { prototypeId: proto.id, name: base, order: order++, htmlFile: htmlName, screenshotFile: shotName },
+        data: { prototypeId: proto.id, name, order: saved, htmlFile: htmlName, screenshotFile: shotName },
       })
+      saved++
+    }
+
+    if (saved === 0) {
+      await prisma.prototype.delete({ where: { id: proto.id } })
+      return NextResponse.json({ error: "沒有有效的 HTML 畫面" }, { status: 400 })
     }
 
     logAudit({
@@ -119,11 +121,11 @@ export async function POST(
       entity: "DEMAND",
       entityId: proto.id,
       demandId: id,
-      details: { kind: "PROTOTYPE", version, screens: htmlFiles.length },
+      details: { kind: "PROTOTYPE", version, screens: saved },
       request,
     })
 
-    return NextResponse.json({ id: proto.id, version })
+    return NextResponse.json({ id: proto.id, version, screens: saved })
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })

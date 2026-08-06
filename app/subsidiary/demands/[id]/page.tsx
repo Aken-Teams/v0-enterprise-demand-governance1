@@ -377,6 +377,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
   // Document preview states
   const [selectedDoc, setSelectedDoc] = useState<DemandDetail["documents"][0] | null>(null)
+  const [docActivePhase, setDocActivePhase] = useState<string | null>(null)
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
   const [excelReady, setExcelReady] = useState(false)
@@ -1713,16 +1714,19 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       token={token}
                       onRefresh={fetchDemand}
                       onDocumentSelect={setSelectedDoc}
+                      onActivePhaseChange={setDocActivePhase}
                       selectedDocId={selectedDoc?.id}
                       userRole="subsidiary"
                     />
                   </CardContent>
                 </Card>
 
-                {/* 原型 Prototype（互動預覽，唯讀） */}
-                <div className="mt-4">
-                  <PrototypePanel demandId={demand.id} token={token} canManage={false} />
-                </div>
+                {/* 原型 Prototype — 只有點進「MVP 架構確認」階段時才出現（唯讀） */}
+                {docActivePhase === "PRD_REVIEW" && (
+                  <div className="mt-4">
+                    <PrototypePanel demandId={demand.id} token={token} canManage={false} />
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>
