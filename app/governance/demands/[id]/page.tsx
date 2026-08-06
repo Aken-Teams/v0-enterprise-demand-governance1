@@ -29,6 +29,7 @@ import { SpAllocationChart } from "@/components/demand/sp-allocation-chart"
 import { ZhiheSpField, ZhiheQuoteCard } from "@/components/demand/zhihe-sp-section"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
+import { PrototypePanel } from "@/components/demand/prototype-panel"
 import { StepNavigation } from "@/components/demand/step-navigation"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
@@ -2330,6 +2331,13 @@ export default function DemandDetailPage() {
                     onRefresh={fetchDemand}
                   />
                 )}
+
+                {/* 原型 Prototype（MVP 可上傳 HTML 畫面供互動預覽，選填、分版本） */}
+                <PrototypePanel
+                  demandId={demand.id}
+                  token={token}
+                  canManage={effectiveCanManage}
+                />
               </div>
             </div>
           </TabsContent>

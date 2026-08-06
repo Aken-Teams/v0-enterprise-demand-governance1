@@ -46,6 +46,7 @@ import {
 import { cn } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
+import { PrototypePanel } from "@/components/demand/prototype-panel"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { SignoffHistory } from "@/components/demand/signoff-history"
@@ -1630,6 +1631,11 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                     />
                   </CardContent>
                 </Card>
+
+                {/* 原型 Prototype（互動預覽，唯讀；透過分享連結授權） */}
+                <div className="mt-4">
+                  <PrototypePanel demandId={demand.id} shareToken={shareToken} canManage={false} />
+                </div>
               </div>
             </div>
           </TabsContent>

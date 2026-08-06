@@ -306,11 +306,42 @@ model Demand {
   shares            DemandShare[]
   auditLogs         AuditLog[]
   mailLogs          MailLog[]
+  prototypes        Prototype[]
 
   @@index([organizationId])
   @@index([status])
   @@index([submitterId])
   @@map("demands")
+}
+
+/// MVP 原型（可上傳一組 HTML 畫面供客戶互動預覽，分版本）
+model Prototype {
+  id         String            @id @default(cuid())
+  demandId   String
+  demand     Demand            @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  version    Int /// 版本號（同一需求內遞增）
+  note       String?           @db.Text /// 版本說明
+  uploadedBy String /// user id
+  createdAt  DateTime          @default(now())
+  screens    PrototypeScreen[]
+
+  @@index([demandId])
+  @@map("prototypes")
+}
+
+/// 原型的單一畫面（一個 HTML 檔 + 選填截圖）
+model PrototypeScreen {
+  id             String    @id @default(cuid())
+  prototypeId    String
+  prototype      Prototype @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  name           String /// 畫面名稱（取自檔名）
+  order          Int       @default(0)
+  htmlFile       String /// 儲存於 uploads/demands/[demandId]/ 的檔名
+  screenshotFile String? /// 選填截圖檔名
+  createdAt      DateTime  @default(now())
+
+  @@index([prototypeId])
+  @@map("prototype_screens")
 }
 
 /// 需求狀態變更歷史
