@@ -16,13 +16,14 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
-  MonitorPlay, Upload, Trash2, Loader2, FileCode2, X, FolderOpen, ImageIcon, Maximize2, ArrowLeft,
+  MonitorPlay, Upload, Trash2, Loader2, FileCode2, X, FolderOpen, ImageIcon, Maximize2, ArrowLeft, Smartphone,
 } from "lucide-react"
 
 export interface PrototypeScreen {
   id: string
   name: string
   order: number
+  hasMobile?: boolean
   screenshotUrl: string | null
 }
 export interface Prototype {
@@ -258,7 +259,7 @@ export function PrototypeInlinePreview({
           ))}
         </div>
       )}
-      <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={screenId} token={token} shareToken={shareToken} />
+      <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={screenId} token={token} shareToken={shareToken} hasMobile={cur?.hasMobile} />
     </div>
   )
 }
@@ -276,69 +277,78 @@ function PrototypePreviewBody({
           <button key={s.id} onClick={() => onScreenChange(s.id)}
             className={cn("flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition", s.id === screenId ? "bg-indigo-100 font-medium text-indigo-800" : "text-muted-foreground hover:bg-muted")}>
             <FileCode2 className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{s.name}</span>
+            {s.hasMobile && <Smartphone className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/50" aria-label="含手機版" />}
           </button>
         ))}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={screenId} token={token} shareToken={shareToken} />
+        <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={screenId} token={token} shareToken={shareToken} hasMobile={proto.screens.find((s) => s.id === screenId)?.hasMobile} />
       </div>
     </div>
   )
 }
 
 // ── Sandboxed iframe that fetches + renders one screen ─────────
-const DEVICES: { key: string; label: string; w: number }[] = [
-  { key: "full", label: "滿版", w: 0 },
-  { key: "desktop", label: "桌機", w: 1280 },
-  { key: "tablet", label: "平板", w: 768 },
-  { key: "mobile", label: "手機", w: 390 },
-]
+// 每個模式：variant 決定抓網頁版或手機版 HTML；w 決定 iframe 寬度（0 = 滿版）
+type FrameMode = { key: string; label: string; variant: "web" | "mobile"; w: number }
 
 function PrototypeFrame({
-  demandId, protoId, screenId, token, shareToken,
+  demandId, protoId, screenId, token, shareToken, hasMobile,
 }: {
-  demandId: string; protoId: string; screenId: string; token?: string | null; shareToken?: string
+  demandId: string; protoId: string; screenId: string; token?: string | null; shareToken?: string; hasMobile?: boolean
 }) {
+  const modes: FrameMode[] = [
+    { key: "web", label: "網頁版", variant: "web", w: 1280 },
+    ...(hasMobile ? [{ key: "mobile", label: "手機版", variant: "mobile", w: 390 } as FrameMode] : []),
+    { key: "full", label: "滿版", variant: "web", w: 0 },
+  ]
+  const [modeKey, setModeKey] = useState("web")
+  const mode = modes.find((m) => m.key === modeKey) ?? modes[0]
+
   const [html, setHtml] = useState("")
   const [loading, setLoading] = useState(true)
-  const [device, setDevice] = useState("desktop")
   const { authQuery, headers } = authFetch(token, shareToken)
+
+  // 切換畫面時，若目前選手機版但新畫面沒有手機版 → 退回網頁版
+  useEffect(() => {
+    if (modeKey === "mobile" && !hasMobile) setModeKey("web")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenId, hasMobile])
 
   useEffect(() => {
     let alive = true
     setLoading(true); setHtml("")
-    fetch(`/api/demands/${demandId}/prototypes/${protoId}/screens/${screenId}${authQuery}`, { headers })
+    const q = mode.variant === "mobile" ? (authQuery ? `${authQuery}&variant=mobile` : "?variant=mobile") : authQuery
+    fetch(`/api/demands/${demandId}/prototypes/${protoId}/screens/${screenId}${q}`, { headers })
       .then((r) => r.ok ? r.text() : Promise.reject())
       .then((t) => { if (alive) setHtml(t) })
       .catch(() => { if (alive) setHtml("<div style='font-family:sans-serif;padding:24px;color:#71717a'>無法載入此畫面</div>") })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demandId, protoId, screenId])
-
-  const dev = DEVICES.find((d) => d.key === device) ?? DEVICES[0]
+  }, [demandId, protoId, screenId, mode.variant])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* 裝置寬度切換（非 RWD 原型可選桌機寬度避免跑版） */}
+      {/* 網頁版／手機版／滿版切換 */}
       <div className="flex items-center gap-1 border-b bg-background px-2 py-1">
-        {DEVICES.map((d) => (
-          <button key={d.key} onClick={() => setDevice(d.key)}
-            className={cn("rounded px-2 py-0.5 text-[11px] transition", device === d.key ? "bg-indigo-100 font-medium text-indigo-800" : "text-muted-foreground hover:bg-muted")}>
-            {d.label}
+        {modes.map((m) => (
+          <button key={m.key} onClick={() => setModeKey(m.key)}
+            className={cn("rounded px-2 py-0.5 text-[11px] transition", modeKey === m.key ? "bg-indigo-100 font-medium text-indigo-800" : "text-muted-foreground hover:bg-muted")}>
+            {m.label}
           </button>
         ))}
-        {dev.w > 0 && <span className="ml-auto text-[10px] text-muted-foreground">{dev.w}px</span>}
+        {mode.w > 0 && <span className="ml-auto text-[10px] text-muted-foreground">{mode.w}px</span>}
       </div>
-      {/* 可雙向捲動的預覽容器（固定寬度裝置給高畫布，外層同時捲動 X/Y，避免 iframe 內建捲軸被推到畫面外） */}
+      {/* 可雙向捲動的預覽容器（固定寬度給高畫布，外層同時捲動 X/Y，避免 iframe 內建捲軸被推到畫面外） */}
       <div className="relative min-h-0 flex-1 overflow-auto bg-muted/30">
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
         <iframe
           title="原型預覽"
           srcDoc={html}
           className="mx-auto block border-0 bg-white shadow-sm"
-          style={dev.w > 0
-            ? { width: dev.w, minWidth: dev.w, height: 1600, minHeight: 1600 }
+          style={mode.w > 0
+            ? { width: mode.w, minWidth: mode.w, height: 1600, minHeight: 1600 }
             : { width: "100%", height: "100%" }}
           sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
         />
@@ -348,7 +358,7 @@ function PrototypeFrame({
 }
 
 // ── Upload dialog (folder or multi-file) ──────────────────────
-type PendingScreen = { name: string; html: File; shot: File | null }
+type PendingScreen = { name: string; html: File; htmlMobile: File | null; shot: File | null }
 
 function UploadDialog({
   open, onOpenChange, demandId, headers, onDone,
@@ -385,12 +395,29 @@ function UploadDialog({
       if (!groups.has(folder)) groups.set(folder, [])
       groups.get(folder)!.push(f)
     }
-    const out: PendingScreen[] = []
+    // 每個資料夾取 html + 截圖
+    const info = new Map<string, { html?: File; shot?: File }>()
     for (const [folder, fs] of groups) {
-      const html = fs.find((f) => /\.html?$/i.test(f.name))
-      if (!html) continue
-      const shot = fs.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name)) || null
-      out.push({ name: folder, html, shot })
+      info.set(folder, {
+        html: fs.find((f) => /\.html?$/i.test(f.name)),
+        shot: fs.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name)),
+      })
+    }
+    // 以「非 _mobile」的資料夾為主畫面，配對同名 _mobile 資料夾為手機版
+    const out: PendingScreen[] = []
+    const consumed = new Set<string>()
+    for (const [folder, v] of info) {
+      if (folder.endsWith("_mobile") || !v.html) continue
+      const mobile = info.get(`${folder}_mobile`)
+      if (mobile) consumed.add(`${folder}_mobile`)
+      out.push({ name: folder, html: v.html, htmlMobile: mobile?.html ?? null, shot: v.shot ?? null })
+    }
+    // 沒有對應主畫面的孤兒 _mobile 資料夾 → 自成一畫面（名稱去掉 _mobile）
+    for (const [folder, v] of info) {
+      if (!folder.endsWith("_mobile") || consumed.has(folder) || !v.html) continue
+      const base = folder.replace(/_mobile$/, "")
+      if (info.get(base)?.html) continue
+      out.push({ name: base, html: v.html, htmlMobile: null, shot: v.shot ?? null })
     }
     out.sort((a, b) => a.name.localeCompare(b.name, "zh-Hant", { numeric: true }))
     if (out.length === 0) { toast.error("此資料夾內找不到 HTML 檔"); return }
@@ -404,7 +431,25 @@ function UploadDialog({
     const shotByBase = new Map<string, File>()
     for (const s of shots) shotByBase.set(baseName(s.name).toLowerCase(), s)
     if (htmls.length === 0) { toast.error("請選擇至少一個 HTML 檔"); return }
-    setScreens(htmls.map((h) => ({ name: baseName(h.name), html: h, shot: shotByBase.get(baseName(h.name).toLowerCase()) || null })))
+    // 以檔名配對 X.html ↔ X_mobile.html
+    const htmlByBase = new Map<string, File>()
+    for (const h of htmls) htmlByBase.set(baseName(h.name).toLowerCase(), h)
+    const out: PendingScreen[] = []
+    for (const h of htmls) {
+      const base = baseName(h.name)
+      if (base.toLowerCase().endsWith("_mobile")) continue
+      const mobile = htmlByBase.get(`${base}_mobile`.toLowerCase()) || null
+      out.push({ name: base, html: h, htmlMobile: mobile, shot: shotByBase.get(base.toLowerCase()) || null })
+    }
+    // 孤兒 _mobile
+    for (const h of htmls) {
+      const base = baseName(h.name)
+      if (!base.toLowerCase().endsWith("_mobile")) continue
+      const plain = base.replace(/_mobile$/i, "")
+      if (htmlByBase.get(plain.toLowerCase())) continue
+      out.push({ name: plain, html: h, htmlMobile: null, shot: shotByBase.get(base.toLowerCase()) || null })
+    }
+    setScreens(out)
   }
 
   const submit = async () => {
@@ -417,6 +462,7 @@ function UploadDialog({
       screens.forEach((s, i) => {
         fd.append(`html_${i}`, s.html)
         fd.append(`name_${i}`, s.name)
+        if (s.htmlMobile) fd.append(`htmlMobile_${i}`, s.htmlMobile)
         if (s.shot) fd.append(`shot_${i}`, s.shot)
       })
       const res = await fetch(`/api/demands/${demandId}/prototypes`, { method: "POST", headers, body: fd })
@@ -433,7 +479,7 @@ function UploadDialog({
         <DialogHeader>
           <DialogTitle>上傳原型（新版本）</DialogTitle>
           <DialogDescription className="text-xs">
-            建議「選擇資料夾」：每個子資料夾＝一個畫面（資料夾名為畫面名、內含 HTML＋選填截圖）；或直接多選 HTML 檔。整批＝同一個版本。
+            建議「選擇資料夾」：每個子資料夾＝一個畫面（含 HTML＋選填截圖）。資料夾名結尾 <b>_mobile</b> 會自動併為該畫面的手機版（如 1._login ＋ 1._login_mobile）。整批＝同一版本。
           </DialogDescription>
         </DialogHeader>
 
@@ -452,6 +498,7 @@ function UploadDialog({
                 <div key={i} className="flex items-center gap-1.5 text-xs">
                   <FileCode2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{s.name}</span>
+                  {s.htmlMobile && <Smartphone className="h-3 w-3 shrink-0 text-indigo-500" aria-label="含手機版" />}
                   {s.shot && <ImageIcon className="h-3 w-3 shrink-0 text-emerald-500" aria-label="含截圖" />}
                   <X className="ml-auto h-3.5 w-3.5 shrink-0 cursor-pointer text-muted-foreground hover:text-destructive" onClick={() => setScreens((p) => p.filter((_, j) => j !== i))} />
                 </div>

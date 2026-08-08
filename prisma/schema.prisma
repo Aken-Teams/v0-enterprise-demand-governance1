@@ -336,7 +336,8 @@ model PrototypeScreen {
   prototype      Prototype @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
   name           String /// 畫面名稱（取自檔名）
   order          Int       @default(0)
-  htmlFile       String /// 儲存於 uploads/demands/[demandId]/ 的檔名
+  htmlFile       String /// 網頁版 HTML 檔名（uploads/demands/[demandId]/）
+  htmlFileMobile String? /// 選填手機版 HTML 檔名（來源資料夾名 _mobile）
   screenshotFile String? /// 選填截圖檔名
   createdAt      DateTime  @default(now())
 

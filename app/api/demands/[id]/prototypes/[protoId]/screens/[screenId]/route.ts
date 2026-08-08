@@ -16,13 +16,16 @@ export async function GET(
 
     const screen = await prisma.prototypeScreen.findFirst({
       where: { id: screenId, prototype: { id: protoId, demandId: id } },
-      select: { htmlFile: true },
+      select: { htmlFile: true, htmlFileMobile: true },
     })
     if (!screen) {
       return NextResponse.json({ error: "畫面不存在" }, { status: 404 })
     }
 
-    const filePath = path.join(process.cwd(), "uploads", "demands", id, path.basename(screen.htmlFile))
+    // ?variant=mobile → 手機版（若有）；否則網頁版
+    const wantMobile = request.nextUrl.searchParams.get("variant") === "mobile"
+    const file = (wantMobile && screen.htmlFileMobile) ? screen.htmlFileMobile : screen.htmlFile
+    const filePath = path.join(process.cwd(), "uploads", "demands", id, path.basename(file))
     let html: string
     try {
       html = await readFile(filePath, "utf-8")

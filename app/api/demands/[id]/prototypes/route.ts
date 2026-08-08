@@ -36,6 +36,7 @@ export async function GET(
         id: s.id,
         name: s.name,
         order: s.order,
+        hasMobile: !!s.htmlFileMobile,
         screenshotUrl: s.screenshotFile ? `/api/uploads/demands/${id}/${s.screenshotFile}` : null,
       })),
     }))
@@ -96,6 +97,14 @@ export async function POST(
       const htmlName = `proto-${proto.id}-${randomUUID()}.html`
       await writeFile(path.join(uploadDir, htmlName), Buffer.from(await hf.arrayBuffer()))
 
+      // 選填手機版 HTML
+      let mobileName: string | null = null
+      const mf = form.get(`htmlMobile_${i}`)
+      if (mf instanceof File && mf.size > 0 && /\.html?$/i.test(mf.name)) {
+        mobileName = `proto-${proto.id}-${randomUUID()}.html`
+        await writeFile(path.join(uploadDir, mobileName), Buffer.from(await mf.arrayBuffer()))
+      }
+
       let shotName: string | null = null
       const shot = form.get(`shot_${i}`)
       if (shot instanceof File && shot.size > 0) {
@@ -105,7 +114,7 @@ export async function POST(
       }
 
       await prisma.prototypeScreen.create({
-        data: { prototypeId: proto.id, name, order: saved, htmlFile: htmlName, screenshotFile: shotName },
+        data: { prototypeId: proto.id, name, order: saved, htmlFile: htmlName, htmlFileMobile: mobileName, screenshotFile: shotName },
       })
       saved++
     }
