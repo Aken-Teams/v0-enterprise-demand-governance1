@@ -15,9 +15,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import JSZip from "jszip"
 import {
   MonitorPlay, Upload, Trash2, Loader2, FileCode2, X, FolderOpen, ImageIcon, Maximize2, ArrowLeft, Smartphone,
-  Monitor, ChevronLeft, ChevronRight,
+  Monitor, ChevronLeft, ChevronRight, FileArchive,
 } from "lucide-react"
 
 export interface PrototypeScreen {
@@ -44,6 +45,40 @@ function authFetch(token?: string | null, shareToken?: string) {
 
 function baseName(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, "").trim() || "畫面"
+}
+
+type PendingScreen = { name: string; html: File; htmlMobile: File | null; shot: File | null }
+
+// 由「路徑 + 檔案」清單（資料夾或 ZIP）建立畫面：每個子資料夾＝一個畫面，_mobile 併為手機版
+function buildScreensFromPaths(items: { path: string; file: File }[]): PendingScreen[] {
+  const groups = new Map<string, File[]>()
+  for (const { path, file } of items) {
+    const parts = path.split("/").filter(Boolean)
+    const folder = parts.length >= 2 ? parts[parts.length - 2] : "根目錄"
+    if (!groups.has(folder)) groups.set(folder, [])
+    groups.get(folder)!.push(file)
+  }
+  const info = new Map<string, { html?: File; shot?: File }>()
+  for (const [folder, fs] of groups) {
+    info.set(folder, {
+      html: fs.find((f) => /\.html?$/i.test(f.name)),
+      shot: fs.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name)),
+    })
+  }
+  const out: PendingScreen[] = []
+  for (const [folder, v] of info) {
+    if (folder.endsWith("_mobile") || !v.html) continue
+    const mobile = info.get(`${folder}_mobile`)
+    out.push({ name: folder, html: v.html, htmlMobile: mobile?.html ?? null, shot: v.shot ?? null })
+  }
+  for (const [folder, v] of info) {
+    if (!folder.endsWith("_mobile") || !v.html) continue
+    const base = folder.replace(/_mobile$/, "")
+    if (info.get(base)?.html) continue
+    out.push({ name: base, html: v.html, htmlMobile: null, shot: v.shot ?? null })
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name, "zh-Hant", { numeric: true }))
+  return out
 }
 
 // ── Panel (card in 文件 tab) ────────────────────────────────────
@@ -363,9 +398,7 @@ function PrototypeFrame({
   )
 }
 
-// ── Upload dialog (folder or multi-file) ──────────────────────
-type PendingScreen = { name: string; html: File; htmlMobile: File | null; shot: File | null }
-
+// ── Upload dialog (ZIP / folder / multi-file) ─────────────────
 function UploadDialog({
   open, onOpenChange, demandId, headers, onDone,
 }: {
@@ -374,11 +407,13 @@ function UploadDialog({
   const [screens, setScreens] = useState<PendingScreen[]>([])
   const [note, setNote] = useState("")
   const [uploading, setUploading] = useState(false)
+  const [reading, setReading] = useState(false)
   const folderRef = useRef<HTMLInputElement | null>(null)
   const filesRef = useRef<HTMLInputElement>(null)
+  const zipRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!open) { setScreens([]); setNote(""); setUploading(false) }
+    if (!open) { setScreens([]); setNote(""); setUploading(false); setReading(false) }
   }, [open])
 
   // 資料夾 input 需在掛載當下就設定 webkitdirectory（useEffect 會太晚 → 變成一般檔案選取）
@@ -392,42 +427,35 @@ function UploadDialog({
   }, [])
 
   const handleFolder = (fileList: FileList | null) => {
-    const files = Array.from(fileList ?? [])
-    const groups = new Map<string, File[]>()
-    for (const f of files) {
-      const rel = (f as unknown as { webkitRelativePath?: string }).webkitRelativePath || f.name
-      const parts = rel.split("/")
-      const folder = parts.length >= 2 ? parts[parts.length - 2] : "根目錄"
-      if (!groups.has(folder)) groups.set(folder, [])
-      groups.get(folder)!.push(f)
-    }
-    // 每個資料夾取 html + 截圖
-    const info = new Map<string, { html?: File; shot?: File }>()
-    for (const [folder, fs] of groups) {
-      info.set(folder, {
-        html: fs.find((f) => /\.html?$/i.test(f.name)),
-        shot: fs.find((f) => /\.(png|jpe?g|webp)$/i.test(f.name)),
-      })
-    }
-    // 以「非 _mobile」的資料夾為主畫面，配對同名 _mobile 資料夾為手機版
-    const out: PendingScreen[] = []
-    const consumed = new Set<string>()
-    for (const [folder, v] of info) {
-      if (folder.endsWith("_mobile") || !v.html) continue
-      const mobile = info.get(`${folder}_mobile`)
-      if (mobile) consumed.add(`${folder}_mobile`)
-      out.push({ name: folder, html: v.html, htmlMobile: mobile?.html ?? null, shot: v.shot ?? null })
-    }
-    // 沒有對應主畫面的孤兒 _mobile 資料夾 → 自成一畫面（名稱去掉 _mobile）
-    for (const [folder, v] of info) {
-      if (!folder.endsWith("_mobile") || consumed.has(folder) || !v.html) continue
-      const base = folder.replace(/_mobile$/, "")
-      if (info.get(base)?.html) continue
-      out.push({ name: base, html: v.html, htmlMobile: null, shot: v.shot ?? null })
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name, "zh-Hant", { numeric: true }))
+    const items = Array.from(fileList ?? []).map((f) => ({
+      path: (f as unknown as { webkitRelativePath?: string }).webkitRelativePath || f.name,
+      file: f,
+    }))
+    const out = buildScreensFromPaths(items)
     if (out.length === 0) { toast.error("此資料夾內找不到 HTML 檔"); return }
     setScreens(out)
+  }
+
+  // ZIP：於瀏覽器解壓 → 重用同一套資料夾分組（避免瀏覽器「上傳資料夾」確認框）
+  const handleZip = async (file: File | null) => {
+    if (!file) return
+    setReading(true)
+    try {
+      const zip = await JSZip.loadAsync(file)
+      const entries = Object.values(zip.files).filter((e) => !e.dir && /\.(html?|png|jpe?g|webp)$/i.test(e.name))
+      const items = await Promise.all(entries.map(async (e) => {
+        const blob = await e.async("blob")
+        const leaf = e.name.split("/").pop() || e.name
+        return { path: e.name, file: new File([blob], leaf) }
+      }))
+      const out = buildScreensFromPaths(items)
+      if (out.length === 0) { toast.error("ZIP 內找不到 HTML 檔（需為每個畫面一個子資料夾）"); return }
+      setScreens(out)
+    } catch {
+      toast.error("無法讀取 ZIP 檔")
+    } finally {
+      setReading(false)
+    }
   }
 
   const handleFiles = (fileList: FileList | null) => {
@@ -485,16 +513,22 @@ function UploadDialog({
         <DialogHeader>
           <DialogTitle>上傳原型（新版本）</DialogTitle>
           <DialogDescription className="text-xs">
-            建議「選擇資料夾」：每個子資料夾＝一個畫面（含 HTML＋選填截圖）。資料夾名結尾 <b>_mobile</b> 會自動併為該畫面的手機版（如 1._login ＋ 1._login_mobile）。整批＝同一版本。
+            每個子資料夾＝一個畫面（含 HTML＋選填截圖）。資料夾名結尾 <b>_mobile</b> 會自動併為該畫面的手機版（如 1._login ＋ 1._login_mobile）。整批＝同一版本。
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
+          <input ref={zipRef} type="file" accept=".zip,application/zip" className="hidden" onChange={(e) => { handleZip(e.target.files?.[0] ?? null); e.target.value = "" }} />
+          <input ref={setFolderInput} type="file" className="hidden" onChange={(e) => { handleFolder(e.target.files); e.target.value = "" }} />
+          <input ref={filesRef} type="file" accept=".html,.htm,image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => { handleFiles(e.target.files); e.target.value = "" }} />
+
+          <Button variant="outline" className="w-full justify-start" onClick={() => zipRef.current?.click()} disabled={reading}>
+            {reading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileArchive className="mr-2 h-4 w-4 text-indigo-600" />}
+            選擇 ZIP 檔（推薦，免瀏覽器確認）
+          </Button>
           <div className="grid grid-cols-2 gap-2">
-            <input ref={setFolderInput} type="file" className="hidden" onChange={(e) => { handleFolder(e.target.files); e.target.value = "" }} />
-            <input ref={filesRef} type="file" accept=".html,.htm,image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => { handleFiles(e.target.files); e.target.value = "" }} />
-            <Button variant="outline" size="sm" onClick={() => folderRef.current?.click()}><FolderOpen className="mr-1.5 h-4 w-4" />選擇資料夾</Button>
-            <Button variant="outline" size="sm" onClick={() => filesRef.current?.click()}><FileCode2 className="mr-1.5 h-4 w-4" />選擇 HTML 檔</Button>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => folderRef.current?.click()}><FolderOpen className="mr-1.5 h-4 w-4" />選擇資料夾</Button>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => filesRef.current?.click()}><FileCode2 className="mr-1.5 h-4 w-4" />選擇 HTML 檔</Button>
           </div>
 
           {screens.length > 0 && (
