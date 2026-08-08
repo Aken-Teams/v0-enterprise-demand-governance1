@@ -271,7 +271,7 @@ export function PrototypePreviewModal({
   }
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="flex h-screen w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0" showCloseButton={false}>
+      <DialogContent className="left-0 top-0 flex h-screen max-h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none" showCloseButton={false}>
         {/* 頂部工具列：版本切換 + 畫面導覽 */}
         <div className="flex flex-wrap items-center gap-2 border-b bg-background px-3 py-2">
           <DialogTitle className="flex shrink-0 items-center gap-1.5 text-sm">
