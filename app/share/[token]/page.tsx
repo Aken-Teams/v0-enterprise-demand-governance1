@@ -1508,6 +1508,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                         proto={protoPreview.proto}
                         screenId={protoPreview.screenId}
                         shareToken={shareToken}
+                        watermarkBg={watermarkBg}
                         onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
                         onMaximize={() => setProtoMax(true)}
                         onClose={() => setProtoPreview(null)}
@@ -1653,6 +1654,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                       demandId={demand.id}
                       shareToken={shareToken}
                       canManage={false}
+                      watermarkBg={watermarkBg}
                       onPreview={(proto, screenId) => { setSelectedDoc(null); setProtoPreview({ proto, screenId }) }}
                     />
                   </div>
@@ -1733,6 +1735,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
           proto={protoPreview.proto}
           screenId={protoPreview.screenId}
           shareToken={shareToken}
+          watermarkBg={watermarkBg}
           onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
           onClose={() => setProtoMax(false)}
         />

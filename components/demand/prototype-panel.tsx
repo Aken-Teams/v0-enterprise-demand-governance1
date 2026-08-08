@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   MonitorPlay, Upload, Trash2, Loader2, FileCode2, X, FolderOpen, ImageIcon, Maximize2, ArrowLeft, Smartphone,
+  Monitor, ChevronLeft, ChevronRight,
 } from "lucide-react"
 
 export interface PrototypeScreen {
@@ -47,7 +48,7 @@ function baseName(fileName: string): string {
 
 // ── Panel (card in 文件 tab) ────────────────────────────────────
 export function PrototypePanel({
-  demandId, token, shareToken, canManage = false, onRefresh, onPreview,
+  demandId, token, shareToken, canManage = false, onRefresh, onPreview, watermarkBg,
 }: {
   demandId: string
   token?: string | null
@@ -56,6 +57,7 @@ export function PrototypePanel({
   onRefresh?: () => void
   /** 有提供時：點畫面改由父層在左側預覽窗呈現（不跳自帶 modal） */
   onPreview?: (proto: Prototype, screenId: string) => void
+  watermarkBg?: string
 }) {
   const [protos, setProtos] = useState<Prototype[]>([])
   const [loading, setLoading] = useState(true)
@@ -189,7 +191,7 @@ export function PrototypePanel({
       {/* 自帶 modal（僅在未提供 onPreview 時使用，如子公司／分享頁） */}
       {modalPreview && (
         <PrototypePreviewModal demandId={demandId} proto={modalPreview.proto} screenId={modalPreview.screenId}
-          token={token} shareToken={shareToken}
+          token={token} shareToken={shareToken} watermarkBg={watermarkBg}
           onScreenChange={(sid) => setModalPreview((p) => p ? { ...p, screenId: sid } : p)}
           onClose={() => setModalPreview(null)} />
       )}
@@ -197,23 +199,73 @@ export function PrototypePanel({
   )
 }
 
-// ── Fullscreen preview modal（放大預覽） ────────────────────────
-export function PrototypePreviewModal({
-  demandId, proto, screenId, token, shareToken, onScreenChange, onClose,
-}: {
-  demandId: string; proto: Prototype; screenId: string; token?: string | null; shareToken?: string
-  onScreenChange: (id: string) => void; onClose: () => void
+// 網頁版／手機版切換小工具
+function VersionToggle({ variant, setVariant, hasMobile }: {
+  variant: "web" | "mobile"; setVariant: (v: "web" | "mobile") => void; hasMobile?: boolean
 }) {
   return (
+    <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
+      <button onClick={() => setVariant("web")}
+        className={cn("flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition", variant === "web" ? "bg-white font-medium text-indigo-700 shadow-sm" : "text-muted-foreground")}>
+        <Monitor className="h-3 w-3" />網頁版
+      </button>
+      {hasMobile && (
+        <button onClick={() => setVariant("mobile")}
+          className={cn("flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition", variant === "mobile" ? "bg-white font-medium text-indigo-700 shadow-sm" : "text-muted-foreground")}>
+          <Smartphone className="h-3 w-3" />手機版
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Fullscreen preview modal（放大＝全螢幕，像操作原稿） ─────────
+export function PrototypePreviewModal({
+  demandId, proto, screenId, token, shareToken, watermarkBg, onScreenChange, onClose,
+}: {
+  demandId: string; proto: Prototype; screenId: string; token?: string | null; shareToken?: string; watermarkBg?: string
+  onScreenChange: (id: string) => void; onClose: () => void
+}) {
+  const [variant, setVariant] = useState<"web" | "mobile">("web")
+  const idx = Math.max(0, proto.screens.findIndex((s) => s.id === screenId))
+  const cur = proto.screens[idx]
+  useEffect(() => { if (variant === "mobile" && !cur?.hasMobile) setVariant("web") }, [screenId, cur?.hasMobile, variant])
+  const go = (delta: number) => {
+    const n = (idx + delta + proto.screens.length) % proto.screens.length
+    onScreenChange(proto.screens[n].id)
+  }
+  return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="flex h-[90vh] max-w-[95vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-[92vw]">
-        <DialogHeader className="border-b px-4 py-2.5">
-          <DialogTitle className="flex items-center gap-2 text-sm">
-            <MonitorPlay className="h-4 w-4 text-indigo-600" />原型預覽 · v{proto.version}
-            <Badge variant="secondary" className="text-[10px]">{proto.screens.length} 畫面</Badge>
+      <DialogContent className="flex h-screen w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0" showCloseButton={false}>
+        {/* 頂部工具列：版本切換 + 畫面導覽 */}
+        <div className="flex flex-wrap items-center gap-2 border-b bg-background px-3 py-2">
+          <DialogTitle className="flex shrink-0 items-center gap-1.5 text-sm">
+            <MonitorPlay className="h-4 w-4 text-indigo-600" />原型 v{proto.version}
           </DialogTitle>
-        </DialogHeader>
-        <PrototypePreviewBody demandId={demandId} proto={proto} screenId={screenId} token={token} shareToken={shareToken} onScreenChange={onScreenChange} />
+          <VersionToggle variant={variant} setVariant={setVariant} hasMobile={cur?.hasMobile} />
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => go(-1)} disabled={proto.screens.length < 2}>
+              <ChevronLeft className="h-4 w-4" /><span className="hidden sm:inline">上一頁</span>
+            </Button>
+            <Select value={cur?.id} onValueChange={onScreenChange}>
+              <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-[60vh]">
+                {proto.screens.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="flex items-center gap-1.5">{s.name}{s.hasMobile && <Smartphone className="h-3 w-3 text-muted-foreground/50" />}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => go(1)} disabled={proto.screens.length < 2}>
+              <span className="hidden sm:inline">下一頁</span><ChevronRight className="h-4 w-4" />
+            </Button>
+            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{idx + 1}/{proto.screens.length}</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} title="關閉"><X className="h-4 w-4" /></Button>
+          </div>
+        </div>
+        {/* 全螢幕預覽 */}
+        <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={cur?.id ?? screenId} variant={cur?.hasMobile ? variant : "web"} token={token} shareToken={shareToken} watermarkBg={watermarkBg} />
       </DialogContent>
     </Dialog>
   )
@@ -221,32 +273,38 @@ export function PrototypePreviewModal({
 
 // ── Left-pane inline preview（供父層放進預覽窗） ─────────────────
 export function PrototypeInlinePreview({
-  demandId, proto, screenId, token, shareToken, onScreenChange, onMaximize, onClose,
+  demandId, proto, screenId, token, shareToken, watermarkBg, onScreenChange, onMaximize, onClose,
 }: {
   demandId: string
   proto: Prototype
   screenId: string
   token?: string | null
   shareToken?: string
+  watermarkBg?: string
   onScreenChange: (screenId: string) => void
   onMaximize?: () => void
   onClose?: () => void
 }) {
   const cur = proto.screens.find((s) => s.id === screenId)
+  const [variant, setVariant] = useState<"web" | "mobile">("web")
+  useEffect(() => { if (variant === "mobile" && !cur?.hasMobile) setVariant("web") }, [screenId, cur?.hasMobile, variant])
   return (
     <div className="relative flex h-full min-h-[300px] flex-col sm:min-h-[520px]">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-2 py-1.5 sm:px-3 sm:py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
           {onClose && (
             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 lg:hidden" onClick={onClose}><ArrowLeft className="h-3.5 w-3.5" /></Button>
           )}
           <MonitorPlay className="h-3.5 w-3.5 shrink-0 text-indigo-600" />
-          <span className="truncate text-[10px] font-medium sm:text-xs">原型 v{proto.version} · {cur?.name}</span>
+          <span className="truncate text-[10px] font-medium sm:text-xs">v{proto.version} · {cur?.name}</span>
         </div>
-        {onMaximize && (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMaximize} title="放大預覽"><Maximize2 className="h-3.5 w-3.5" /></Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <VersionToggle variant={variant} setVariant={setVariant} hasMobile={cur?.hasMobile} />
+          {onMaximize && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMaximize} title="放大（全螢幕）"><Maximize2 className="h-3.5 w-3.5" /></Button>
+          )}
+        </div>
       </div>
       {/* Screen switcher */}
       {proto.screens.length > 1 && (
@@ -259,66 +317,27 @@ export function PrototypeInlinePreview({
           ))}
         </div>
       )}
-      <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={screenId} token={token} shareToken={shareToken} hasMobile={cur?.hasMobile} />
-    </div>
-  )
-}
-
-// ── Preview body (modal): screen list + frame ─────────────────
-function PrototypePreviewBody({
-  demandId, proto, screenId, token, shareToken, onScreenChange,
-}: {
-  demandId: string; proto: Prototype; screenId: string; token?: string | null; shareToken?: string; onScreenChange: (id: string) => void
-}) {
-  return (
-    <div className="flex min-h-0 flex-1">
-      <div className="w-40 shrink-0 space-y-0.5 overflow-y-auto border-r bg-muted/20 p-2 sm:w-52">
-        {proto.screens.map((s) => (
-          <button key={s.id} onClick={() => onScreenChange(s.id)}
-            className={cn("flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition", s.id === screenId ? "bg-indigo-100 font-medium text-indigo-800" : "text-muted-foreground hover:bg-muted")}>
-            <FileCode2 className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{s.name}</span>
-            {s.hasMobile && <Smartphone className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/50" aria-label="含手機版" />}
-          </button>
-        ))}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={screenId} token={token} shareToken={shareToken} hasMobile={proto.screens.find((s) => s.id === screenId)?.hasMobile} />
-      </div>
+      <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={screenId} variant={cur?.hasMobile ? variant : "web"} token={token} shareToken={shareToken} watermarkBg={watermarkBg} />
     </div>
   )
 }
 
 // ── Sandboxed iframe that fetches + renders one screen ─────────
-// 每個模式：variant 決定抓網頁版或手機版 HTML；w 決定 iframe 寬度（0 = 滿版）
-type FrameMode = { key: string; label: string; variant: "web" | "mobile"; w: number }
-
+// 網頁版＝滿版填滿；手機版＝置中 390px 手機框。內建垂直捲軸（寬度合身→捲軸在畫面上）。
 function PrototypeFrame({
-  demandId, protoId, screenId, token, shareToken, hasMobile,
+  demandId, protoId, screenId, variant, token, shareToken, watermarkBg,
 }: {
-  demandId: string; protoId: string; screenId: string; token?: string | null; shareToken?: string; hasMobile?: boolean
+  demandId: string; protoId: string; screenId: string; variant: "web" | "mobile"
+  token?: string | null; shareToken?: string; watermarkBg?: string
 }) {
-  const modes: FrameMode[] = [
-    { key: "web", label: "網頁版", variant: "web", w: 1280 },
-    ...(hasMobile ? [{ key: "mobile", label: "手機版", variant: "mobile", w: 390 } as FrameMode] : []),
-    { key: "full", label: "滿版", variant: "web", w: 0 },
-  ]
-  const [modeKey, setModeKey] = useState("web")
-  const mode = modes.find((m) => m.key === modeKey) ?? modes[0]
-
   const [html, setHtml] = useState("")
   const [loading, setLoading] = useState(true)
   const { authQuery, headers } = authFetch(token, shareToken)
 
-  // 切換畫面時，若目前選手機版但新畫面沒有手機版 → 退回網頁版
-  useEffect(() => {
-    if (modeKey === "mobile" && !hasMobile) setModeKey("web")
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screenId, hasMobile])
-
   useEffect(() => {
     let alive = true
     setLoading(true); setHtml("")
-    const q = mode.variant === "mobile" ? (authQuery ? `${authQuery}&variant=mobile` : "?variant=mobile") : authQuery
+    const q = variant === "mobile" ? (authQuery ? `${authQuery}&variant=mobile` : "?variant=mobile") : authQuery
     fetch(`/api/demands/${demandId}/prototypes/${protoId}/screens/${screenId}${q}`, { headers })
       .then((r) => r.ok ? r.text() : Promise.reject())
       .then((t) => { if (alive) setHtml(t) })
@@ -326,33 +345,20 @@ function PrototypeFrame({
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demandId, protoId, screenId, mode.variant])
+  }, [demandId, protoId, screenId, variant])
 
+  const isMobile = variant === "mobile"
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* 網頁版／手機版／滿版切換 */}
-      <div className="flex items-center gap-1 border-b bg-background px-2 py-1">
-        {modes.map((m) => (
-          <button key={m.key} onClick={() => setModeKey(m.key)}
-            className={cn("rounded px-2 py-0.5 text-[11px] transition", modeKey === m.key ? "bg-indigo-100 font-medium text-indigo-800" : "text-muted-foreground hover:bg-muted")}>
-            {m.label}
-          </button>
-        ))}
-        {mode.w > 0 && <span className="ml-auto text-[10px] text-muted-foreground">{mode.w}px</span>}
-      </div>
-      {/* 可雙向捲動的預覽容器（固定寬度給高畫布，外層同時捲動 X/Y，避免 iframe 內建捲軸被推到畫面外） */}
-      <div className="relative min-h-0 flex-1 overflow-auto bg-muted/30">
-        {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
-        <iframe
-          title="原型預覽"
-          srcDoc={html}
-          className="mx-auto block border-0 bg-white shadow-sm"
-          style={mode.w > 0
-            ? { width: mode.w, minWidth: mode.w, height: 1600, minHeight: 1600 }
-            : { width: "100%", height: "100%" }}
-          sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
-        />
-      </div>
+    <div className={cn("relative min-h-0 flex-1 overflow-auto", isMobile ? "flex justify-center bg-muted/40 py-3" : "bg-white")}>
+      {loading && <div className="absolute inset-0 z-20 flex items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
+      <iframe
+        title="原型預覽"
+        srcDoc={html}
+        className={cn("block border-0 bg-white", isMobile && "self-start rounded-lg shadow-lg")}
+        style={isMobile ? { width: 390, minWidth: 390, height: "100%", minHeight: 640 } : { width: "100%", height: "100%" }}
+        sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
+      />
+      {watermarkBg && <div className="pointer-events-none absolute inset-0 z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />}
     </div>
   )
 }

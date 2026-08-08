@@ -2034,6 +2034,7 @@ export default function DemandDetailPage() {
                         proto={protoPreview.proto}
                         screenId={protoPreview.screenId}
                         token={token}
+                        watermarkBg={watermarkBg}
                         onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
                         onMaximize={() => setProtoMax(true)}
                         onClose={() => setProtoPreview(null)}
@@ -2352,6 +2353,7 @@ export default function DemandDetailPage() {
                     demandId={demand.id}
                     token={token}
                     canManage={effectiveCanManage}
+                    watermarkBg={watermarkBg}
                     onPreview={(proto, screenId) => { setSelectedDoc(null); setProtoPreview({ proto, screenId }) }}
                   />
                 )}
@@ -2482,6 +2484,7 @@ export default function DemandDetailPage() {
           proto={protoPreview.proto}
           screenId={protoPreview.screenId}
           token={token}
+          watermarkBg={watermarkBg}
           onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
           onClose={() => setProtoMax(false)}
         />

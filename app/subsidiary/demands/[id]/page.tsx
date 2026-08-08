@@ -1456,6 +1456,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                         proto={protoPreview.proto}
                         screenId={protoPreview.screenId}
                         token={token}
+                        watermarkBg={watermarkBg}
                         onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
                         onMaximize={() => setProtoMax(true)}
                         onClose={() => setProtoPreview(null)}
@@ -1740,6 +1741,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       demandId={demand.id}
                       token={token}
                       canManage={false}
+                      watermarkBg={watermarkBg}
                       onPreview={(proto, screenId) => { setSelectedDoc(null); setProtoPreview({ proto, screenId }) }}
                     />
                   </div>
@@ -1813,6 +1815,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           proto={protoPreview.proto}
           screenId={protoPreview.screenId}
           token={token}
+          watermarkBg={watermarkBg}
           onScreenChange={(sid) => setProtoPreview((p) => (p ? { ...p, screenId: sid } : p))}
           onClose={() => setProtoMax(false)}
         />
