@@ -18,7 +18,7 @@ import { toast } from "sonner"
 import JSZip from "jszip"
 import {
   MonitorPlay, Upload, Trash2, Loader2, FileCode2, X, FolderOpen, ImageIcon, Maximize2, ArrowLeft, Smartphone,
-  Monitor, ChevronLeft, ChevronRight, FileArchive,
+  Monitor, ChevronLeft, ChevronRight, FileArchive, Download, GripVertical, Pencil,
 } from "lucide-react"
 
 export interface PrototypeScreen {
@@ -101,6 +101,9 @@ export function PrototypePanel({
   const [deleteTarget, setDeleteTarget] = useState<Prototype | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [modalPreview, setModalPreview] = useState<{ proto: Prototype; screenId: string } | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
 
   const { authQuery, headers } = authFetch(token, shareToken)
 
@@ -139,6 +142,42 @@ export function PrototypePanel({
     } finally { setDeleting(false) }
   }
 
+  const doDownload = async () => {
+    if (!selected) return
+    setDownloading(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/prototypes/${selected.id}/download`, { headers })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast.error(e.error || "下載失敗"); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url; a.download = `prototype-v${selected.version}.zip`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+    } finally { setDownloading(false) }
+  }
+
+  const saveName = async (screenId: string, raw: string) => {
+    const name = raw.trim()
+    setEditing(null)
+    if (!name) return
+    const res = await fetch(`/api/demands/${demandId}/prototypes/${selectedId}/screens/${screenId}`, {
+      method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+    })
+    if (res.ok) load(); else toast.error("更名失敗")
+  }
+
+  const doReorder = async (from: number, to: number) => {
+    if (from === to || !selected) return
+    const arr = [...selected.screens]
+    const [moved] = arr.splice(from, 1)
+    arr.splice(to, 0, moved)
+    setProtos((ps) => ps.map((p) => (p.id === selected.id ? { ...p, screens: arr } : p)))
+    const res = await fetch(`/api/demands/${demandId}/prototypes/${selected.id}`, {
+      method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ order: arr.map((s) => s.id) }),
+    })
+    if (!res.ok) { toast.error("排序失敗"); load() }
+  }
+
   if (loading) {
     return <Card><CardContent className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></CardContent></Card>
   }
@@ -159,6 +198,11 @@ export function PrototypePanel({
             </Select>
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            {canManage && selected && selected.screens.length > 0 && (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground" onClick={doDownload} disabled={downloading} title="下載此版本（ZIP：HTML＋截圖）">
+                {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              </Button>
+            )}
             {canManage && selected && (
               <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(selected)}>
                 <Trash2 className="h-3.5 w-3.5" />
@@ -172,7 +216,9 @@ export function PrototypePanel({
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">可上傳一組 HTML 畫面供客戶點擊互動預覽（選填、分版本）。</p>
+        <p className="text-xs text-muted-foreground">
+          可上傳一組 HTML 畫面供客戶點擊互動預覽（選填、分版本）。{canManage && "管理者可拖曳排序、點鉛筆改名。"}
+        </p>
 
         {selected?.note && (
           <p className="rounded-md bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground" title={selected.note}>{selected.note}</p>
@@ -185,20 +231,50 @@ export function PrototypePanel({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {selected.screens.map((s) => (
-              <button key={s.id} type="button" onClick={() => openScreen(selected, s.id)}
-                className="group flex flex-col overflow-hidden rounded-lg border bg-card text-left transition hover:border-indigo-300 hover:shadow-sm">
-                <div className="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-muted/40">
-                  {s.screenshotUrl
+            {selected.screens.map((s, i) => (
+              <div key={s.id}
+                draggable={canManage && editing?.id !== s.id}
+                onDragStart={() => setDragIdx(i)}
+                onDragOver={(e) => { if (canManage && dragIdx !== null) e.preventDefault() }}
+                onDrop={() => { if (canManage && dragIdx !== null) doReorder(dragIdx, i); setDragIdx(null) }}
+                onDragEnd={() => setDragIdx(null)}
+                className={cn(
+                  "group flex flex-col overflow-hidden rounded-lg border bg-card transition hover:border-indigo-300 hover:shadow-sm",
+                  dragIdx === i && "opacity-40",
+                )}>
+                <button type="button" onClick={() => openScreen(selected, s.id)}
+                  className="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-muted/40">
+                  <FileCode2 className="h-7 w-7 text-muted-foreground/40" />
+                  {s.screenshotUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={s.screenshotUrl} alt={s.name} className="h-full w-full object-cover object-top" />
-                    : <FileCode2 className="h-7 w-7 text-muted-foreground/40" />}
+                    <img src={s.screenshotUrl} alt={s.name} className="absolute inset-0 h-full w-full object-cover object-top"
+                      onError={(e) => { e.currentTarget.style.display = "none" }} />
+                  )}
                   <span className="absolute inset-0 flex items-center justify-center bg-indigo-600/0 text-xs font-medium text-white opacity-0 transition group-hover:bg-indigo-600/70 group-hover:opacity-100">
                     <MonitorPlay className="mr-1 h-4 w-4" />預覽
                   </span>
-                </div>
-                <span className="truncate px-2 py-1.5 text-xs font-medium" title={s.name}>{s.name}</span>
-              </button>
+                </button>
+                {editing?.id === s.id ? (
+                  <input
+                    autoFocus
+                    value={editing.value}
+                    onChange={(e) => setEditing({ id: s.id, value: e.target.value })}
+                    onBlur={() => saveName(s.id, editing.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveName(s.id, editing.value); if (e.key === "Escape") setEditing(null) }}
+                    className="m-1 rounded border px-1.5 py-1 text-xs outline-none focus:border-indigo-400"
+                  />
+                ) : (
+                  <div className={cn("flex items-center gap-1 px-2 py-1.5", canManage && "cursor-grab")}>
+                    {canManage && <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/40" />}
+                    <span className="truncate text-xs font-medium" title={s.name}>{s.name}</span>
+                    {s.hasMobile && <Smartphone className="h-3 w-3 shrink-0 text-muted-foreground/40" />}
+                    {canManage && (
+                      <Pencil className="ml-auto h-3 w-3 shrink-0 cursor-pointer text-muted-foreground/50 opacity-0 transition hover:text-indigo-600 group-hover:opacity-100"
+                        onClick={() => setEditing({ id: s.id, value: s.name })} />
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -329,7 +405,9 @@ export function PrototypeInlinePreview({
       <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-2 py-1.5 sm:px-3 sm:py-2">
         <div className="flex min-w-0 items-center gap-1.5">
           {onClose && (
-            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 lg:hidden" onClick={onClose}><ArrowLeft className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7 shrink-0 px-1.5 text-muted-foreground" onClick={onClose} title="返回文件清單">
+              <ArrowLeft className="h-3.5 w-3.5 sm:mr-1" /><span className="hidden sm:inline">返回</span>
+            </Button>
           )}
           <MonitorPlay className="h-3.5 w-3.5 shrink-0 text-indigo-600" />
           <span className="truncate text-[10px] font-medium sm:text-xs">v{proto.version} · {cur?.name}</span>

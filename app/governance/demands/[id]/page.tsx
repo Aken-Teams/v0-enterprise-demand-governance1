@@ -2025,7 +2025,7 @@ export default function DemandDetailPage() {
           <TabsContent value="documents" className="mt-3 sm:mt-4">
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
               {/* Preview pane (hidden on mobile until doc selected) */}
-              <div className={cn("lg:col-span-3 order-2 lg:order-1 min-w-0", !selectedDoc && !protoPreview && "hidden lg:block")}>
+              <div className={cn("order-2 lg:order-1 min-w-0", protoPreview ? "lg:col-span-5" : "lg:col-span-3", !selectedDoc && !protoPreview && "hidden lg:block")}>
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {protoPreview ? (
@@ -2185,7 +2185,7 @@ export default function DemandDetailPage() {
                               }
                               if (ext === "md") {
                                 return (
-                                  <div className="w-full max-h-[300px] sm:max-h-[520px] overflow-auto p-3 sm:p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                                  <div className="w-full self-stretch h-full overflow-auto p-3 sm:p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                                     <ReactMarkdown
                                       remarkPlugins={[remarkGfm, remarkBreaks]}
                                       rehypePlugins={[rehypeRaw]}
@@ -2215,7 +2215,7 @@ export default function DemandDetailPage() {
                                 )
                               }
                               return (
-                                <pre className="text-sm whitespace-pre-wrap break-words w-full max-h-[520px] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">
+                                <pre className="text-sm whitespace-pre-wrap break-words w-full self-stretch h-full overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">
                                   {textContent}
                                 </pre>
                               )
@@ -2294,7 +2294,7 @@ export default function DemandDetailPage() {
               </div>
 
               {/* Document list */}
-              <div className={cn("lg:col-span-2 order-1 lg:order-2 min-w-0 space-y-4", (selectedDoc || protoPreview) && "hidden lg:block")}>
+              <div className={cn("lg:col-span-2 order-1 lg:order-2 min-w-0 space-y-4", protoPreview ? "hidden" : (selectedDoc && "hidden lg:block"))}>
                 <Card>
                   <CardHeader className="px-4 sm:px-6 pb-3">
                     <div className="flex items-center justify-between">

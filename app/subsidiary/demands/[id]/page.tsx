@@ -1447,7 +1447,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           <TabsContent value="documents" className="mt-5">
             <div className="grid gap-6 lg:grid-cols-5">
               {/* Preview pane */}
-              <div className="lg:col-span-3">
+              <div className={cn(protoPreview ? "lg:col-span-5" : "lg:col-span-3")}>
                 <Card className="h-full">
                   <CardContent className="p-0 h-full">
                     {protoPreview ? (
@@ -1615,7 +1615,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                               }
                               if (ext === "md") {
                                 return (
-                                  <div className="w-full max-h-[520px] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                                  <div className="w-full self-stretch h-full overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                                     <ReactMarkdown
                                       remarkPlugins={[remarkGfm, remarkBreaks]}
                                       rehypePlugins={[rehypeRaw]}
@@ -1645,7 +1645,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 )
                               }
                               return (
-                                <pre className="text-sm whitespace-pre-wrap break-words w-full max-h-[520px] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">
+                                <pre className="text-sm whitespace-pre-wrap break-words w-full self-stretch h-full overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">
                                   {textContent}
                                 </pre>
                               )
@@ -1712,7 +1712,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
               </div>
 
               {/* Document list */}
-              <div className="lg:col-span-2">
+              <div className={cn("lg:col-span-2", protoPreview && "hidden")}>
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">階段文件</CardTitle>
