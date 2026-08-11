@@ -11,6 +11,16 @@ function baseName(fileName: string): string {
   return path.basename(fileName).replace(/\.[^.]+$/, "").trim() || "畫面"
 }
 
+// 檢查是否為真正的圖片（避免像 Stitch「<FIFE Image failed to fetch>」的壞掉佔位檔被存成截圖）
+function isValidImage(buf: Buffer): boolean {
+  if (buf.length < 100) return false
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return true // PNG
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return true // JPEG
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return true // GIF
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return true // WEBP
+  return false
+}
+
 // GET: 列出此需求的原型版本（含各畫面 metadata） — 登入使用者或有效分享連結
 export async function GET(
   request: NextRequest,
@@ -108,9 +118,13 @@ export async function POST(
       let shotName: string | null = null
       const shot = form.get(`shot_${i}`)
       if (shot instanceof File && shot.size > 0) {
-        const ext = (path.extname(shot.name) || ".png").toLowerCase()
-        shotName = `proto-${proto.id}-${randomUUID()}${ext}`
-        await writeFile(path.join(uploadDir, shotName), Buffer.from(await shot.arrayBuffer()))
+        const shotBuf = Buffer.from(await shot.arrayBuffer())
+        if (isValidImage(shotBuf)) {
+          const ext = (path.extname(shot.name) || ".png").toLowerCase()
+          shotName = `proto-${proto.id}-${randomUUID()}${ext}`
+          await writeFile(path.join(uploadDir, shotName), shotBuf)
+        }
+        // 非有效圖片（壞掉佔位檔）→ 略過，該畫面改顯示檔案圖示
       }
 
       await prisma.prototypeScreen.create({
