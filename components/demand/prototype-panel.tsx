@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -376,7 +376,7 @@ export function PrototypePreviewModal({
           </div>
         </div>
         {/* 全螢幕預覽 */}
-        <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={cur?.id ?? screenId} variant={cur?.hasMobile ? variant : "web"} token={token} shareToken={shareToken} watermarkBg={watermarkBg} />
+        <PrototypeFrame demandId={demandId} protoId={proto.id} screenId={cur?.id ?? screenId} variant={cur?.hasMobile ? variant : "web"} token={token} shareToken={shareToken} watermarkBg={watermarkBg} fill />
       </DialogContent>
     </Dialog>
   )
@@ -400,7 +400,7 @@ export function PrototypeInlinePreview({
   const [variant, setVariant] = useState<"web" | "mobile">("web")
   useEffect(() => { if (variant === "mobile" && !cur?.hasMobile) setVariant("web") }, [screenId, cur?.hasMobile, variant])
   return (
-    <div className="relative flex h-full min-h-[420px] flex-col sm:min-h-[calc(100vh-12rem)]">
+    <div className="relative flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-2 py-1.5 sm:px-3 sm:py-2">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -436,39 +436,70 @@ export function PrototypeInlinePreview({
 }
 
 // ── Sandboxed iframe that fetches + renders one screen ─────────
-// 網頁版＝滿版填滿；手機版＝置中 390px 手機框。內建垂直捲軸（寬度合身→捲軸在畫面上）。
+// 注入的量測腳本：回報頁面實際高度給父層（iframe 依內容高度縮放，避免下方一堆空白）
+function resizeScript(key: string): string {
+  // 用 body.scrollHeight 量「內容高度」（documentElement 會被視窗撐滿→量到空白）；
+  // 若頁面本身是 h-screen 應用殼，body 高度=視窗，也會正確回報為滿高。
+  return `<script>(function(){var K=${JSON.stringify(key)};function s(){try{var b=document.body,h=(b?Math.max(b.scrollHeight,b.offsetHeight):0)||document.documentElement.scrollHeight;parent.postMessage({__protoH:h,__k:K},'*')}catch(e){}}addEventListener('load',s);setTimeout(s,150);setTimeout(s,600);setTimeout(s,1600);if(window.ResizeObserver){try{new ResizeObserver(s).observe(document.body||document.documentElement)}catch(e){}}})();<\/script>`
+}
+
 function PrototypeFrame({
-  demandId, protoId, screenId, variant, token, shareToken, watermarkBg,
+  demandId, protoId, screenId, variant, token, shareToken, watermarkBg, fill = false,
 }: {
   demandId: string; protoId: string; screenId: string; variant: "web" | "mobile"
   token?: string | null; shareToken?: string; watermarkBg?: string
+  /** true＝填滿容器（全螢幕）；false＝依內容高度自適應（左側預覽，短頁不留空白、長頁可捲到底） */
+  fill?: boolean
 }) {
   const [html, setHtml] = useState("")
   const [loading, setLoading] = useState(true)
+  const [contentH, setContentH] = useState(0)
+  const keyRef = useRef(Math.random().toString(36).slice(2))
   const { authQuery, headers } = authFetch(token, shareToken)
 
   useEffect(() => {
     let alive = true
-    setLoading(true); setHtml("")
+    setLoading(true); setHtml(""); setContentH(0)
     const q = variant === "mobile" ? (authQuery ? `${authQuery}&variant=mobile` : "?variant=mobile") : authQuery
     fetch(`/api/demands/${demandId}/prototypes/${protoId}/screens/${screenId}${q}`, { headers })
       .then((r) => r.ok ? r.text() : Promise.reject())
-      .then((t) => { if (alive) setHtml(t) })
+      .then((t) => { if (alive) setHtml(t + resizeScript(keyRef.current)) })
       .catch(() => { if (alive) setHtml("<div style='font-family:sans-serif;padding:24px;color:#71717a'>無法載入此畫面</div>") })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demandId, protoId, screenId, variant])
 
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { __protoH?: number; __k?: string } | null
+      if (d && d.__k === keyRef.current && typeof d.__protoH === "number") {
+        setContentH(Math.min(Math.max(d.__protoH, 200), 30000))
+      }
+    }
+    window.addEventListener("message", onMsg)
+    return () => window.removeEventListener("message", onMsg)
+  }, [])
+
   const isMobile = variant === "mobile"
+  // 未量到高度前，非全螢幕用近視窗高度當初值（讓 h-screen 應用殼以視窗高渲染、量到正確高度）
+  const h: number | string = contentH > 0 ? contentH : (fill ? "100%" : "calc(100vh - 10rem)")
+  const style: CSSProperties = isMobile
+    ? { width: 390, minWidth: 390, height: h, ...(fill ? { minHeight: "100%" } : {}) }
+    : { width: "100%", maxWidth: 1280, height: h, ...(fill ? { minHeight: "100%" } : {}) }
+
   return (
-    <div className={cn("relative min-h-0 flex-1 overflow-auto", isMobile ? "flex justify-center bg-muted/40 py-3" : "bg-white")}>
+    <div className={cn(
+      "relative overflow-auto",
+      fill ? "min-h-0 flex-1" : "max-h-[calc(100vh-9rem)]",
+      isMobile ? "flex justify-center bg-muted/40 py-3" : "bg-muted/30",
+    )}>
       {loading && <div className="absolute inset-0 z-20 flex items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
       <iframe
         title="原型預覽"
         srcDoc={html}
-        className={cn("block border-0 bg-white", isMobile && "self-start rounded-lg shadow-lg")}
-        style={isMobile ? { width: 390, minWidth: 390, height: "100%", minHeight: 640 } : { width: "100%", height: "100%" }}
+        className={cn("mx-auto block border-0 bg-white", isMobile && "self-start rounded-lg shadow-lg")}
+        style={style}
         sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
       />
       {watermarkBg && <div className="pointer-events-none absolute inset-0 z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />}
