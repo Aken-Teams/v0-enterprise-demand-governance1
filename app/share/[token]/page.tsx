@@ -1591,14 +1591,14 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                               }
                               if (ext === "md") {
                                 return (
-                                  <div className="w-full self-stretch h-full overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                                  <div className="w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
                                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mdComponents}>
                                       {formatGherkinInMarkdown(textContent)}
                                     </ReactMarkdown>
                                   </div>
                                 )
                               }
-                              return <pre className="text-sm whitespace-pre-wrap break-words w-full self-stretch h-full overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">{textContent}</pre>
+                              return <pre className="text-sm whitespace-pre-wrap break-words w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">{textContent}</pre>
                             }
                             if (["xls", "xlsx"].includes(ext) && excelReady) {
                               return <div className="w-full min-h-[520px] relative"><div className="absolute inset-0"><ExcelPreview fileUrl={selectedDoc.fileUrl!} fileName={selectedDoc.fileName} /></div></div>

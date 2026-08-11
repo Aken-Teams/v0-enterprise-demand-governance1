@@ -400,7 +400,7 @@ export function PrototypeInlinePreview({
   const [variant, setVariant] = useState<"web" | "mobile">("web")
   useEffect(() => { if (variant === "mobile" && !cur?.hasMobile) setVariant("web") }, [screenId, cur?.hasMobile, variant])
   return (
-    <div className="relative flex h-full min-h-[300px] flex-col sm:min-h-[520px]">
+    <div className="relative flex h-full min-h-[420px] flex-col sm:min-h-[calc(100vh-12rem)]">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-2 py-1.5 sm:px-3 sm:py-2">
         <div className="flex min-w-0 items-center gap-1.5">
