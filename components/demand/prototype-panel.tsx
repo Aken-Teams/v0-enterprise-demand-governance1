@@ -341,6 +341,7 @@ export function PrototypePreviewModal({
   const idx = Math.max(0, proto.screens.findIndex((s) => s.id === screenId))
   const cur = proto.screens[idx]
   useEffect(() => { if (variant === "mobile" && !cur?.hasMobile) setVariant("web") }, [screenId, cur?.hasMobile, variant])
+  useNeighborPrefetch(demandId, proto, cur?.id ?? screenId, variant, token, shareToken)
   const go = (delta: number) => {
     const n = (idx + delta + proto.screens.length) % proto.screens.length
     onScreenChange(proto.screens[n].id)
@@ -399,6 +400,7 @@ export function PrototypeInlinePreview({
   const cur = proto.screens.find((s) => s.id === screenId)
   const [variant, setVariant] = useState<"web" | "mobile">("web")
   useEffect(() => { if (variant === "mobile" && !cur?.hasMobile) setVariant("web") }, [screenId, cur?.hasMobile, variant])
+  useNeighborPrefetch(demandId, proto, screenId, variant, token, shareToken)
   return (
     <div className="relative flex flex-col">
       {/* Toolbar */}
@@ -443,6 +445,60 @@ function resizeScript(key: string): string {
   return `<script>(function(){var K=${JSON.stringify(key)};function s(){try{var b=document.body,h=(b?Math.max(b.scrollHeight,b.offsetHeight):0)||document.documentElement.scrollHeight;parent.postMessage({__protoH:h,__k:K},'*')}catch(e){}}addEventListener('load',s);setTimeout(s,150);setTimeout(s,600);setTimeout(s,1600);if(window.ResizeObserver){try{new ResizeObserver(s).observe(document.body||document.documentElement)}catch(e){}}})();<\/script>`
 }
 
+const ERROR_HTML = "<div style='font-family:sans-serif;padding:24px;color:#71717a'>無法載入此畫面</div>"
+
+// ── 畫面快取 ────────────────────────────────────────────────
+// 同一份原型在畫面之間來回切換（上一頁／下一頁／分頁）時不重打 API，
+// 否則回上一頁要等重新下載才會有畫面，看起來像按鈕沒反應。
+// 一組 (protoId, screenId) 的 HTML 內容不會被改寫（改版＝新的 protoId），故可安全快取。
+const SCREEN_CACHE_MAX = 30
+const screenHtmlCache = new Map<string, string>()
+const screenHeightCache = new Map<string, number>()
+
+const screenCacheKey = (demandId: string, protoId: string, screenId: string, variant: string) =>
+  `${demandId}|${protoId}|${screenId}|${variant}`
+
+function putScreenCache(key: string, html: string) {
+  if (screenHtmlCache.size >= SCREEN_CACHE_MAX) {
+    const oldest = screenHtmlCache.keys().next().value
+    if (oldest !== undefined) { screenHtmlCache.delete(oldest); screenHeightCache.delete(oldest) }
+  }
+  screenHtmlCache.set(key, html)
+}
+
+async function fetchScreenHtml(
+  demandId: string, protoId: string, screenId: string, variant: "web" | "mobile",
+  token?: string | null, shareToken?: string,
+): Promise<string> {
+  const key = screenCacheKey(demandId, protoId, screenId, variant)
+  const cached = screenHtmlCache.get(key)
+  if (cached !== undefined) return cached
+  const { authQuery, headers } = authFetch(token, shareToken)
+  const q = variant === "mobile" ? (authQuery ? `${authQuery}&variant=mobile` : "?variant=mobile") : authQuery
+  const res = await fetch(`/api/demands/${demandId}/prototypes/${protoId}/screens/${screenId}${q}`, { headers })
+  if (!res.ok) throw new Error(`screen ${screenId}: ${res.status}`)
+  const text = await res.text()
+  putScreenCache(key, text) // 失敗不快取，下次切回來還能重試
+  return text
+}
+
+/** 預抓相鄰畫面，讓上一頁／下一頁按下去當場就有內容 */
+function useNeighborPrefetch(
+  demandId: string, proto: Prototype, screenId: string, variant: "web" | "mobile",
+  token?: string | null, shareToken?: string,
+) {
+  useEffect(() => {
+    if (proto.screens.length < 2) return
+    const i = proto.screens.findIndex((s) => s.id === screenId)
+    if (i < 0) return
+    for (const delta of [1, -1]) {
+      const n = proto.screens[(i + delta + proto.screens.length) % proto.screens.length]
+      if (!n || n.id === screenId) continue
+      fetchScreenHtml(demandId, proto.id, n.id, n.hasMobile ? variant : "web", token, shareToken).catch(() => {})
+    }
+  }, [demandId, proto.id, proto.screens, screenId, variant, token, shareToken])
+}
+
 function PrototypeFrame({
   demandId, protoId, screenId, variant, token, shareToken, watermarkBg, fill = false,
 }: {
@@ -451,30 +507,51 @@ function PrototypeFrame({
   /** true＝填滿容器（全螢幕）；false＝依內容高度自適應（左側預覽，短頁不留空白、長頁可捲到底） */
   fill?: boolean
 }) {
-  const [html, setHtml] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [contentH, setContentH] = useState(0)
+  const cacheKey = screenCacheKey(demandId, protoId, screenId, variant)
   const keyRef = useRef(Math.random().toString(36).slice(2))
-  const { authQuery, headers } = authFetch(token, shareToken)
+  // 用 initializer 讀快取：命中時第一次 render 就有內容，不會先閃一格空白
+  // （字串與下面 effect 組出來的完全相同，React 會直接略過，不會重載 iframe）
+  const [html, setHtml] = useState(() => {
+    const hit = screenHtmlCache.get(cacheKey)
+    return hit === undefined ? "" : hit + resizeScript(keyRef.current)
+  })
+  const [loading, setLoading] = useState(() => !screenHtmlCache.has(cacheKey))
+  const [contentH, setContentH] = useState(() => screenHeightCache.get(cacheKey) ?? 0)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const cacheKeyRef = useRef(cacheKey)
+  cacheKeyRef.current = cacheKey
 
   useEffect(() => {
     let alive = true
+    // 換畫面就回到頂端：留在舊的捲動位置會看到一片空白，像是沒切成功
+    scrollRef.current?.scrollTo({ top: 0, left: 0 })
+
+    const cached = screenHtmlCache.get(cacheKey)
+    if (cached !== undefined) {
+      // 命中快取：連同上次量到的高度一起還原，切回去就是原本的樣子
+      setHtml(cached + resizeScript(keyRef.current))
+      setContentH(screenHeightCache.get(cacheKey) ?? 0)
+      setLoading(false)
+      return
+    }
+
     setLoading(true); setHtml(""); setContentH(0)
-    const q = variant === "mobile" ? (authQuery ? `${authQuery}&variant=mobile` : "?variant=mobile") : authQuery
-    fetch(`/api/demands/${demandId}/prototypes/${protoId}/screens/${screenId}${q}`, { headers })
-      .then((r) => r.ok ? r.text() : Promise.reject())
+    fetchScreenHtml(demandId, protoId, screenId, variant, token, shareToken)
       .then((t) => { if (alive) setHtml(t + resizeScript(keyRef.current)) })
-      .catch(() => { if (alive) setHtml("<div style='font-family:sans-serif;padding:24px;color:#71717a'>無法載入此畫面</div>") })
+      .catch(() => { if (alive) setHtml(ERROR_HTML) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demandId, protoId, screenId, variant])
+  }, [cacheKey])
 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { __protoH?: number; __k?: string } | null
       if (d && d.__k === keyRef.current && typeof d.__protoH === "number") {
-        setContentH(Math.min(Math.max(d.__protoH, 200), 30000))
+        const measured = Math.min(Math.max(d.__protoH, 200), 30000)
+        setContentH(measured)
+        // 記住高度，下次切回這個畫面可以直接用，不會先塌一下再撐開
+        if (screenHtmlCache.has(cacheKeyRef.current)) screenHeightCache.set(cacheKeyRef.current, measured)
       }
     }
     window.addEventListener("message", onMsg)
@@ -489,20 +566,31 @@ function PrototypeFrame({
     : { width: "100%", maxWidth: 1280, height: h, ...(fill ? { minHeight: "100%" } : {}) }
 
   return (
-    <div className={cn(
-      "relative overflow-auto",
-      fill ? "min-h-0 flex-1" : "max-h-[calc(100vh-9rem)]",
-      isMobile ? "flex justify-center bg-muted/40 py-3" : "bg-muted/30",
-    )}>
-      {loading && <div className="absolute inset-0 z-20 flex items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
-      <iframe
-        title="原型預覽"
-        srcDoc={html}
-        className={cn("mx-auto block border-0 bg-white", isMobile && "self-start rounded-lg shadow-lg")}
-        style={style}
-        sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
-      />
-      {watermarkBg && <div className="pointer-events-none absolute inset-0 z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />}
+    // 外層不捲動：讀取遮罩掛在這裡，捲到頁面下方時切換畫面也看得到轉圈，
+    // 掛在捲動容器裡的話遮罩會跟著內容捲走，切換時畫面等於毫無回饋。
+    <div className={cn("relative", fill && "flex min-h-0 flex-1 flex-col")}>
+      <div
+        ref={scrollRef}
+        className={cn(
+          "relative overflow-auto",
+          fill ? "min-h-0 flex-1" : "max-h-[calc(100vh-9rem)]",
+          isMobile ? "flex justify-center bg-muted/40 py-3" : "bg-muted/30",
+        )}
+      >
+        <iframe
+          title="原型預覽"
+          srcDoc={html}
+          className={cn("mx-auto block border-0 bg-white", isMobile && "self-start rounded-lg shadow-lg")}
+          style={style}
+          sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
+        />
+        {watermarkBg && <div className="pointer-events-none absolute inset-0 z-10" style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }} />}
+      </div>
+      {loading && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-white">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
     </div>
   )
 }
