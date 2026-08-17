@@ -370,10 +370,13 @@ export async function GET(request: NextRequest) {
     type MonthlyLedgerOrg = { organization: string; deltaSp: number; deltaAmount: number; details: LedgerDetail[] }
     type MonthlyLedger = { month: string; data: MonthlyLedgerOrg[] }
 
+    type VendorFinancial = { vendor: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }
+
     let financial: {
       totalQuotaSp: number
       totalQuotaAmount: number
-      orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number; byVendor: { vendor: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[] }[]
+      vendorSummary: VendorFinancial[]
+      orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number; byVendor: VendorFinancial[] }[]
       demandDetail: { organization: string; demandNumber: string; title: string; status: string; vendor: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
       monthlyLedger: MonthlyLedger[]
     } | null = null
@@ -427,6 +430,25 @@ export async function GET(request: NextRequest) {
 
       const totalQuotaSp = orgSummary.reduce((s, o) => s + o.quotaSp, 0)
       const totalQuotaAmount = totalQuotaSp * SP_RATE
+
+      // 各開發商（智合 / JV…）獨立小計 —— 預算與消耗分開看，避免合併後失真
+      const vendorMap = new Map<string, VendorFinancial>()
+      for (const org of orgSummary) {
+        for (const v of org.byVendor) {
+          const acc = vendorMap.get(v.vendor) ?? {
+            vendor: v.vendor, quotaSp: 0, quotaAmount: 0, totalSp: 0, usedSp: 0, amount: 0, usedAmount: 0, demandCount: 0,
+          }
+          acc.quotaSp += v.quotaSp
+          acc.quotaAmount += v.quotaAmount
+          acc.totalSp += v.totalSp
+          acc.usedSp += v.usedSp
+          acc.amount += v.amount
+          acc.usedAmount += v.usedAmount
+          acc.demandCount += v.demandCount
+          vendorMap.set(v.vendor, acc)
+        }
+      }
+      const vendorSummary = Array.from(vendorMap.values()).sort((a, b) => b.quotaSp - a.quotaSp || a.vendor.localeCompare(b.vendor, "zh-TW"))
 
       // Demand detail (grouped by org) — exclude 已駁回 / 已取消 (不佔用預算)
       const demandDetail = demands
@@ -583,7 +605,7 @@ export async function GET(request: NextRequest) {
         monthlyLedger.push({ month: monthLabel, data })
       }
 
-      financial = { totalQuotaSp, totalQuotaAmount, orgSummary, demandDetail, monthlyLedger }
+      financial = { totalQuotaSp, totalQuotaAmount, vendorSummary, orgSummary, demandDetail, monthlyLedger }
     }
 
     return NextResponse.json({

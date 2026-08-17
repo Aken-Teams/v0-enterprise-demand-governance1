@@ -201,9 +201,7 @@ export default function HomePage() {
       <header className="hidden sm:block border-b border-gray-200 bg-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center px-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-blue-600 shadow-md">
-              <Building2 className="h-5 w-5 text-white" />
-            </div>
+            <Image src="/logo2.png" alt="企業需求管理平台" width={254} height={176} priority className="h-10 w-auto object-contain" />
             <span className="text-xl font-bold text-gray-900">企業需求管理平台</span>
           </div>
         </div>
@@ -229,9 +227,7 @@ export default function HomePage() {
             <div className="w-full">
               {/* Mobile branding */}
               <div className="sm:hidden flex flex-col items-center gap-2 mb-6 pt-12">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-blue-600 shadow-lg">
-                  <Building2 className="h-7 w-7 text-white" />
-                </div>
+                <Image src="/logo2.png" alt="企業需求管理平台" width={254} height={176} priority className="h-14 w-auto object-contain" />
                 <h1 className="text-xl font-bold text-gray-900">企業需求管理平台</h1>
                 <p className="text-xs text-gray-400">需求提案 · 資源配置 · 開發追蹤 · 交付管控</p>
               </div>
@@ -561,9 +557,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="flex flex-col items-center justify-between gap-1 sm:gap-4 sm:flex-row">
             <div className="hidden sm:flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <Building2 className="h-4 w-4 text-white" />
-              </div>
+              <Image src="/logo2.png" alt="企業需求管理平台" width={254} height={176} className="h-8 w-auto object-contain" />
               <span className="font-semibold text-gray-900">企業需求管理平台</span>
             </div>
             <p className="text-[10px] sm:text-sm text-gray-400 sm:text-gray-500">© 2025 企業需求管理平台 Powered by <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">智合科技</a></p>

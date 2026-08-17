@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import {
   Building2,
@@ -299,9 +300,7 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
           {/* Logo */}
           <div className={cn("flex h-16 items-center justify-between border-b border-sidebar-border", effectiveCollapsed ? "px-3" : "px-4")}>
             <Link href="/" className={cn("flex items-center gap-2", effectiveCollapsed && "justify-center w-full")}>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
-                <Building2 className="h-5 w-5 text-primary-foreground" />
-              </div>
+              <Image src="/logo2.png" alt="企業需求管理平台" width={254} height={176} className="h-8 w-auto object-contain shrink-0" />
               {!effectiveCollapsed && <span className="text-sm font-semibold text-sidebar-foreground">企業需求管理平台</span>}
             </Link>
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>

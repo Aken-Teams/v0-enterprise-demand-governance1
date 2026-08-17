@@ -107,11 +107,12 @@ export async function GET(request: NextRequest) {
       { header: "總 SP", key: "estimatedSp", width: 8 },
       { header: "調整後 SP", key: "adjustedSp", width: 10 },
       { header: "已消耗 SP", key: "usedSp", width: 12 },
-      { header: "消耗比例", key: "rate", width: 10 },
+      { header: "消耗比例\n(已消耗 ÷ 調整後 SP)", key: "rate", width: 16 },
       { header: "備註", key: "remark", width: 48 },
     ]
 
     const headerRow = sheet.getRow(1)
+    headerRow.height = 32 // 「消耗比例」欄位為兩行標題
     headerRow.eachCell((cell) => {
       cell.fill = headerFill
       cell.font = headerFont
@@ -126,6 +127,21 @@ export async function GET(request: NextRequest) {
       DEVELOPING: { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2EFDA" } },
       ACCEPTANCE: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } },
       CLOSED: { type: "pattern", pattern: "solid", fgColor: { argb: "FFC6EFCE" } },
+      REJECTED: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD0CECE" } },
+      CANCELLED: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD0CECE" } },
+    }
+
+    // 已取消／已駁回：明細照常列出，但不佔預算，故不計入合計
+    const NON_BUDGET_STATUSES = new Set(["CANCELLED", "REJECTED"])
+    const nonBudgetFill: ExcelJS.Fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFEDEDED" },
+    }
+    const nonBudgetFont: Partial<ExcelJS.Font> = {
+      color: { argb: "FF808080" },
+      italic: true,
+      size: 11,
     }
 
     const SP_PROGRESS_RATE: Record<string, number> = {
@@ -145,20 +161,28 @@ export async function GET(request: NextRequest) {
     let totalSp = 0
     let totalAdjusted = 0
     let totalUsed = 0
+    let excludedCount = 0
+    let excludedSp = 0
 
     for (const d of demands) {
       const effectiveSp = d.confirmedSp ?? d.estimatedSp
       const usedSp = calcUsedSp(d.status, effectiveSp, d.heldFromStatus)
+      const isNonBudget = NON_BUDGET_STATUSES.has(d.status)
 
-      let effectiveStatus = d.status
+      let effectiveStatus: string = d.status
       if (d.status === "ON_HOLD" || d.status === "REJECTED") {
         effectiveStatus = d.heldFromStatus || d.status
       }
-      const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
+      const rate = isNonBudget ? 0 : (SP_PROGRESS_RATE[effectiveStatus] ?? 0)
 
-      totalSp += d.estimatedSp
-      totalAdjusted += effectiveSp
-      totalUsed += usedSp
+      if (isNonBudget) {
+        excludedCount++
+        excludedSp += effectiveSp
+      } else {
+        totalSp += d.estimatedSp
+        totalAdjusted += effectiveSp
+        totalUsed += usedSp
+      }
 
       const row = sheet.addRow({
         demandNumber: d.demandNumber,
@@ -171,7 +195,8 @@ export async function GET(request: NextRequest) {
         status: STATUS_MAP[d.status]?.label || d.status,
         estimatedSp: d.estimatedSp,
         adjustedSp: effectiveSp,
-        usedSp,
+        // 已取消／已駁回會釋放 SP，故消耗歸零
+        usedSp: isNonBudget ? 0 : usedSp,
         rate: fmtRate(rate),
         remark: buildRemark(d),
       })
@@ -185,6 +210,10 @@ export async function GET(request: NextRequest) {
           horizontal: isText ? "left" : "center",
           wrapText: colNumber === 13,
         }
+        if (isNonBudget) {
+          cell.fill = nonBudgetFill
+          cell.font = nonBudgetFont
+        }
       })
 
       const statusCell = row.getCell("status")
@@ -196,14 +225,22 @@ export async function GET(request: NextRequest) {
     // Blank row
     sheet.addRow({})
 
-    // Summary row
+    // Summary row —— 只計入佔用預算的需求，與儀表板「已提出」一致
     const totalRate = totalAdjusted > 0 ? `${Math.round((totalUsed / totalAdjusted) * 100)}%` : "0%"
+    const summaryRemark = [
+      `消耗比例 = 已消耗 ${totalUsed} ÷ 調整後 ${totalAdjusted} = ${totalRate}`,
+      excludedCount > 0
+        ? `合計不含已取消／已駁回 ${excludedCount} 筆（${excludedSp} SP，明細見上方灰底列）`
+        : null,
+    ].filter(Boolean).join("；")
     const summaryRow = sheet.addRow({
       demandNumber: "合計",
+      status: `${demands.length - excludedCount} 筆`,
       estimatedSp: totalSp,
       adjustedSp: totalAdjusted,
       usedSp: totalUsed,
       rate: totalRate,
+      remark: summaryRemark,
     })
     summaryRow.font = { bold: true, size: 11 }
     const summaryFill: ExcelJS.Fill = {
@@ -211,9 +248,13 @@ export async function GET(request: NextRequest) {
       pattern: "solid",
       fgColor: { argb: "FFF2F2F2" },
     }
-    summaryRow.eachCell((cell) => {
+    summaryRow.eachCell((cell, colNumber) => {
       cell.border = thinBorder
-      cell.alignment = { vertical: "middle", horizontal: "center" }
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: colNumber === 13 ? "left" : "center",
+        wrapText: colNumber === 13,
+      }
       cell.fill = summaryFill
     })
 

@@ -20,6 +20,17 @@ import {
   Download,
 } from "lucide-react"
 
+type VendorFinancial = {
+  vendor: string
+  quotaSp: number
+  quotaAmount: number
+  totalSp: number
+  usedSp: number
+  amount: number
+  usedAmount: number
+  demandCount: number
+}
+
 interface AnalyticsData {
   kpi: {
     activeDemands: number
@@ -78,6 +89,7 @@ interface AnalyticsData {
   financial?: {
     totalQuotaSp: number
     totalQuotaAmount: number
+    vendorSummary?: VendorFinancial[]
     orgSummary: { name: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number; byVendor?: { vendor: string; quotaSp: number; quotaAmount: number; totalSp: number; usedSp: number; amount: number; usedAmount: number; demandCount: number }[] }[]
     demandDetail: { organization: string; demandNumber: string; title: string; status: string; vendor?: string; sp: number; usedSp: number; amount: number; usedAmount: number }[]
     monthlyLedger: { month: string; data: { organization: string; deltaSp: number; deltaAmount: number; details: { demandNumber: string; title: string; vendor?: string; fromStatus: string | null; toStatus: string; sp: number; deltaSp: number; deltaAmount: number; date: string; spChange?: { from: number; to: number; reason: string } }[] }[] }[]
@@ -105,6 +117,28 @@ const fmtAmountShort = (n: number) => {
   if (abs >= 10000000) return `${sign}${(abs / 10000000).toFixed(1).replace(/\.0$/, "")}千萬`
   if (abs >= 10000) return `${sign}${(abs / 10000).toFixed(0)}萬`
   return `${sign}${abs.toLocaleString("zh-TW")}`
+}
+
+const fmtSp = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+
+/** KPI 格子下方的開發商說明，例如「強合 JV 1250 SP · 83%｜智合 Zhaoi 250 SP · 17%」 */
+function VendorNote({
+  vendors, value, pct,
+}: {
+  vendors: VendorFinancial[]
+  value: (v: VendorFinancial) => number
+  /** 該開發商的占比（%），回傳 null 則不顯示 */
+  pct: (v: VendorFinancial) => number | null
+}) {
+  if (vendors.length < 2) return null
+  return (
+    <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug mt-1">
+      {vendors.map((v) => {
+        const p = pct(v)
+        return `${v.vendor} ${fmtSp(value(v))} SP${p === null ? "" : ` · ${Math.round(p)}%`}`
+      }).join("　")}
+    </p>
+  )
 }
 
 export default function GovernanceAnalyticsPage() {
@@ -733,29 +767,37 @@ export default function GovernanceAnalyticsPage() {
                 const totalCommittedSp = fin.orgSummary.reduce((s, o) => s + o.totalSp, 0)
                 const totalUsedSp = fin.orgSummary.reduce((s, o) => s + o.usedSp, 0)
 
+                const vendors = fin.vendorSummary ?? []
+
                 return (
                   <>
-                    {/* KPI strip: 預算 → 已提出 → 已消耗 */}
+                    {/* KPI strip: 預算 → 已提出 → 已消耗（以合計呈現，下方小字分開發商） */}
                     <div className="grid grid-cols-2 md:grid-cols-4 divide-x rounded-lg border bg-card text-center mb-3 sm:mb-4">
                       <div className="px-2 py-2 sm:px-4 sm:py-3">
                         <p className="text-[10px] sm:text-xs text-muted-foreground">年度預算</p>
                         <p className="text-sm sm:text-xl font-bold mt-0.5">{isMobile ? fmtAmountShort(fin.totalQuotaAmount) : fmtAmount(fin.totalQuotaAmount)}</p>
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground">{fin.totalQuotaSp} SP</p>
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-0.5">{fin.totalQuotaSp} SP</p>
+                        {/* 預算：顯示各開發商占總預算的比重 */}
+                        <VendorNote vendors={vendors} value={(v) => v.quotaSp} pct={(v) => (fin.totalQuotaSp > 0 ? (v.quotaSp / fin.totalQuotaSp) * 100 : null)} />
                       </div>
                       <div className="px-2 py-2 sm:px-4 sm:py-3">
                         <p className="text-[10px] sm:text-xs text-muted-foreground">已提出</p>
                         <p className="text-sm sm:text-xl font-bold mt-0.5 text-amber-600">{isMobile ? fmtAmountShort(totalCommittedAmount) : fmtAmount(totalCommittedAmount)}</p>
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground">{totalCommittedSp} SP · {fin.totalQuotaAmount > 0 ? Math.round((totalCommittedAmount / fin.totalQuotaAmount) * 100) : 0}%</p>
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-0.5">{fmtSp(totalCommittedSp)} SP · {fin.totalQuotaAmount > 0 ? Math.round((totalCommittedAmount / fin.totalQuotaAmount) * 100) : 0}%</p>
+                        {/* 已提出／已消耗／剩餘：占該開發商自己的預算比例 */}
+                        <VendorNote vendors={vendors} value={(v) => v.totalSp} pct={(v) => (v.quotaSp > 0 ? (v.totalSp / v.quotaSp) * 100 : null)} />
                       </div>
-                      <div className="px-2 py-2 sm:px-4 sm:py-3">
+                      <div className="px-2 py-2 sm:px-4 sm:py-3 border-t md:border-t-0">
                         <p className="text-[10px] sm:text-xs text-muted-foreground">已消耗</p>
                         <p className="text-sm sm:text-xl font-bold mt-0.5 text-violet-600">{isMobile ? fmtAmountShort(totalUsedAmount) : fmtAmount(totalUsedAmount)}</p>
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground">{totalUsedSp} SP · {fin.totalQuotaAmount > 0 ? Math.round((totalUsedAmount / fin.totalQuotaAmount) * 100) : 0}%</p>
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-0.5">{fmtSp(totalUsedSp)} SP · {fin.totalQuotaAmount > 0 ? Math.round((totalUsedAmount / fin.totalQuotaAmount) * 100) : 0}%</p>
+                        <VendorNote vendors={vendors} value={(v) => v.usedSp} pct={(v) => (v.quotaSp > 0 ? (v.usedSp / v.quotaSp) * 100 : null)} />
                       </div>
-                      <div className="px-2 py-2 sm:px-4 sm:py-3">
+                      <div className="px-2 py-2 sm:px-4 sm:py-3 border-t md:border-t-0">
                         <p className="text-[10px] sm:text-xs text-muted-foreground">剩餘</p>
                         <p className="text-sm sm:text-xl font-bold mt-0.5 text-emerald-600">{isMobile ? fmtAmountShort(Math.max(0, fin.totalQuotaAmount - totalCommittedAmount)) : fmtAmount(Math.max(0, fin.totalQuotaAmount - totalCommittedAmount))}</p>
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground">{Math.max(0, fin.totalQuotaSp - totalCommittedSp)} SP</p>
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-0.5">{fmtSp(Math.max(0, fin.totalQuotaSp - totalCommittedSp))} SP</p>
+                        <VendorNote vendors={vendors} value={(v) => Math.max(0, v.quotaSp - v.totalSp)} pct={(v) => (v.quotaSp > 0 ? (Math.max(0, v.quotaSp - v.totalSp) / v.quotaSp) * 100 : null)} />
                       </div>
                     </div>
 
@@ -768,10 +810,10 @@ export default function GovernanceAnalyticsPage() {
                         </div>
                         <div className="flex h-3 rounded-full overflow-hidden bg-muted">
                           {totalUsedAmount > 0 && (
-                            <div className="bg-violet-500" style={{ width: `${(totalUsedAmount / fin.totalQuotaAmount) * 100}%` }} title="已消耗" />
+                            <div className="bg-violet-500" style={{ width: `${Math.min(100, (totalUsedAmount / fin.totalQuotaAmount) * 100)}%` }} title="已消耗" />
                           )}
                           {totalCommittedAmount - totalUsedAmount > 0 && (
-                            <div className="bg-amber-400" style={{ width: `${((totalCommittedAmount - totalUsedAmount) / fin.totalQuotaAmount) * 100}%` }} title="已提出(未消耗)" />
+                            <div className="bg-amber-400" style={{ width: `${Math.min(100, ((totalCommittedAmount - totalUsedAmount) / fin.totalQuotaAmount) * 100)}%` }} title="已提出(未消耗)" />
                           )}
                         </div>
                         <div className="flex gap-4 mt-1.5 text-[11px] text-muted-foreground">
