@@ -40,7 +40,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
-import { cn } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
+import { toast } from "sonner"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PrototypePanel, PrototypeInlinePreview, PrototypePreviewModal, type Prototype } from "@/components/demand/prototype-panel"
@@ -356,6 +357,14 @@ interface DemandDetail {
   }[]
 }
 
+type ShareLink = {
+  id: string
+  token: string
+  expiresAt: string
+  createdAt: string
+  createdBy: { name: string }
+}
+
 function fmtDate(dateStr: string | null) {
   if (!dateStr) return null
   const d = new Date(dateStr)
@@ -388,11 +397,12 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("overview")
   const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
-  const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState<string | null>(null)
   const [docLinkCopied, setDocLinkCopied] = useState(false)
+  const [docLinkBusy, setDocLinkBusy] = useState(false)
   // Tracks if user just approved a DESIGN_CHANGE in this session — used to
   // suppress the PHASE banner so they don't see a second "approve" prompt
   // immediately after. Resets naturally on any new page load.
@@ -425,7 +435,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
 
   // Fetch share links for document sharing
   const fetchShareLinks = useCallback(async () => {
-    if (!token || !id) return
+    if (!token || !id) return [] as ShareLink[]
     setShareLoading(true)
     try {
       const res = await fetch(`/api/demands/${id}/share`, {
@@ -433,10 +443,13 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
       })
       if (res.ok) {
         const data = await res.json()
-        setShareLinks(data.shares ?? [])
+        const list: ShareLink[] = data.shares ?? []
+        setShareLinks(list)
+        return list
       }
     } catch { /* ignore */ }
     finally { setShareLoading(false) }
+    return [] as ShareLink[]
   }, [token, id])
 
   useEffect(() => {
@@ -466,6 +479,46 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
       })
       fetchShareLinks()
     } catch { /* ignore */ }
+  }
+
+  /**
+   * 複製「單一文件」的分享連結。客戶自己就能分享：
+   * 沒有有效連結時直接建一條再複製，不要只彈對話框讓人再點一次。
+   */
+  const copyDocShareLink = async (docId: string) => {
+    if (!token || docLinkBusy) return
+    setDocLinkBusy(true)
+    try {
+      const isActive = (s: ShareLink) => new Date(s.expiresAt) > new Date()
+      let active = shareLinks.find(isActive) ?? (await fetchShareLinks()).find(isActive)
+
+      if (!active) {
+        const res = await fetch(`/api/demands/${id}/share`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          toast.error(err.error || "無法建立分享連結")
+          return
+        }
+        active = await res.json()
+        fetchShareLinks()
+      }
+
+      const url = `${window.location.origin}/share/${active!.token}?doc=${docId}`
+      if (await copyText(url)) {
+        setDocLinkCopied(true)
+        setTimeout(() => setDocLinkCopied(false), 2000)
+        toast.success("已複製文件分享連結")
+      } else {
+        toast.message("請手動複製連結", { description: url, duration: 15000 })
+      }
+    } catch {
+      toast.error("複製分享連結失敗")
+    } finally {
+      setDocLinkBusy(false)
+    }
   }
 
   const copyShareUrl = (shareToken: string) => {
@@ -1479,22 +1532,18 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7"
-                                    onClick={() => {
-                                      const activeShare = shareLinks.find(s => new Date(s.expiresAt) > new Date())
-                                      if (!activeShare) { setShareDialogOpen(true); return }
-                                      const docUrl = `${window.location.origin}/share/${activeShare.token}?doc=${selectedDoc.id}`
-                                      navigator.clipboard.writeText(docUrl)
-                                      setDocLinkCopied(true)
-                                      setTimeout(() => setDocLinkCopied(false), 2000)
-                                    }}
+                                    disabled={docLinkBusy}
+                                    onClick={() => copyDocShareLink(selectedDoc.id)}
                                   >
-                                    {docLinkCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Link2 className="h-3.5 w-3.5" />}
+                                    {docLinkBusy
+                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      : docLinkCopied
+                                        ? <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                        : <Link2 className="h-3.5 w-3.5" />}
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {shareLinks.some(s => new Date(s.expiresAt) > new Date())
-                                    ? (docLinkCopied ? "已複製" : "複製文件分享連結")
-                                    : "先建立分享連結"}
+                                  {docLinkCopied ? "已複製" : "複製文件分享連結"}
                                 </TooltipContent>
                               </UiTooltip>
                               <UiTooltip>

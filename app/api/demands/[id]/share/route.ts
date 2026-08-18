@@ -5,18 +5,47 @@ import { canAdminWrite } from "@/lib/demand-access"
 import { nanoid } from "nanoid"
 import { logAudit } from "@/lib/audit"
 
+const SHARE_ROLES = ["admin", "delivery", "subsidiary", "viewer"] as const
+
+/**
+ * 這位使用者在「這一張需求」上是不是需求方的人。
+ *
+ * 全域角色會跟專案身分衝突：例如董事會成員的帳號是 viewer（唯讀、可跨子公司看），
+ * 但他同時可能是某幾張需求的需求窗口。在自己那幾張需求上，他就該比照一般需求者，
+ * 能簽核、也能分享連結，不該被全域的 viewer 角色擋掉。
+ */
+async function isDemandRequesterSide(
+  userId: string,
+  demand: { id: string; submitterId: string; contactPersonId: string | null; demandManagerId: string | null },
+): Promise<boolean> {
+  if (demand.submitterId === userId) return true
+  if (demand.contactPersonId === userId) return true
+  if (demand.demandManagerId === userId) return true
+  // 被指派到這張需求且不是純觀察者
+  const grant = await prisma.demandAccess.findUnique({
+    where: { demandId_userId: { demandId: demand.id, userId } },
+    select: { signoffRole: true },
+  })
+  return !!grant && grant.signoffRole !== "OBSERVER"
+}
+
 // POST: Create a share link for a demand
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = verifyRole(request, ["admin", "delivery", "subsidiary"])
+    const auth = verifyRole(request, [...SHARE_ROLES])
     const { id } = await params
 
     const demand = await prisma.demand.findUnique({ where: { id } })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+    }
+
+    // Viewer: 只有在自己是需求方的那幾張需求上才能分享
+    if (auth.role === "viewer" && !(await isDemandRequesterSide(auth.userId, demand))) {
+      return NextResponse.json({ error: "無權限分享此需求" }, { status: 403 })
     }
 
     // Admin write permission check
@@ -32,7 +61,7 @@ export async function POST(
     // Subsidiary: verify user belongs to the demand's organization
     if (auth.role === "subsidiary") {
       const user = await prisma.user.findUnique({ where: { id: auth.userId }, select: { organizationId: true } })
-      if (user?.organizationId !== demand.organizationId) {
+      if (user?.organizationId !== demand.organizationId && !(await isDemandRequesterSide(auth.userId, demand))) {
         return NextResponse.json({ error: "無權限分享此需求" }, { status: 403 })
       }
     }
@@ -80,8 +109,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    verifyRole(request, ["admin", "delivery", "subsidiary"])
+    const auth = verifyRole(request, [...SHARE_ROLES])
     const { id } = await params
+
+    if (auth.role === "viewer") {
+      const demand = await prisma.demand.findUnique({
+        where: { id },
+        select: { id: true, submitterId: true, contactPersonId: true, demandManagerId: true },
+      })
+      if (!demand) return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+      if (!(await isDemandRequesterSide(auth.userId, demand))) {
+        return NextResponse.json({ shares: [] })
+      }
+    }
 
     const shares = await prisma.demandShare.findMany({
       where: { demandId: id },
@@ -105,12 +145,23 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = verifyRole(request, ["admin", "delivery", "subsidiary"])
+    const auth = verifyRole(request, [...SHARE_ROLES])
     const { id } = await params
 
     const { shareId } = await request.json()
     if (!shareId) {
       return NextResponse.json({ error: "缺少 shareId" }, { status: 400 })
+    }
+
+    if (auth.role === "viewer") {
+      const demand = await prisma.demand.findUnique({
+        where: { id },
+        select: { id: true, submitterId: true, contactPersonId: true, demandManagerId: true },
+      })
+      if (!demand) return NextResponse.json({ error: "需求不存在" }, { status: 404 })
+      if (!(await isDemandRequesterSide(auth.userId, demand))) {
+        return NextResponse.json({ error: "無權限撤銷此分享連結" }, { status: 403 })
+      }
     }
 
     await prisma.demandShare.delete({ where: { id: shareId } })

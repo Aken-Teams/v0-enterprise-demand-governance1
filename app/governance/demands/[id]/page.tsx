@@ -18,7 +18,7 @@ import { toast } from "sonner"
 import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
-import { cn } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
 import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -155,6 +155,14 @@ const ROLE_META: Record<string, { label: string; color: string }> = {
   subsidiary: { label: "需求單位", color: "text-blue-600" },
 }
 const ROLE_ORDER = ["delivery", "admin", "subsidiary"]
+
+type ShareLink = {
+  id: string
+  token: string
+  expiresAt: string
+  createdAt: string
+  createdBy: { name: string }
+}
 
 function groupUsersByRole(users: { id: string; name: string; role?: string }[]) {
   const groups: Record<string, { id: string; name: string }[]> = {}
@@ -437,9 +445,10 @@ export default function DemandDetailPage() {
 
   // Share link state
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
-  const [shareLinks, setShareLinks] = useState<{ id: string; token: string; expiresAt: string; createdAt: string; createdBy: { name: string } }[]>([])
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState<string | null>(null)
+  const [docLinkBusy, setDocLinkBusy] = useState(false)
   const [adminCanWrite, setAdminCanWrite] = useState(true)
   const [canSeeQuote, setCanSeeQuote] = useState(false)
   const [canApproveQuote, setCanApproveQuote] = useState(false)
@@ -449,6 +458,14 @@ export default function DemandDetailPage() {
   const isAdminWithWrite = user?.role === "admin" && (isFullAdmin || adminCanWrite)
   // canManage: full admin or delivery can manage; limited admin with edit can too
   const canManage = isAdminWithWrite || user?.role === "delivery"
+  // 需求方身分優先於全域角色：董事會成員的帳號是 viewer，但他可能同時是某張需求的
+  // 需求窗口／提出者／需求主管 —— 在那張需求上他就是需求者，該能分享連結。
+  const isRequesterSide = !!user && !!demand && (
+    demand.submitter?.id === user.id ||
+    demand.contactPersonId === user.id ||
+    demand.demandManagerId === user.id
+  )
+  const canShare = canManage || isRequesterSide
 
   // Periodically clean up stray mermaid error SVGs from the DOM
   useEffect(() => {
@@ -641,8 +658,8 @@ export default function DemandDetailPage() {
   }
 
   // Share link functions
-  const fetchShareLinks = async () => {
-    if (!token) return
+  const fetchShareLinks = useCallback(async () => {
+    if (!token || !demandId) return [] as ShareLink[]
     setShareLoading(true)
     try {
       const res = await fetch(`/api/demands/${demandId}/share`, {
@@ -650,11 +667,18 @@ export default function DemandDetailPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        setShareLinks(data.shares)
+        const list: ShareLink[] = data.shares ?? []
+        setShareLinks(list)
+        return list
       }
     } catch { /* ignore */ }
     finally { setShareLoading(false) }
-  }
+    return [] as ShareLink[]
+  }, [token, demandId])
+
+  // 進頁面就先抓分享連結：否則文件工具列不知道已經有有效連結，
+  // 提示會一直停在「先建立分享連結」、按下去也只是叫出對話框。
+  useEffect(() => { fetchShareLinks() }, [fetchShareLinks])
 
   const createShareLink = async () => {
     if (!token) return
@@ -679,6 +703,48 @@ export default function DemandDetailPage() {
       })
       fetchShareLinks()
     } catch { /* ignore */ }
+  }
+
+  /**
+   * 複製「單一文件」的分享連結。
+   * 沒有有效連結時直接建一條再複製，不要只是彈出分享對話框 ——
+   * 對話框在部分角色下根本沒掛載，按了會完全沒反應。
+   */
+  const copyDocShareLink = async (docId: string) => {
+    if (!token || docLinkBusy) return
+    setDocLinkBusy(true)
+    try {
+      const isActive = (s: ShareLink) => new Date(s.expiresAt) > new Date()
+      // 本地清單可能還沒抓到，先跟伺服器對一次，避免重複建連結
+      let active = shareLinks.find(isActive) ?? (await fetchShareLinks()).find(isActive)
+
+      if (!active) {
+        const res = await fetch(`/api/demands/${demandId}/share`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          toast.error(err.error || "無法建立分享連結")
+          return
+        }
+        active = await res.json()
+        fetchShareLinks()
+      }
+
+      const url = `${window.location.origin}/share/${active!.token}?doc=${docId}`
+      if (await copyText(url)) {
+        setDocLinkCopied(true)
+        setTimeout(() => setDocLinkCopied(false), 2000)
+        toast.success("已複製文件分享連結")
+      } else {
+        toast.message("請手動複製連結", { description: url, duration: 15000 })
+      }
+    } catch {
+      toast.error("複製分享連結失敗")
+    } finally {
+      setDocLinkBusy(false)
+    }
   }
 
   // Ensure an active share link exists, then open notify signers dialog
@@ -864,8 +930,8 @@ export default function DemandDetailPage() {
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground ml-10 sm:ml-11 break-words">{demand.title}</h1>
           </div>
           <div className="flex items-center gap-2 ml-10 sm:ml-0 shrink-0">
-            {/* Share button (admin + delivery) */}
-            {canManage && (
+            {/* Share button (admin + delivery，以及本案的需求方窗口) */}
+            {canShare && (
               <Dialog open={shareDialogOpen} onOpenChange={(open) => { setShareDialogOpen(open); if (open) fetchShareLinks() }}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3">
@@ -2057,25 +2123,18 @@ export default function DemandDetailPage() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7"
-                                    onClick={() => {
-                                      const activeShare = shareLinks.find(s => new Date(s.expiresAt) > new Date())
-                                      if (!activeShare) {
-                                        setShareDialogOpen(true)
-                                        return
-                                      }
-                                      const docUrl = `${window.location.origin}/share/${activeShare.token}?doc=${selectedDoc.id}`
-                                      navigator.clipboard.writeText(docUrl)
-                                      setDocLinkCopied(true)
-                                      setTimeout(() => setDocLinkCopied(false), 2000)
-                                    }}
+                                    disabled={docLinkBusy}
+                                    onClick={() => copyDocShareLink(selectedDoc.id)}
                                   >
-                                    {docLinkCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Link2 className="h-3.5 w-3.5" />}
+                                    {docLinkBusy
+                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      : docLinkCopied
+                                        ? <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                        : <Link2 className="h-3.5 w-3.5" />}
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {shareLinks.some(s => new Date(s.expiresAt) > new Date())
-                                    ? (docLinkCopied ? "已複製" : "複製文件分享連結")
-                                    : "先建立分享連結"}
+                                  {docLinkCopied ? "已複製" : "複製文件分享連結"}
                                 </TooltipContent>
                               </Tooltip>
                               <Tooltip>
