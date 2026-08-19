@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { cn } from "@/lib/utils"
+import { cn, saveBlobAsFile } from "@/lib/utils"
 import { toast } from "sonner"
 import JSZip from "jszip"
 import {
@@ -149,10 +149,10 @@ export function PrototypePanel({
       const res = await fetch(`/api/demands/${demandId}/prototypes/${selected.id}/download`, { headers })
       if (!res.ok) { const e = await res.json().catch(() => ({})); toast.error(e.error || "下載失敗"); return }
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url; a.download = `prototype-v${selected.version}.zip`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+      if (blob.size === 0) { toast.error("下載失敗：檔案是空的，請稍後再試"); return }
+      saveBlobAsFile(blob, `prototype-v${selected.version}.zip`)
+    } catch {
+      toast.error("下載失敗，請檢查連線後再試一次")
     } finally { setDownloading(false) }
   }
 

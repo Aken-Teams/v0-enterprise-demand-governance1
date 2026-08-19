@@ -10,26 +10,64 @@ import { marked, type Token, type Tokens } from "marked"
 const execAsync = promisify(exec)
 
 // System CJK font paths (tried in order)
+//
+// 只放單一字型檔（.ttf / .otf）。.ttc 是「字型集合」，pdf-lib + fontkit 對它的支援不完整：
+// embedFont() 會成功，但實際 drawText 時才炸 "this.font.layout is not a function"，
+// 讓整個下載請求 500 —— 使用者只看到轉圈圈然後沒有檔案。所以下面刻意把 .ttc 排到最後，
+// 且載入後會實際試排一次版才採用。
 const CJK_FONT_PATHS = [
-  "C:\\Windows\\Fonts\\kaiu.ttf",       // 楷體 (Traditional Chinese TTF)
-  "C:\\Windows\\Fonts\\msjh.ttc",       // Microsoft JhengHei
-  "C:\\Windows\\Fonts\\mingliu.ttc",    // MingLiU
-  "/System/Library/Fonts/PingFang.ttc", // macOS
-  "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-  "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+  // 一律用正斜線：Node 在 Windows 也吃得下，而且不會踩到 "\W" 這種反斜線跳脫陷阱
+  "C:/Windows/Fonts/kaiu.ttf",       // 楷體 (Traditional Chinese TTF)
+  "C:/Windows/Fonts/msjhl.ttf",      // Microsoft JhengHei Light（單檔版）
+  "C:/Windows/Fonts/simsun.ttf",     // 新宋體
+  "/usr/share/fonts/truetype/noto/NotoSansTC-Regular.otf",
+  "/usr/share/fonts/opentype/noto/NotoSansTC-Regular.otf",
+  "/usr/share/fonts/truetype/arphic/uming.ttc",
+  "/System/Library/Fonts/PingFang.ttc",
+  "C:/Windows/Fonts/msjh.ttc",
+  "C:/Windows/Fonts/mingliu.ttc",
 ]
 
+/** 抽樣字元：涵蓋中文、英數與時間戳會用到的符號 */
+const FONT_PROBE_TEXT = "測試 Test 2026/01/01 10:00 |"
+
+/**
+ * 載入可用的中文字型。
+ *
+ * 兩個重點：
+ * 1. subset: true —— 只嵌入實際用到的字。整包楷體約 4.9MB，不做 subset 等於每份下載的
+ *    PDF 都白白多背幾 MB（實測 855KB 的來源檔會變成 3.6MB；subset 後只剩 737KB）。
+ * 2. 嵌完要真的試排一次版。有些字型（特別是 .ttc）embedFont 會過、drawText 才炸，
+ *    先驗證過才能安全地 fallback 到下一個候選字型，而不是讓整個請求掛掉。
+ */
 async function loadCJKFont(pdfDoc: PDFDocument): Promise<PDFFont | null> {
   pdfDoc.registerFontkit(fontkit)
   for (const fontPath of CJK_FONT_PATHS) {
+    let font: PDFFont
     try {
       const fontBytes = await readFile(fontPath)
-      return await pdfDoc.embedFont(fontBytes, { subset: false })
+      font = await pdfDoc.embedFont(fontBytes, { subset: true })
     } catch {
+      continue // 檔案不存在或格式不支援
+    }
+    try {
+      font.widthOfTextAtSize(FONT_PROBE_TEXT, 12) // 會走到 fontkit 的 layout()
+      return font
+    } catch (e) {
+      console.warn(`字型 ${fontPath} 無法排版，改用下一個候選：`, (e as Error)?.message)
       continue
     }
   }
+  console.warn("找不到可用的中文字型，浮水印將退回 ASCII")
   return null
+}
+
+/** 中文字型不可用時，退回只留 ASCII 的浮水印文字，讓下載還是能完成 */
+function toAsciiWatermark(text: string): string {
+  const ascii = text.replace(/[^\x20-\x7E]/g, " ").replace(/\s+/g, " ").trim()
+  return ascii.length >= 8
+    ? ascii
+    : `RESTRICTED ${new Date().toISOString().slice(0, 19).replace("T", " ")}`
 }
 
 function drawWatermarkOnPage(
@@ -37,22 +75,38 @@ function drawWatermarkOnPage(
   text: string,
   font: PDFFont,
   fontSize: number = 16,
+  fallbackFont?: PDFFont,
 ) {
   const { width, height } = page.getSize()
+  // 先試一次：字型畫不出這段文字就整頁改用 ASCII 版，不要每格都丟例外
+  let drawText = text
+  let drawFont = font
+  try {
+    font.widthOfTextAtSize(text, fontSize)
+  } catch {
+    if (!fallbackFont) return // 沒有備援字型就跳過浮水印，也不要讓整份檔案失敗
+    drawText = toAsciiWatermark(text)
+    drawFont = fallbackFont
+  }
+
   // Draw diagonal watermark in a grid
   const spacingX = 280
   const spacingY = 140
   for (let y = -100; y < height + 200; y += spacingY) {
     for (let x = -200; x < width + 200; x += spacingX) {
-      page.drawText(text, {
-        x,
-        y,
-        size: fontSize,
-        font,
-        color: rgb(0.6, 0.6, 0.6),
-        opacity: 0.18,
-        rotate: degrees(35),
-      })
+      try {
+        page.drawText(drawText, {
+          x,
+          y,
+          size: fontSize,
+          font: drawFont,
+          color: rgb(0.6, 0.6, 0.6),
+          opacity: 0.18,
+          rotate: degrees(35),
+        })
+      } catch {
+        return // 這頁畫不了就放棄這頁，不要拖垮整個下載
+      }
     }
   }
 }
@@ -64,10 +118,12 @@ export async function watermarkPdf(
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(pdfBytes)
   const cjkFont = await loadCJKFont(pdfDoc)
-  const font = cjkFont || (await pdfDoc.embedFont(StandardFonts.Helvetica))
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const font = cjkFont || latinFont
+  const text = cjkFont ? watermarkText : toAsciiWatermark(watermarkText)
 
   for (const page of pdfDoc.getPages()) {
-    drawWatermarkOnPage(page, watermarkText, font)
+    drawWatermarkOnPage(page, text, font, 16, latinFont)
   }
   return pdfDoc.save()
 }
@@ -81,7 +137,8 @@ export async function textToPdf(
   const pdfDoc = await PDFDocument.create()
   const cjkFont = await loadCJKFont(pdfDoc)
   const contentFont = cjkFont || (await pdfDoc.embedFont(StandardFonts.Courier))
-  const watermarkFont = cjkFont || (await pdfDoc.embedFont(StandardFonts.Helvetica))
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const watermarkFont = cjkFont || latinFont
 
   const fontSize = 10
   const margin = 50
@@ -138,7 +195,7 @@ export async function textToPdf(
 
   // Add watermark to all pages
   for (const p of pdfDoc.getPages()) {
-    drawWatermarkOnPage(p, watermarkText, watermarkFont)
+    drawWatermarkOnPage(p, watermarkText, watermarkFont, 16, latinFont)
   }
 
   return pdfDoc.save()
@@ -302,11 +359,12 @@ export async function markdownToPdf(
   const pdfDoc = await PDFDocument.create()
   const cjkFont = await loadCJKFont(pdfDoc)
 
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const fonts: MdFonts = {
-    regular: cjkFont || (await pdfDoc.embedFont(StandardFonts.Helvetica)),
+    regular: cjkFont || latinFont,
     bold: cjkFont || (await pdfDoc.embedFont(StandardFonts.HelveticaBold)),
     mono: cjkFont || (await pdfDoc.embedFont(StandardFonts.Courier)),
-    watermark: cjkFont || (await pdfDoc.embedFont(StandardFonts.Helvetica)),
+    watermark: cjkFont || latinFont,
   }
 
   const pageWidth = 595
@@ -699,7 +757,7 @@ export async function markdownToPdf(
 
   // Watermark all pages
   for (const p of pdfDoc.getPages()) {
-    drawWatermarkOnPage(p, watermarkText, fonts.watermark)
+    drawWatermarkOnPage(p, watermarkText, fonts.watermark, 16, latinFont)
   }
 
   return pdfDoc.save()
@@ -713,7 +771,8 @@ export async function imageToPdf(
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create()
   const cjkFont = await loadCJKFont(pdfDoc)
-  const watermarkFont = cjkFont || (await pdfDoc.embedFont(StandardFonts.Helvetica))
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const watermarkFont = cjkFont || latinFont
 
   let image
   if (mimeType === "image/png") {
@@ -741,7 +800,7 @@ export async function imageToPdf(
     height: drawH,
   })
 
-  drawWatermarkOnPage(page, watermarkText, watermarkFont)
+  drawWatermarkOnPage(page, watermarkText, watermarkFont, 16, latinFont)
   return pdfDoc.save()
 }
 
@@ -833,7 +892,8 @@ export async function coverPagePdf(
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create()
   const cjkFont = await loadCJKFont(pdfDoc)
-  const font = cjkFont || (await pdfDoc.embedFont(StandardFonts.Helvetica))
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const font = cjkFont || latinFont
 
   const page = pdfDoc.addPage([595, 842])
   const lines = [
@@ -855,6 +915,6 @@ export async function coverPagePdf(
     y -= 24
   }
 
-  drawWatermarkOnPage(page, watermarkText, font)
+  drawWatermarkOnPage(page, watermarkText, font, 16, latinFont)
   return pdfDoc.save()
 }

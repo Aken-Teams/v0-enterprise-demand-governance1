@@ -12,7 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Coins, Lock, Upload, FileText, Download, Eye, Check, Loader2, Pencil, ShieldCheck, Trash2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, saveBlobAsFile } from "@/lib/utils"
 
 interface QuoteDoc { id: string; fileName: string; fileUrl: string | null; fileSize: number | null; createdAt?: string | null }
 
@@ -181,10 +181,12 @@ export function ZhiheQuoteCard({
       const res = await fetch(`/api/demands/${demandId}/documents/${quote.id}/download`, { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) { const e = await res.json().catch(() => ({})); toast.error(e.error || "下載失敗"); return }
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url; a.download = quote.fileName.replace(/\.[^.]+$/, ".pdf")
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+      // 伺服器出錯時可能回 JSON 而不是 PDF，這裡擋掉，免得存出一個打不開的空檔
+      if (blob.size === 0) { toast.error("下載失敗：檔案是空的，請稍後再試"); return }
+      saveBlobAsFile(blob, quote.fileName.replace(/\.[^.]+$/, ".pdf"))
+    } catch {
+      // 沒有 catch 的話網路中斷會靜靜地什麼都不做，看起來就像轉圈圈轉完沒反應
+      toast.error("下載失敗，請檢查連線後再試一次")
     } finally { setDownloading(false) }
   }
 

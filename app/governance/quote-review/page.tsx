@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useAuth } from "@/hooks/use-auth"
 import { STATUS_MAP, demandStatusKey } from "@/lib/constants/demand"
-import { cn } from "@/lib/utils"
+import { cn, saveBlobAsFile } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   ReceiptText, Lock, Download, Eye, CheckCircle2, Clock, Loader2, Inbox,
@@ -112,10 +112,10 @@ export default function QuoteReviewPage() {
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); toast.error(e.error || "下載失敗"); return }
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url; a.download = item.fileName.replace(/\.[^.]+$/, ".pdf")
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+      if (blob.size === 0) { toast.error("下載失敗：檔案是空的，請稍後再試"); return }
+      saveBlobAsFile(blob, item.fileName.replace(/\.[^.]+$/, ".pdf"))
+    } catch {
+      toast.error("下載失敗，請檢查連線後再試一次")
     } finally {
       setDownloadingId(null)
     }

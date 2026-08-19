@@ -33,3 +33,21 @@ export async function copyText(text: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * 把 Blob 存成檔案。
+ * 重點是不要在 a.click() 之後馬上 revokeObjectURL —— 瀏覽器還在讀那個 URL，
+ * 大檔（例如加了浮水印的 PDF）常常會因此中途被取消，使用者看到的就是
+ * 「轉圈圈轉完卻沒有檔案」。延後回收才安全。
+ */
+export function saveBlobAsFile(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = fileName
+  a.rel = "noopener"
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
