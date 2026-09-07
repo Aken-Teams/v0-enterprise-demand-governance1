@@ -564,6 +564,21 @@ export async function PATCH(
       return NextResponse.json({ demand: { id: updated.id } })
     }
 
+    // 結案 SP 調整送審後，需求等同進入結案結算階段：
+    // 此時往前或往後改狀態都會讓董事會核准的內容與實際情況對不上，一律擋下。
+    if (body.status && body.status !== demand.status) {
+      const pendingClosingSp = await prisma.phaseSignoff.findFirst({
+        where: { demandId: id, kind: "CLOSING_SP", status: "PENDING" },
+        select: { id: true },
+      })
+      if (pendingClosingSp) {
+        return NextResponse.json(
+          { error: "結案 SP 調整待董事會核准中，無法變更階段。如需修改，請先撤回該結案簽核。" },
+          { status: 409 }
+        )
+      }
+    }
+
     // Handle ON_HOLD: save holdReason and record previous status
     if (body.status === "ON_HOLD") {
       if (demand.status === "ON_HOLD") {

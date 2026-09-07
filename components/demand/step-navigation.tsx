@@ -220,6 +220,10 @@ export function StepNavigation({
       setShowForceDialog(true)
       return
     }
+    if (dir === "prev" && closingSpPending) {
+      toast.error("結案 SP 調整待董事會核准中，無法退回上一階段。如需修改，請先撤回該結案簽核。")
+      return
+    }
     setDirection(dir)
     setShowConfirm(true)
   }
@@ -267,17 +271,8 @@ export function StepNavigation({
 
   const handleClosingConfirm = async () => {
     if (!token) return
-    // 尚有待簽核時，必須由使用者明確選擇略過，並留下原因
-    if (hasPendingSignoff && !skipSignoff) {
-      toast.error("此階段仍有待簽核，請先完成簽核，或於第一步勾選「略過此階段簽核」")
-      setClosingStep(0)
-      return
-    }
-    if (skipSignoff && !forceComment.trim()) {
-      toast.error("請於第一步填寫略過簽核的原因")
-      setClosingStep(0)
-      return
-    }
+    // 略過本階段簽核已是獨立且即時生效的動作（見 handleForceAdvance），
+    // 走到這裡代表本階段已無待簽核，不需再做略過相關檢查。
     setLoading(true)
     const spAdj = buildSpAdjustmentPayload()
 
@@ -294,9 +289,6 @@ export function StepNavigation({
             completedDate: inputCompletedDate || null,
             designChangeIds: selectedDcIds,
             override: spOverride,
-            // 略過決定必須跟著送出，否則本階段簽核會一直停在待確認
-            skipSignoff: hasPendingSignoff && skipSignoff,
-            skipComment: forceComment.trim() || null,
           }),
         })
         if (res.ok) {
@@ -316,10 +308,6 @@ export function StepNavigation({
     // SP 未調整 → 照原流程直接結案
     const payload: Record<string, unknown> = { status: "CLOSED" }
     if (inputCompletedDate) payload.completedDate = inputCompletedDate
-    if (hasPendingSignoff && skipSignoff) {
-      payload.forceAdvance = true
-      payload.forceComment = forceComment.trim()
-    }
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
         method: "PATCH",
@@ -477,13 +465,22 @@ export function StepNavigation({
           <span>請記得至下方基本資訊填寫<strong>實際結案日期</strong>，以確保交付率計算正確</span>
         </div>
       )}
+      {closingSpPending && currentStatus !== "CLOSED" && (
+        <div className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50/60 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-orange-800">
+          <ClipboardCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 mt-0.5" />
+          <span>
+            <strong>結案 SP 調整待董事會核准中</strong>，此期間無法變更階段。
+            董事會同意後將自動結案；如需修改內容，請先於簽核紀錄撤回該結案簽核。
+          </span>
+        </div>
+      )}
       {currentStatus !== "CLOSED" && (
         <div className="flex items-center justify-between pt-2.5 sm:pt-3 border-t border-border/40">
           <Button
             variant="outline"
             size="sm"
             className="h-7 sm:h-8 text-xs sm:text-sm px-2.5 sm:px-3"
-            disabled={!canGoPrev}
+            disabled={!canGoPrev || !!closingSpPending}
             onClick={() => handleClick("prev")}
           >
             <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
@@ -492,7 +489,7 @@ export function StepNavigation({
           <Button
             size="sm"
             className="h-7 sm:h-8 text-xs sm:text-sm px-2.5 sm:px-3"
-            disabled={!canGoNext || (!!closingSpPending && nextPhase === "CLOSED")}
+            disabled={!canGoNext || !!closingSpPending}
             onClick={() => handleClick("next")}
           >
             下一步
