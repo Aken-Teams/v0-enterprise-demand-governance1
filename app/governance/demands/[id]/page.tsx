@@ -2485,8 +2485,9 @@ export default function DemandDetailPage() {
               phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
               token={token}
               currentUserId={user?.id}
-              // 設計變更在「已結案」後仍可發起（例如結案後才提出的新需求需調整 SP），
-              // 因此使用 canManage 而非受結案鎖定的 effectiveCanManage。
+              // 已結案後不可再發起設計變更（SP 已依變更紀錄結算並經董事會核准），
+              // 但仍需 canManage 讓管理者檢視既有紀錄；發起與否由後端的
+              // DESIGN_CHANGE_ALLOWED_PHASES 把關。
               canManage={canManage}
               currentSp={demand.confirmedSp ?? demand.estimatedSp}
               watermarkBg={watermarkBg}

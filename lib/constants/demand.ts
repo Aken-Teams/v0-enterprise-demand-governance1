@@ -149,12 +149,17 @@ export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }
   CANCELLED: { label: "已撤回", color: "bg-slate-100 text-slate-600" },
 }
 
-/** 可發起設計變更的階段 (開案/開發中/驗收/已結案；需求確認與 MVP 架構確認不可) */
+/**
+ * 可發起設計變更的階段：開案確認／開發中／驗收中。
+ *
+ * 需求確認與 MVP 架構確認階段：需求還在成形，直接改需求即可。
+ * 已結案：SP 已於結案時依設計變更紀錄結算完畢並經董事會核准，
+ *         此時再開變更會讓結算基準與紀錄對不上，故不開放。
+ */
 export const DESIGN_CHANGE_ALLOWED_PHASES = [
   "SP_REVIEW",
   "DEVELOPING",
   "ACCEPTANCE",
-  "CLOSED",
 ] as const
 
 /** 設計變更 / 版本狀態標籤 */

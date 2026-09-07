@@ -489,18 +489,39 @@ function SubsidiaryGuide() {
               <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
               <Badge className="ml-1 bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
               <Badge className="ml-1 bg-cyan-100 text-cyan-700 text-[10px] sm:text-xs">驗收中</Badge>
-              <Badge className="ml-1 bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge>
             </p>
           </div>
 
           <div className="border-t pt-3">
-            <p className="font-medium text-foreground mb-1.5 sm:mb-2">審核流程</p>
-            <ol className="space-y-1.5 list-decimal list-inside">
-              <li>收到設計變更通知後，進入需求詳情頁的「設計變更」分頁</li>
-              <li>閱讀變更摘要與附件，並逐條檢視檢查清單</li>
-              <li>每一條可標記<span className="font-medium text-foreground">確認</span> / <span className="font-medium text-foreground">疑慮</span> / <span className="font-medium text-foreground">問題</span>並補充說明；有疑慮或問題可附上佐證檔案</li>
-              <li>全部項目皆<span className="font-medium text-foreground">確認</span>後即可<span className="font-medium text-foreground">通過</span>；若有疑慮或問題請<span className="font-medium text-foreground">退回</span>並說明，由開發端修訂後重新送出</li>
-            </ol>
+            <p className="font-medium text-foreground mb-1.5 sm:mb-2">審核流程（兩關）</p>
+            <p className="leading-relaxed mb-2">
+              設計變更要通過<span className="font-medium text-foreground">兩關</span>：先決定「這個變更該不該開」，再逐條確認「內容對不對」。
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 sm:p-3">
+                <p className="font-medium text-amber-900 mb-1">第一關 · 設計變更確認</p>
+                <p className="leading-relaxed text-amber-800">
+                  由<span className="font-medium">董事會</span>與<span className="font-medium">需求窗口</span>裁決是否同意開立此變更。
+                  兩方<span className="font-medium">同時進行、誰先簽都可以</span>，不分先後；此關<span className="font-medium">不需</span>逐條勾選檢查清單。
+                  只要有一方駁回，此設計變更即中止，不會進入第二關。
+                </p>
+              </div>
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-2.5 sm:p-3">
+                <p className="font-medium text-indigo-900 mb-1">第二關 · 逐條確認</p>
+                <ol className="space-y-1 list-decimal list-inside text-indigo-800">
+                  <li>閱讀變更摘要與附件，逐條檢視檢查清單</li>
+                  <li>每一條標記<span className="font-medium">確認</span> / <span className="font-medium">疑慮</span> / <span className="font-medium">問題</span>並補充說明；有疑慮或問題可附上佐證檔案</li>
+                  <li>全部項目皆<span className="font-medium">確認</span>後才能<span className="font-medium">通過</span>；有疑慮或問題請<span className="font-medium">退回</span>，由開發端修訂後重新送出</li>
+                </ol>
+                <p className="mt-1.5 text-[11px] text-indigo-700/80">
+                  由<span className="font-medium">需求窗口</span>（必要）與<span className="font-medium">需求主管</span>（若有指派）進行。
+                  需求窗口在兩關都要簽 —— 第一關是「准不准開」，第二關是「內容對不對」，不是重複簽核。
+                </p>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground/80">
+              開發端修訂後重送的新版本，若第一關先前已通過，會<span className="font-medium text-foreground">直接回到第二關</span>，不必重新裁決要不要開。
+            </p>
           </div>
 
           <div className="border-t pt-3">
@@ -543,13 +564,15 @@ function SubsidiaryGuide() {
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
                 <span>
-                  審核人為<span className="font-medium text-foreground">需求窗口</span>（必要）；若有指派<span className="font-medium text-foreground">需求主管</span>則需一併通過。若此變更<span className="font-medium text-foreground">影響 SP</span>，需求方通過後會再送<span className="font-medium text-foreground">董事會</span>確認 SP 調整。
+                  <span className="font-medium text-foreground">董事會一律參與第一關</span>，不論此變更是否影響 SP —— 所有設計變更都需要董事會背書。
+                  第二關則由<span className="font-medium text-foreground">需求窗口</span>（必要）與<span className="font-medium text-foreground">需求主管</span>（若有指派）逐條確認。
                 </span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
                 <span>
-                  通過後<span className="font-medium text-foreground">不會</span>自動調整需求狀態或 SP 點數，相關 SP 增減於結案時一併結算。
+                  通過後<span className="font-medium text-foreground">不會</span>立即調整需求狀態或 SP 點數。
+                  相關 SP 增減會在<span className="font-medium text-foreground">結案時</span>依已通過的設計變更自動加總，並送<span className="font-medium text-foreground">董事會簽核</span>，同意後才完成結案。
                 </span>
               </li>
               <li className="flex items-start gap-2">
@@ -868,7 +891,6 @@ function AdminDeliveryGuide() {
               <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
               <Badge className="ml-1 bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
               <Badge className="ml-1 bg-cyan-100 text-cyan-700 text-[10px] sm:text-xs">驗收中</Badge>
-              <Badge className="ml-1 bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge>
             </p>
           </div>
 
@@ -879,29 +901,75 @@ function AdminDeliveryGuide() {
               <li>填寫<span className="font-medium text-foreground">變更標題</span>與<span className="font-medium text-foreground">變更摘要</span>（皆必填）；可貼上 Markdown 檢查清單，系統會拆成逐條供需求方確認</li>
               <li><span className="font-medium text-foreground">需求窗口</span>預設沿用專案設定，可手動改選；若此變更<span className="font-medium text-foreground">影響 SP</span>，請勾選並填寫上調／下降的數量</li>
               <li>（選填）上傳相關附件（會議紀錄、修訂的設計稿等）</li>
-              <li>送出後系統會自動通知審核人；送出後若發現填錯，可用「編輯」修正</li>
+              <li>送出後系統會自動通知<span className="font-medium text-foreground">第一關</span>審核人（董事會與需求窗口）；送出後若發現填錯，可用「編輯」修正</li>
             </ol>
           </div>
 
           <div className="border-t pt-3">
-            <p className="font-medium text-foreground mb-2">審核人員（依序）</p>
+            <p className="font-medium text-foreground mb-2">審核關卡（兩關）</p>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 sm:p-3">
+                <p className="font-medium text-amber-900 mb-1">第一關 · 設計變更確認（併行）</p>
+                <ul className="space-y-1 text-amber-800">
+                  <li>· <span className="font-medium">董事會</span> — 一律參與，<span className="font-medium">不論是否影響 SP</span>；依「一間公司一位」的優先序自動指派</li>
+                  <li>· <span className="font-medium">需求窗口</span> — 預設為專案需求窗口，發起時可手動改選</li>
+                </ul>
+                <p className="mt-1.5 text-[11px] text-amber-700/80">
+                  兩方併行、誰先簽都可以；此關只裁決「准不准開」，不需逐條勾選。
+                  任一方駁回即中止，不會進入第二關。
+                </p>
+              </div>
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-2.5 sm:p-3">
+                <p className="font-medium text-indigo-900 mb-1">第二關 · 逐條確認（併行）</p>
+                <ul className="space-y-1 text-indigo-800">
+                  <li>· <span className="font-medium">需求窗口（必要）</span> — 沿用第一關指定的窗口</li>
+                  <li>· <span className="font-medium">需求主管（若有指派）</span> — 需一併通過</li>
+                </ul>
+                <p className="mt-1.5 text-[11px] text-indigo-700/80">
+                  逐條確認檢查清單，<span className="font-medium">全部標記為「確認」</span>才能通過。此關通過後，整筆設計變更才算完成。
+                </p>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground/80">
+              被退回後重送的新版本：若第一關先前已通過，新版本會<span className="font-medium text-foreground">直接進入第二關</span>；
+              若當初是卡在第一關，才需要重走一次。
+            </p>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="font-medium text-foreground mb-2">結案時的 SP 結算</p>
+            <p className="leading-relaxed mb-2">
+              結案若 SP 有變動，<span className="font-medium text-foreground">必須經董事會簽核</span>才能完成結案。金額由系統依設計變更紀錄推算，管理者不需自行計算。
+            </p>
             <ul className="space-y-1.5">
               <li className="flex items-start gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
                 <span>
-                  <span className="font-medium text-foreground">需求窗口（必要）</span> — 逐條確認檢查清單，全部確認才能通過；預設為專案需求窗口，發起時可手動改選
+                  <span className="font-medium text-foreground">只認最終通過的版本</span> —— 例如某設計變更提出 +2 被退回、改為 +1 才通過，只計 <span className="font-medium text-foreground">+1</span>；整筆被駁回的設計變更則<span className="font-medium text-foreground">完全不計</span>。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
+                <span>
+                  結案 SP ＝ 專案原始 SP ＋ 所有已通過設計變更的增減總和。系統會自動帶入並<span className="font-medium text-foreground">鎖定欄位</span>，同時預先勾選造成調整的設計變更供董事會對照。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
+                <span>
+                  送出後需求<span className="font-medium text-foreground">不會立即結案</span>，狀態顯示為<span className="font-medium text-foreground">「結案簽核中」</span>；此期間<span className="font-medium text-foreground">無法變更階段</span>，也不能重複送出申請。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
+                <span>
+                  董事會<span className="font-medium text-foreground">同意</span>後才實際套用 SP 並結案；<span className="font-medium text-foreground">退回</span>則維持原階段，可修正後重送。若需修改內容，請先於簽核紀錄<span className="font-medium text-foreground">撤回</span>該結案簽核。
                 </span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
                 <span>
-                  <span className="font-medium text-foreground">需求主管（若有指派）</span> — 需一併通過
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
-                <span>
-                  <span className="font-medium text-foreground">董事會（僅影響 SP 時）</span> — 需求方全部通過後，若此變更影響 SP，會自動加入該公司對應的董事會審核 SP 調整，通過後才算完成
+                  例外情況可勾選<span className="font-medium text-foreground">手動覆寫</span>自行填寫金額，但<span className="font-medium text-foreground">必須說明原因</span>，且會記入操作紀錄供事後查核。
                 </span>
               </li>
             </ul>
@@ -927,7 +995,8 @@ function AdminDeliveryGuide() {
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
                 <span>
-                  設計變更的核心是<span className="font-medium text-foreground">留下需求新增／調整的證據</span>；相關 SP 增減請於<span className="font-medium text-foreground">結案階段</span>一併結算，勿於中途逕自修改已確認的 SP。
+                  設計變更的核心是<span className="font-medium text-foreground">留下需求新增／調整的證據</span>；相關 SP 增減一律於<span className="font-medium text-foreground">結案階段</span>結算，勿於中途逕自修改已確認的 SP。
+                  結案時系統會<span className="font-medium text-foreground">自動依已通過的設計變更加總</span>，不需人工計算或填寫（詳見下方「結案時的 SP 結算」）。
                 </span>
               </li>
               <li className="flex items-start gap-2">
@@ -1008,7 +1077,7 @@ function AdminDeliveryGuide() {
                     <span className="text-red-700">現有內容不符合 → 駁回</span>；
                     <span className="text-indigo-700">有新需求需要討論 → 設計變更</span>。
                   </p>
-                  <p>設計變更可於開案確認、開發中、驗收中、已結案階段發起。</p>
+                  <p>設計變更可於開案確認、開發中、驗收中階段發起；<span className="font-medium text-foreground">已結案後不可再發起</span>（SP 已於結案時結算並經董事會核准）。</p>
                 </div>
               </AccordionContent>
             </AccordionItem>
