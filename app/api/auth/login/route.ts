@@ -3,8 +3,7 @@ import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import { logAudit } from "@/lib/audit"
-
-const JWT_SECRET = process.env.JWT_SECRET || "REDACTED-SECRET-ROTATED"
+import { getJwtSecret } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
         role: user.role,
         adminScopeType: user.role === "admin" ? (user.adminScopeType || "all") : undefined,
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: "7d" }
     )
 

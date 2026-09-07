@@ -3,7 +3,18 @@ import { createHash } from "crypto"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 
-const JWT_SECRET = process.env.JWT_SECRET || "REDACTED-SECRET-ROTATED"
+/**
+ * 取得 JWT 簽發/驗證密鑰。
+ * 未設定 JWT_SECRET 時直接拋錯，避免正式環境誤用可預測的預設值導致 token 可被偽造。
+ * 採呼叫時才讀取（而非模組載入時），確保建置階段不會因環境變數尚未注入而失敗。
+ */
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error("環境變數 JWT_SECRET 未設定，無法簽發或驗證認證令牌")
+  }
+  return secret
+}
 
 export interface JwtPayload {
   userId: string
@@ -27,8 +38,10 @@ export function verifyAuth(request: NextRequest): JwtPayload {
     throw new AuthError("未提供認證令牌", 401)
   }
   const token = authHeader.slice(7)
+  // 先取密鑰：缺少設定屬伺服器設定錯誤，不可被下方 catch 誤判為「令牌無效」
+  const secret = getJwtSecret()
   try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload
+    return jwt.verify(token, secret) as JwtPayload
   } catch {
     throw new AuthError("認證令牌無效或已過期", 401)
   }

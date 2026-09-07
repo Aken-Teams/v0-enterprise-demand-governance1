@@ -3,8 +3,7 @@ import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import { canAccessDemand } from "@/lib/demand-access"
-
-const JWT_SECRET = process.env.JWT_SECRET || "REDACTED-SECRET-ROTATED"
+import { getJwtSecret } from "@/lib/auth"
 
 // POST: Login via share page (validates share token + user credentials + demand access)
 export async function POST(
@@ -103,7 +102,7 @@ export async function POST(
         email: user.email,
         role: user.role,
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: "7d" }
     )
 
