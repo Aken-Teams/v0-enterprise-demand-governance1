@@ -208,6 +208,7 @@ model User {
   auditLogs          AuditLog[]
   sentMailLogs       MailLog[]
   apiKeys            ApiKey[]
+  processDocs        ProcessDoc[]
 
   @@map("users")
 }
@@ -744,6 +745,23 @@ model MailLog {
   @@index([type])
   @@index([createdAt])
   @@map("mail_logs")
+}
+
+/// 開發流程規範文件（Markdown 逐版保存，供各方比對「為什麼流程要這樣跑」）
+/// 內容存資料庫而非檔案：既能做版本差異比對，也避免檔案 URL 變成繞過唯讀限制的下載入口。
+model ProcessDoc {
+  id           String   @id @default(cuid())
+  seq          Int      @unique /// 系統流水版次（遞增，用於排序與差異比對）
+  versionLabel String   /// 顯示版本號，例如 "v1.3"
+  title        String
+  content      String   @db.LongText /// Markdown 原文
+  changeNote   String?  @db.Text /// 本版修改摘要
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([seq])
+  @@map("process_docs")
 }
 
 /// 外部 API 金鑰

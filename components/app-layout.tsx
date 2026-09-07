@@ -26,6 +26,7 @@ import {
   FileText,
   KeyRound,
   ReceiptText,
+  BookOpenCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -116,6 +117,7 @@ const navSections: NavSection[] = [
     title: "共用",
     roles: ["subsidiary", "admin", "delivery", "viewer"],
     items: [
+      { title: "開發流程", href: "/process", icon: BookOpenCheck, roles: ["subsidiary", "admin", "delivery", "viewer"] },
       { title: "使用指南", href: "/documents", icon: BookOpen, roles: ["subsidiary", "admin", "delivery", "viewer"] },
       { title: "文件範本", href: "/documents/templates", icon: FileText, roles: ["admin", "delivery"] },
     ],
