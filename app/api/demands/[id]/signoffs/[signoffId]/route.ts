@@ -486,6 +486,17 @@ export async function PATCH(
                   update: { usedSp: { increment: delta } },
                 })
               }
+
+              // 需求已結案，殘留的階段待簽核不再有意義，一併標記略過避免永遠掛著
+              await tx.phaseSignoff.updateMany({
+                where: { demandId: id, status: "PENDING", id: { not: signoffId } },
+                data: {
+                  status: "SKIPPED",
+                  comment: "需求已結案（結案 SP 調整經董事會核准），自動略過",
+                  respondedAt: now,
+                  respondedById: auth.userId,
+                },
+              })
             })
 
             const fromLabel = STATUS_MAP[fromStatus]?.label ?? fromStatus

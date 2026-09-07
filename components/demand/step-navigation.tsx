@@ -152,16 +152,18 @@ export function StepNavigation({
   )
 
   const handleClick = (dir: "next" | "prev") => {
-    if (dir === "next" && hasPendingSignoff) {
-      // Show force advance dialog instead
-      setShowForceDialog(true)
-      return
-    }
+    // 結案必須走精靈（文件確認／SP 調整／關聯設計變更／董事會簽核），
+    // 即使還有待簽核也一樣——略過簽核改在精靈第一步處理，不可整段跳過結案流程。
     if (dir === "next" && nextPhase === "CLOSED") {
       setDirection("next")
       setClosingStep(0)
       setShowClosingWizard(true)
       loadApprovedDcs()
+      return
+    }
+    if (dir === "next" && hasPendingSignoff) {
+      // Show force advance dialog instead
+      setShowForceDialog(true)
       return
     }
     setDirection(dir)
@@ -189,14 +191,8 @@ export function StepNavigation({
     if (!token) return
     setLoading(true)
     const targetStatus = direction === "next" ? nextPhase : prevPhase
+    // 註：CLOSED 一律由結案精靈處理（見 handleClick），此路徑不會結案
     const payload: Record<string, unknown> = { status: targetStatus }
-    if (targetStatus === "CLOSED" && inputCompletedDate) {
-      payload.completedDate = inputCompletedDate
-    }
-    if (targetStatus === "CLOSED") {
-      const spAdj = buildSpAdjustmentPayload()
-      if (spAdj) payload.spAdjustment = spAdj
-    }
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
         method: "PATCH",
@@ -217,6 +213,12 @@ export function StepNavigation({
 
   const handleClosingConfirm = async () => {
     if (!token) return
+    // 略過簽核必須留下原因（與 handleForceAdvance 一致）
+    if (hasPendingSignoff && !forceComment.trim()) {
+      toast.error("此階段仍有待簽核，請於第一步填寫略過原因")
+      setClosingStep(0)
+      return
+    }
     setLoading(true)
     const spAdj = buildSpAdjustmentPayload()
 
@@ -251,6 +253,10 @@ export function StepNavigation({
     // SP 未調整 → 照原流程直接結案
     const payload: Record<string, unknown> = { status: "CLOSED" }
     if (inputCompletedDate) payload.completedDate = inputCompletedDate
+    if (hasPendingSignoff) {
+      payload.forceAdvance = true
+      payload.forceComment = forceComment.trim()
+    }
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
         method: "PATCH",
@@ -278,13 +284,8 @@ export function StepNavigation({
       forceAdvance: true,
       forceComment: forceComment.trim(),
     }
-    if (targetStatus === "CLOSED" && inputCompletedDate) {
-      payload.completedDate = inputCompletedDate
-    }
-    if (targetStatus === "CLOSED") {
-      const spAdj = buildSpAdjustmentPayload()
-      if (spAdj) payload.spAdjustment = spAdj
-    }
+    // 註：結案不會走到這裡（handleClick 已讓 CLOSED 一律進入結案精靈），
+    // 故不再處理完成日期與 SP 調整——SP 調整必須經董事會簽核。
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
         method: "PATCH",
@@ -549,6 +550,26 @@ export function StepNavigation({
                       <ClipboardCheck className="h-4 w-4 shrink-0" />
                       <span className="font-medium">尚未取得需求者簽核</span>
                     </div>
+                  </div>
+                )}
+
+                {/* 仍有待簽核 → 必須寫明略過原因，該輪簽核會被標記為「管理者略過」 */}
+                {hasPendingSignoff && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                      <p className="text-sm font-semibold text-amber-800">此階段仍有待簽核，結案將略過簽核</p>
+                    </div>
+                    <p className="text-xs text-amber-700">
+                      繼續結案會把本輪待簽核標記為「管理者略過」，請說明原因以留下紀錄。
+                    </p>
+                    <Textarea
+                      value={forceComment}
+                      onChange={(e) => setForceComment(e.target.value)}
+                      placeholder="請說明略過簽核的原因…"
+                      rows={2}
+                      className="bg-background"
+                    />
                   </div>
                 )}
 
