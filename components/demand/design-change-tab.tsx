@@ -6,15 +6,17 @@ import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypeRaw from "rehype-raw"
 import { mermaidMarkdownComponents } from "@/components/mermaid-block"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import {
   FileEdit, Plus, ChevronDown, ChevronRight, Check, X, Paperclip, Loader2,
-  CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban, Save, UserCheck,
+  CircleDollarSign, FileText, ListChecks, Maximize2, Trash2, FileIcon, Eye, ClipboardCheck, Upload, Ban, Save, UserCheck, Info,
 } from "lucide-react"
 import { DESIGN_CHANGE_STATUS_MAP, CHECKLIST_MARK_MAP, STATUS_MAP } from "@/lib/constants/demand"
 import { DesignChangeEditorDialog } from "@/components/demand/design-change-editor-dialog"
@@ -52,6 +54,16 @@ export interface PreviewableDoc { id: string; type: string; fileName: string; fi
 const ROLE_LABELS: Record<string, string> = { REQUESTER: "需求窗口", MANAGER: "需求主管", BOARD: "董事會" }
 /** 目前所處階段：設計變更確認（董事會+需求窗口）通過後，才進入逐條確認 */
 const activeStageOf = (rev: { gateStatus: string }) => (rev.gateStatus === "APPROVED" ? "CONTENT" : "GATE")
+
+/**
+ * 版本被駁回時是卡在哪一關。
+ * 只看整體狀態會分不出「第一關就沒過」與「第一關過了但內容被退」，
+ * 而這兩者對開發端的意義完全不同（前者要重新說服，後者只要改內容）。
+ */
+const rejectedStageLabel = (rev: { status: string; gateStatus: string }): string | null => {
+  if (rev.status !== "REJECTED") return null
+  return rev.gateStatus === "REJECTED" ? "第一關" : "第二關"
+}
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 function StatusBadge({ status }: { status: string }) {
@@ -103,6 +115,8 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
   const [deleteDcTarget, setDeleteDcTarget] = useState<DesignChange | null>(null)
   const [deleteFileTarget, setDeleteFileTarget] = useState<{ dcId: string; doc: DcDocument } | null>(null)
   const [draft, setDraft] = useState<Record<string, DraftState>>({})
+  /** 右側面板分頁：內容（文件＋檢查清單）/ 審核結果 */
+  const [rightTab, setRightTab] = useState<Record<string, "content" | "reviews">>({})
   const [submitting, setSubmitting] = useState<string | null>(null)
   const [draftStatus, setDraftStatus] = useState<Record<string, "saving" | "saved">>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -219,7 +233,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
         setDraft((d) => ({ ...d, [dc.id]: emptyDraft() }))
         await load()
       }
-      else { const e = await res.json().catch(() => ({})); alert(e.error || "送出失敗") }
+      else { const e = await res.json().catch(() => ({})); toast.error(e.error || "送出失敗") }
     } finally { setSubmitting(null) }
   }
 
@@ -249,7 +263,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
         }
       } else {
         setDraftStatus((s) => { const n = { ...s }; delete n[dc.id]; return n })
-        if (withFiles) { const e = await res.json().catch(() => ({})); alert(e.error || "暫存失敗") }
+        if (withFiles) { const e = await res.json().catch(() => ({})); toast.error(e.error || "暫存失敗") }
       }
     } catch {
       setDraftStatus((s) => { const n = { ...s }; delete n[dc.id]; return n })
@@ -272,7 +286,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
     try {
       const res = await fetch(`/api/demands/${demandId}/design-changes/${dc.id}/cancel`, { method: "POST", headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) { setCancelTarget(null); await load() }
-      else { const e = await res.json().catch(() => ({})); alert(e.error || "撤銷失敗") }
+      else { const e = await res.json().catch(() => ({})); toast.error(e.error || "撤銷失敗") }
     } finally { setSubmitting(null) }
   }
 
@@ -283,7 +297,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
     try {
       const res = await fetch(`/api/demands/${demandId}/design-changes/${dc.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) { setDeleteDcTarget(null); await load() }
-      else { const e = await res.json().catch(() => ({})); alert(e.error || "刪除失敗") }
+      else { const e = await res.json().catch(() => ({})); toast.error(e.error || "刪除失敗") }
     } finally { setSubmitting(null) }
   }
 
@@ -302,7 +316,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           return c
         })
         await load()
-      } else { const e = await res.json().catch(() => ({})); alert(e.error || "刪除失敗") }
+      } else { const e = await res.json().catch(() => ({})); toast.error(e.error || "刪除失敗") }
     } finally { setSubmitting(null) }
   }
 
@@ -334,7 +348,9 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           const iReview = myPendingReview(latest) && rev.version === dc.currentVersion
           const selection = selOf(dc, rev)
           const cur = dd(dc.id)
-          const allConfirmed = rev.items.length > 0 && rev.items.every((it) => (cur.items[it.id]?.mark ?? "PENDING") === "CONFIRMED")
+          const rt = rightTab[dc.id] ?? "content"
+          // 沒有檢查項目時視同已確認——無項目可勾，不該卡住通過（伺服器端亦放行）
+          const allConfirmed = rev.items.length === 0 || rev.items.every((it) => (cur.items[it.id]?.mark ?? "PENDING") === "CONFIRMED")
           // 設計變更確認只裁決「准不准開」，不受「全部確認」限制；逐條確認才需全數確認
           const activeStage = activeStageOf(rev)
           const canApprove = allConfirmed || activeStage === "GATE"
@@ -434,6 +450,11 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     <span>·</span>
                     <span>v{rev.version} · {fmt(rev.submittedAt)}</span>
                     <StatusBadge status={rev.status} />
+                    {rejectedStageLabel(rev) && (
+                      <span className="text-[10px] rounded bg-red-50 text-red-600 border border-red-200 px-1.5 py-px">
+                        {rejectedStageLabel(rev)}駁回
+                      </span>
+                    )}
                     {dc.revisions.length > 1 && (
                       <div className="flex items-center gap-1.5 ml-auto">
                         <span>版本</span>
@@ -445,6 +466,11 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                                 <span className="flex items-center gap-1.5">
                                   <span className="font-medium">v{r.version}</span>
                                   <StatusBadge status={r.status} />
+                                  {rejectedStageLabel(r) && (
+                                    <span className="text-[10px] rounded bg-red-50 text-red-600 border border-red-200 px-1 py-px">
+                                      {rejectedStageLabel(r)}
+                                    </span>
+                                  )}
                                   <span className="text-muted-foreground">{r.submittedBy.name} · {fmt(r.submittedAt)}</span>
                                 </span>
                               </SelectItem>
@@ -647,7 +673,32 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
 
                     {/* RIGHT: 導覽卡（檔案優先、checklist 最後）+ 審核 */}
                     <Card className="lg:col-span-2 flex flex-col max-h-[70vh] lg:max-h-[560px]">
+                      {/* 右側分頁：內容（文件＋檢查清單） / 審核結果 */}
+                      <div className="flex items-center gap-1 border-b px-3 pt-2.5 shrink-0">
+                        {([
+                          { k: "content" as const, label: "內容" },
+                          { k: "reviews" as const, label: "審核結果" },
+                        ]).map((t) => (
+                          <button
+                            key={t.k}
+                            type="button"
+                            onClick={() => setRightTab((s) => ({ ...s, [dc.id]: t.k }))}
+                            className={cn(
+                              "px-2.5 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors",
+                              rt === t.k
+                                ? "border-indigo-500 text-indigo-700"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {t.label}
+                            {t.k === "reviews" && decidedReviews.length > 0 && (
+                              <span className="ml-1 text-[10px] rounded-full bg-muted px-1.5 py-px">{decidedReviews.length}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
                       <div className="p-3 space-y-3 overflow-y-auto flex-1 min-h-0">
+                        {rt === "content" && (<>
                         {/* 檔案（開發端文件） */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
@@ -711,22 +762,42 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                           )
                         })()}
 
-                        {/* 審核結果（需求方裁決 + 說明 + 佐證） */}
-                        {(decidedReviews.length > 0 || reviewerDocs.length > 0) && (
-                          <div className="border-t pt-3">
-                            <p className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><ClipboardCheck className="h-4 w-4" />審核結果</p>
-                            <div className="space-y-2">
-                              {decidedReviews.map((r) => (
-                                <div key={r.reviewerId} className="rounded-md border p-2">
-                                  <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                                    <Badge variant="outline" className="text-[10px]">{ROLE_LABELS[r.role] ?? r.role}</Badge>
-                                    <span className="text-muted-foreground">{r.reviewer.name}</span>
-                                    <StatusBadge status={r.decision} />
-                                    {r.decidedAt && <span className="text-muted-foreground ml-auto">{fmt(r.decidedAt)}</span>}
+                        </>)}
+
+                        {/* 審核結果：依關卡分組，關卡內依裁決時間排序 */}
+                        {rt === "reviews" && (
+                          decidedReviews.length === 0 && reviewerDocs.length === 0 ? (
+                            <p className="text-xs text-muted-foreground text-center py-8">尚無審核紀錄</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {(["GATE", "CONTENT"] as const).map((st) => {
+                                const rows = decidedReviews
+                                  .filter((r) => r.stage === st)
+                                  .sort((a, b) => new Date(a.decidedAt ?? 0).getTime() - new Date(b.decidedAt ?? 0).getTime())
+                                if (rows.length === 0) return null
+                                return (
+                                  <div key={st}>
+                                    <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                                      <ClipboardCheck className="h-3.5 w-3.5" />
+                                      {st === "GATE" ? "第一關 · 設計變更確認" : "第二關 · 逐條確認"}
+                                    </p>
+                                    <div className="space-y-2">
+                                      {rows.map((r) => (
+                                        // 同一人可能在兩關各留一筆，key 必須帶 stage
+                                        <div key={`${r.stage}-${r.reviewerId}`} className="rounded-md border p-2">
+                                          <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                                            <Badge variant="outline" className="text-[10px]">{ROLE_LABELS[r.role] ?? r.role}</Badge>
+                                            <span className="text-muted-foreground">{r.reviewer.name}</span>
+                                            <StatusBadge status={r.decision} />
+                                            {r.decidedAt && <span className="text-muted-foreground ml-auto">{fmt(r.decidedAt)}</span>}
+                                          </div>
+                                          {r.comment && <p className="text-xs mt-1.5 whitespace-pre-line">{r.comment}</p>}
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                  {r.comment && <p className="text-xs mt-1.5 whitespace-pre-line">{r.comment}</p>}
-                                </div>
-                              ))}
+                                )
+                              })}
                               {reviewerDocs.length > 0 && (
                                 <div>
                                   <p className="text-[11px] text-muted-foreground mb-1">需求方佐證</p>
@@ -745,14 +816,33 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                                 </div>
                               )}
                             </div>
-                          </div>
+                          )
                         )}
                       </div>
 
                       {/* 審核動作 */}
                       {iReview && (
                         <div className="border-t p-3 space-y-2 mt-auto">
-                          <p className="text-[11px] font-semibold text-muted-foreground">審核</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] font-semibold text-muted-foreground">審核</p>
+                            <TooltipProvider delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" aria-label="審核說明" className="text-muted-foreground/60 hover:text-muted-foreground">
+                                    <Info className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-[280px] text-xs leading-relaxed">
+                                  {activeStage === "GATE" ? (
+                                    <p>設計變更確認：請裁決是否同意開立此設計變更。董事會與需求窗口皆同意後，才會開放逐條確認。</p>
+                                  ) : (
+                                    <p>逐條確認（第二關）：此變更已通過第一關的「設計變更確認」，現在請逐項確認變更內容的細節。</p>
+                                  )}
+                                  <p className="mt-1.5 text-muted-foreground">不必一次審完 —— 標記或附加檔案都會自動暫存，可分次完成，最後再按通過／駁回送出。</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                           <Textarea value={cur.comment} onChange={(e) => { setOverall(dc.id, e.target.value); scheduleAutoSave(dc, rev) }} placeholder="回饋／總回應（選填；駁回請說明或標記問題項目）..." rows={2} className="text-xs" />
                           {cur.files.length > 0 && (
                             <div className="space-y-1">
@@ -764,18 +854,9 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                               ))}
                             </div>
                           )}
-                          {activeStage === "GATE" && (
-                            <p className="text-xs sm:text-sm text-indigo-700">設計變更確認：請裁決是否同意開立此設計變更。董事會與需求窗口皆同意後，才會開放逐條確認。</p>
-                          )}
-                          {activeStage === "CONTENT" && (
-                            <p className="text-xs sm:text-sm text-indigo-700">
-                              逐條確認（第二關）：此變更已通過第一關的「設計變更確認」，現在請逐項確認變更內容的細節。
-                            </p>
-                          )}
                           {!canApprove && activeStage === "CONTENT" && (
                             <p className="text-[11px] text-amber-600">需將全部檢查項目標記為「確認」才能通過（有疑慮/問題請駁回）。</p>
                           )}
-                          <p className="text-[11px] text-muted-foreground/80">不必一次審完 —— 標記或附加檔案都會自動暫存，可分次完成，最後再按通過／駁回送出。</p>
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-2 min-w-0">
                               <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0" onClick={() => openFilePicker("review:" + dc.id)}>
@@ -862,7 +943,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           if (!token) return
           const fd = new FormData(); picked.forEach((f) => fd.append("files", f))
           const res = await fetch(`/api/demands/${demandId}/design-changes/${target}/documents`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })
-          if (res.ok) await load(); else { const err = await res.json().catch(() => ({})); alert(err.error || "上傳失敗") }
+          if (res.ok) await load(); else { const err = await res.json().catch(() => ({})); toast.error(err.error || "上傳失敗") }
         }} />
 
       <DesignChangeEditorDialog

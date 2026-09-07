@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { canAdminWrite } from "@/lib/demand-access"
 import { DESIGN_CHANGE_ALLOWED_PHASES, STATUS_MAP } from "@/lib/constants/demand"
-import { parseChecklistMarkdown, resolveGateReviewers } from "@/lib/design-change"
+import { parseChecklistMarkdown, resolveGateReviewers, resolveDesignChangeReviewers } from "@/lib/design-change"
 import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 
@@ -49,7 +49,11 @@ export async function POST(
       where: { id: dcId },
       include: {
         demand: { select: { id: true, demandNumber: true, title: true, status: true, organizationId: true, contactPersonId: true, demandManagerId: true, estimatedSp: true, confirmedSp: true } },
-        revisions: { orderBy: { version: "desc" }, take: 1 },
+        revisions: {
+          orderBy: { version: "desc" },
+          take: 1,
+          include: { reviews: { select: { reviewerId: true, role: true, stage: true } } },
+        },
       },
     })
     if (!dc || dc.demandId !== id) return NextResponse.json({ error: "設計變更不存在" }, { status: 404 })
@@ -70,8 +74,21 @@ export async function POST(
       return NextResponse.json({ error: "此設計變更已通過，無需再修訂" }, { status: 400 })
     }
 
-    // 新版本重新走一次設計變更確認（董事會 + 需求窗口）
-    const reviewers = await resolveGateReviewers(dc.demand)
+    // 第一關（設計變更確認）決定的是「這個變更該不該開」——一旦通過就有共識，
+    // 之後的修訂版只是調整內容，應直接回到第二關逐條確認，不必再問一次要不要開。
+    // 只有當上一版是「卡在第一關」時，新版本才需要重走第一關。
+    const gatePassed = latest?.gateStatus === "APPROVED"
+
+    // 沿用上一版指定的需求窗口（可能經手動指定，不能直接用專案預設）
+    const prevRequesterId =
+      latest?.reviews.find((r) => r.stage === "GATE" && r.role === "REQUESTER")?.reviewerId ??
+      latest?.reviews.find((r) => r.role === "REQUESTER")?.reviewerId ??
+      dc.demand.contactPersonId
+
+    const reviewStage: "GATE" | "CONTENT" = gatePassed ? "CONTENT" : "GATE"
+    const reviewers = gatePassed
+      ? resolveDesignChangeReviewers(dc.demand, { contactPersonOverride: prevRequesterId })
+      : await resolveGateReviewers(dc.demand, { contactPersonOverride: prevRequesterId })
     const checklistItems = parseChecklistMarkdown(checklistMd)
     const nextVersion = (latest?.version ?? 0) + 1
     const spCurrent = affectsSp ? (dc.demand.confirmedSp ?? dc.demand.estimatedSp) : null
@@ -86,6 +103,8 @@ export async function POST(
         data: {
           designChangeId: dc.id, version: nextVersion, summary, checklistMd, affectsSp, spCurrent, spDelta, spNote,
           status: "PENDING", submittedById: auth.userId,
+          // 已通過第一關者，新版本直接視為第一關已完成
+          gateStatus: gatePassed ? "APPROVED" : "PENDING",
         },
       })
       if (checklistItems.length > 0) {
@@ -95,7 +114,7 @@ export async function POST(
       }
       if (reviewers.length > 0) {
         await tx.designChangeReview.createMany({
-          data: reviewers.map((rv) => ({ revisionId: r.id, reviewerId: rv.userId, role: rv.role, stage: "GATE", decision: "PENDING" as const })),
+          data: reviewers.map((rv) => ({ revisionId: r.id, reviewerId: rv.userId, role: rv.role, stage: reviewStage, decision: "PENDING" as const })),
         })
       }
       await tx.designChange.update({
@@ -123,13 +142,15 @@ export async function POST(
       notifyUsers(recipients, {
         type: "SIGNOFF",
         title: "設計變更已更新，待重新確認",
-        message: `需求 ${dc.demand.demandNumber}「${dc.demand.title}」的設計變更「${dc.title}」已更新為 v${nextVersion}（${phaseLabel}），請重新確認是否同意開立此變更。`,
+        message: gatePassed
+          ? `需求 ${dc.demand.demandNumber}「${dc.demand.title}」的設計變更「${dc.title}」已更新為 v${nextVersion}（${phaseLabel}），請逐項確認變更內容。`
+          : `需求 ${dc.demand.demandNumber}「${dc.demand.title}」的設計變更「${dc.title}」已更新為 v${nextVersion}（${phaseLabel}），請重新確認是否同意開立此變更。`,
         linkUrl: `/demands/${id}`,
       })
     }
     logAudit({
       userId: auth.userId, action: "SIGNOFF_REQUEST", entity: "SIGNOFF", entityId: dc.id, demandId: id,
-      details: { kind: "DESIGN_CHANGE_REVISION", stage: "GATE", seq: dc.seq, version: nextVersion, affectsSp },
+      details: { kind: "DESIGN_CHANGE_REVISION", stage: reviewStage, seq: dc.seq, version: nextVersion, affectsSp },
       request,
     })
 
