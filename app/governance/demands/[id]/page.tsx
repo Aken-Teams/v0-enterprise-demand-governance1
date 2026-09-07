@@ -1171,9 +1171,11 @@ export default function DemandDetailPage() {
                                 "h-9 w-9 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors",
                                 isCurrent && "border-primary bg-primary text-primary-foreground",
                                 isPast && "border-primary bg-primary/10 text-primary",
-                                isFuture && "border-muted-foreground/30 bg-background text-muted-foreground/50",
+                                isFuture && !closingSpPending && "border-muted-foreground/30 bg-background text-muted-foreground/50",
+                                // 結案簽核中：節點亮起表示「正在處理」，與已完成（藍）區隔
+                                isFuture && closingSpPending && "border-amber-400 bg-amber-50 text-amber-600 animate-pulse",
                               )}>
-                                {isPast ? <Check className="h-4 w-4" /> : i + 1}
+                                {isPast ? <Check className="h-4 w-4" /> : closingSpPending ? <Clock className="h-4 w-4" /> : i + 1}
                               </div>
                               {showWarning && (
                                 <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-500 flex items-center justify-center">
