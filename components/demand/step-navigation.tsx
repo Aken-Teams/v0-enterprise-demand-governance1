@@ -21,7 +21,12 @@ import {
   SIGNOFF_REQUIRED_PHASES,
 } from "@/lib/constants/demand"
 
-const CLOSING_STEP_TITLES = ["簽核確認", "文件確認", "SP 調整", "確認結案"]
+const CLOSING_STEP_BASE = ["簽核確認", "文件確認", "SP 調整"] as const
+/** SP 有調整時，需勾選造成調整的設計變更並送董事會簽核，故多一個步驟 */
+const CLOSING_STEP_DC = "關聯設計變更"
+const CLOSING_STEP_LAST = "確認結案"
+
+interface ApprovedDesignChange { id: string; seq: number; title: string }
 
 interface SignoffInfo {
   id: string
@@ -83,6 +88,35 @@ export function StepNavigation({
   // Closing wizard state
   const [showClosingWizard, setShowClosingWizard] = useState(false)
   const [closingStep, setClosingStep] = useState(0)
+  // 結案 SP 調整需經董事會簽核，並附上造成調整的設計變更（僅限已通過者）
+  const [approvedDcs, setApprovedDcs] = useState<ApprovedDesignChange[]>([])
+  const [selectedDcIds, setSelectedDcIds] = useState<string[]>([])
+  const [dcLoading, setDcLoading] = useState(false)
+
+  // 動態步驟：有 SP 調整才需要「關聯設計變更」
+  const closingSteps = hasSpAdjustment
+    ? [...CLOSING_STEP_BASE, CLOSING_STEP_DC, CLOSING_STEP_LAST]
+    : [...CLOSING_STEP_BASE, CLOSING_STEP_LAST]
+  const dcStepIndex = CLOSING_STEP_BASE.length // 3
+  const lastStepIndex = closingSteps.length - 1
+
+  // 開啟精靈時載入本需求已通過的設計變更
+  const loadApprovedDcs = async () => {
+    if (!token) return
+    setDcLoading(true)
+    try {
+      const res = await fetch(`/api/demands/${demandId}/design-changes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const list = (data.designChanges ?? []) as { id: string; seq: number; title: string; status: string }[]
+        setApprovedDcs(list.filter((d) => d.status === "APPROVED").map(({ id, seq, title }) => ({ id, seq, title })))
+      }
+    } catch { /* 清單載入失敗不阻擋結案流程 */ } finally {
+      setDcLoading(false)
+    }
+  }
 
   const currentEffectiveSp = confirmedSp ?? estimatedSp ?? 0
 
@@ -127,6 +161,7 @@ export function StepNavigation({
       setDirection("next")
       setClosingStep(0)
       setShowClosingWizard(true)
+      loadApprovedDcs()
       return
     }
     setDirection(dir)
@@ -183,10 +218,39 @@ export function StepNavigation({
   const handleClosingConfirm = async () => {
     if (!token) return
     setLoading(true)
+    const spAdj = buildSpAdjustmentPayload()
+
+    // SP 有調整 → 先送董事會簽核，董事會全數同意後才由簽核端實際結案
+    if (spAdj) {
+      try {
+        const res = await fetch(`/api/demands/${demandId}/closing-sp`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            newSp: spAdj.newSp,
+            reason: spAdj.reason,
+            phaseAllocations: spAdj.phaseAllocations,
+            completedDate: inputCompletedDate || null,
+            designChangeIds: selectedDcIds,
+          }),
+        })
+        if (res.ok) {
+          setShowClosingWizard(false)
+          toast.success("已送出董事會簽核，董事會同意後即完成結案")
+          onRefresh?.()
+        } else {
+          const e = await res.json().catch(() => ({}))
+          toast.error(e.error || "送出簽核失敗")
+        }
+      } catch { /* ignore */ } finally {
+        setLoading(false)
+      }
+      return
+    }
+
+    // SP 未調整 → 照原流程直接結案
     const payload: Record<string, unknown> = { status: "CLOSED" }
     if (inputCompletedDate) payload.completedDate = inputCompletedDate
-    const spAdj = buildSpAdjustmentPayload()
-    if (spAdj) payload.spAdjustment = spAdj
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
         method: "PATCH",
@@ -433,7 +497,7 @@ export function StepNavigation({
             </p>
             {/* Step indicator */}
             <div className="flex items-center gap-0.5">
-              {CLOSING_STEP_TITLES.map((title, i) => {
+              {closingSteps.map((title, i) => {
                 const isActive = i === closingStep
                 const isDone = i < closingStep
                 return (
@@ -453,7 +517,7 @@ export function StepNavigation({
                       </span>
                       <span className="whitespace-nowrap hidden sm:inline">{title}</span>
                     </button>
-                    {i < CLOSING_STEP_TITLES.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />}
+                    {i < closingSteps.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />}
                   </div>
                 )
               })}
@@ -633,9 +697,73 @@ export function StepNavigation({
             )}
 
             {/* Step 4: 確認結案 */}
-            {closingStep === 3 && (
+            {hasSpAdjustment && closingStep === dcStepIndex && (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground mb-2">請確認以下結案資訊無誤後，按下「確認結案」完成操作。</p>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs text-amber-800 font-medium">此次結案調整了 SP，需經董事會簽核</p>
+                  <p className="text-[11px] text-amber-700 mt-1">
+                    請勾選造成本次 SP 調整的設計變更，讓董事會了解調整來由（這些變更董事會皆已簽核過）。
+                    送出後需求不會立即結案，待董事會同意後才完成結案。
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground line-through">{currentEffectiveSp} SP</span>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                  <span className="font-semibold text-primary">{adjustedSp} SP</span>
+                </div>
+
+                {dcLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                    <Loader2 className="h-4 w-4 animate-spin" />載入設計變更…
+                  </div>
+                ) : approvedDcs.length === 0 ? (
+                  <div className="rounded-lg border p-3">
+                    <p className="text-sm text-muted-foreground">此需求沒有已通過的設計變更。</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">請於上一步填寫 SP 調整原因，董事會將依此判斷。</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {approvedDcs.map((dc) => (
+                      <label
+                        key={dc.id}
+                        className="flex items-start gap-2.5 rounded-lg border p-2.5 cursor-pointer hover:bg-muted/40"
+                      >
+                        <Checkbox
+                          checked={selectedDcIds.includes(dc.id)}
+                          onCheckedChange={(c) =>
+                            setSelectedDcIds((prev) =>
+                              c ? [...prev, dc.id] : prev.filter((x) => x !== dc.id)
+                            )
+                          }
+                          className="mt-0.5"
+                        />
+                        <span className="min-w-0">
+                          <span className="font-mono text-xs text-muted-foreground mr-1.5">
+                            DC-{String(dc.seq).padStart(2, "0")}
+                          </span>
+                          <span className="text-sm">{dc.title}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {approvedDcs.length > 0 && selectedDcIds.length === 0 && !adjustmentReason.trim() && (
+                  <p className="text-[11px] text-amber-600">
+                    請至少勾選一項設計變更，或回上一步填寫調整原因。
+                  </p>
+                )}
+              </div>
+            )}
+
+            {closingStep === lastStepIndex && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground mb-2">
+                  {hasSpAdjustment
+                    ? "請確認以下資訊無誤後送出。因本次調整了 SP，將先送董事會簽核，同意後才完成結案。"
+                    : "請確認以下結案資訊無誤後，按下「確認結案」完成操作。"}
+                </p>
 
                 {/* Summary: 簽核 */}
                 <div className="rounded-lg border p-3 space-y-1.5">
@@ -699,6 +827,27 @@ export function StepNavigation({
                   )}
                 </div>
 
+                {/* Summary: 關聯設計變更 */}
+                {hasSpAdjustment && (
+                  <div className="rounded-lg border p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">關聯設計變更</span>
+                      <button type="button" onClick={() => setClosingStep(dcStepIndex)} className="text-xs text-primary hover:underline font-medium">修改</button>
+                    </div>
+                    {selectedDcIds.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {approvedDcs.filter((d) => selectedDcIds.includes(d.id)).map((d) => (
+                          <span key={d.id} className="text-xs rounded border px-1.5 py-0.5 bg-muted/40">
+                            DC-{String(d.seq).padStart(2, "0")} {d.title}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">未勾選（將以調整原因說明）</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Summary: 結案日期 */}
                 <div className="rounded-lg border p-3 space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -723,8 +872,8 @@ export function StepNavigation({
             >
               {closingStep === 0 ? "取消" : <><ChevronLeft className="h-4 w-4 mr-1" />上一步</>}
             </Button>
-            <span className="text-xs text-muted-foreground">{closingStep + 1} / {CLOSING_STEP_TITLES.length}</span>
-            {closingStep < CLOSING_STEP_TITLES.length - 1 ? (
+            <span className="text-xs text-muted-foreground">{closingStep + 1} / {closingSteps.length}</span>
+            {closingStep < lastStepIndex ? (
               <Button size="sm" onClick={() => setClosingStep(closingStep + 1)}>
                 下一步<ChevronRight className="h-4 w-4 ml-1" />
               </Button>
@@ -734,10 +883,18 @@ export function StepNavigation({
                 variant="default"
                 className="bg-emerald-600 hover:bg-emerald-700"
                 onClick={handleClosingConfirm}
-                disabled={loading || (hasSpAdjustment && (!adjustedSp || parseInt(adjustedSp, 10) < 1))}
+                disabled={
+                  loading ||
+                  (hasSpAdjustment && (
+                    !adjustedSp ||
+                    parseInt(adjustedSp, 10) < 1 ||
+                    // 需可歸因：有已通過的設計變更就得勾選，否則要有調整原因
+                    (selectedDcIds.length === 0 && !adjustmentReason.trim())
+                  ))
+                }
               >
                 {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-1" />}
-                確認結案
+                {hasSpAdjustment ? "送出董事會簽核" : "確認結案"}
               </Button>
             )}
           </div>

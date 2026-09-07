@@ -242,11 +242,12 @@ export async function GET(
       where: { reviewerId: auth.userId, decision: "PENDING", revision: { status: "PENDING", designChange: { demandId: id } } },
       select: {
         role: true,
+        stage: true,
         revision: { select: { version: true, affectsSp: true, designChange: { select: { seq: true, title: true, currentVersion: true } } } },
       },
     })
     const myDesignChangeReview = (myDcReview && myDcReview.revision.version === myDcReview.revision.designChange.currentVersion)
-      ? { seq: myDcReview.revision.designChange.seq, title: myDcReview.revision.designChange.title, role: myDcReview.role, affectsSp: myDcReview.revision.affectsSp }
+      ? { seq: myDcReview.revision.designChange.seq, title: myDcReview.revision.designChange.title, role: myDcReview.role, stage: myDcReview.stage, affectsSp: myDcReview.revision.affectsSp }
       : null
 
     // 智合移轉 SP / 報價單：管理者一律可見；非管理者需帳號權限 canViewSpTransfer

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { verifyRole, AuthError } from "@/lib/auth"
 import { canAdminWrite } from "@/lib/demand-access"
 import { DESIGN_CHANGE_ALLOWED_PHASES, STATUS_MAP } from "@/lib/constants/demand"
-import { parseChecklistMarkdown, resolveDesignChangeReviewers } from "@/lib/design-change"
+import { parseChecklistMarkdown, resolveGateReviewers } from "@/lib/design-change"
 import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 
@@ -70,7 +70,8 @@ export async function POST(
       return NextResponse.json({ error: "此設計變更已通過，無需再修訂" }, { status: 400 })
     }
 
-    const reviewers = resolveDesignChangeReviewers(dc.demand)
+    // 新版本重新走一次設計變更確認（董事會 + 需求窗口）
+    const reviewers = await resolveGateReviewers(dc.demand)
     const checklistItems = parseChecklistMarkdown(checklistMd)
     const nextVersion = (latest?.version ?? 0) + 1
     const spCurrent = affectsSp ? (dc.demand.confirmedSp ?? dc.demand.estimatedSp) : null
@@ -94,7 +95,7 @@ export async function POST(
       }
       if (reviewers.length > 0) {
         await tx.designChangeReview.createMany({
-          data: reviewers.map((rv) => ({ revisionId: r.id, reviewerId: rv.userId, role: rv.role, decision: "PENDING" as const })),
+          data: reviewers.map((rv) => ({ revisionId: r.id, reviewerId: rv.userId, role: rv.role, stage: "GATE", decision: "PENDING" as const })),
         })
       }
       await tx.designChange.update({
@@ -122,13 +123,13 @@ export async function POST(
       notifyUsers(recipients, {
         type: "SIGNOFF",
         title: "設計變更已更新，待重新確認",
-        message: `需求 ${dc.demand.demandNumber}「${dc.demand.title}」的設計變更「${dc.title}」已更新為 v${nextVersion}（${phaseLabel}），請重新確認。`,
+        message: `需求 ${dc.demand.demandNumber}「${dc.demand.title}」的設計變更「${dc.title}」已更新為 v${nextVersion}（${phaseLabel}），請重新確認是否同意開立此變更。`,
         linkUrl: `/demands/${id}`,
       })
     }
     logAudit({
       userId: auth.userId, action: "SIGNOFF_REQUEST", entity: "SIGNOFF", entityId: dc.id, demandId: id,
-      details: { kind: "DESIGN_CHANGE_REVISION", seq: dc.seq, version: nextVersion, affectsSp },
+      details: { kind: "DESIGN_CHANGE_REVISION", stage: "GATE", seq: dc.seq, version: nextVersion, affectsSp },
       request,
     })
 

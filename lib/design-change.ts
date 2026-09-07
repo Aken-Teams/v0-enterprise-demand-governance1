@@ -1,3 +1,5 @@
+import { resolveBoardReviewers } from "@/lib/board"
+
 export interface ParsedChecklistItem {
   text: string
   checked: boolean
@@ -26,9 +28,35 @@ export interface ReviewerTarget {
   role: "REQUESTER" | "MANAGER" | "BOARD"
 }
 
+/** 設計變更審核階段 */
+export type DesignChangeStage = "GATE" | "CONTENT"
+
 /**
- * 第一階段審核人：需求窗口(REQUESTER) + 需求主管(MANAGER，若有指派)。
- * 董事會不在此階段——採兩段式：需求方通過後、若該版影響 SP，才送董事會。
+ * 第一階段「設計變更確認」審核人：董事會 + 需求窗口。
+ *
+ * 不論該版本是否影響 SP 都必須經過此關——董事會要求所有設計變更都需其背書。
+ * 兩方皆同意後才開放需求方進入逐條確認；任一方駁回，該設計變更即中止。
+ *
+ * 需求窗口預設沿用專案設定，可用 contactPersonOverride 手動指定。
+ * 若窗口本身也是董事，只保留一筆 REQUESTER（避免 revisionId+reviewerId+stage 唯一鍵衝突）。
+ */
+export async function resolveGateReviewers(
+  demand: { organizationId: string; contactPersonId: string | null },
+  opts?: { contactPersonOverride?: string | null }
+): Promise<ReviewerTarget[]> {
+  const targets: ReviewerTarget[] = []
+  const requesterId = opts?.contactPersonOverride || demand.contactPersonId
+  if (requesterId) targets.push({ userId: requesterId, role: "REQUESTER" })
+  const board = await resolveBoardReviewers(demand.organizationId)
+  for (const b of board) {
+    if (b.userId !== requesterId) targets.push({ userId: b.userId, role: "BOARD" })
+  }
+  return targets
+}
+
+/**
+ * 第二階段「逐條確認」審核人：需求窗口(REQUESTER) + 需求主管(MANAGER，若有指派)。
+ * 董事會不在此階段——已於第一階段的設計變更確認 (resolveGateReviewers) 完成背書。
  *
  * 需求窗口預設沿用專案設定 (demand.contactPersonId)，但可用 contactPersonOverride 手動指定。
  * 若窗口與需求主管為同一人，只留一筆（避免 revisionId+reviewerId 唯一鍵衝突）。
@@ -47,7 +75,7 @@ export function resolveDesignChangeReviewers(
 }
 
 // resolveBoardReviewers 已移至 lib/board.ts（開案確認與設計變更共用同一套優先序）
-export { resolveBoardReviewers } from "@/lib/board"
+export { resolveBoardReviewers }
 
 /**
  * 依所有審核裁決計算版本整體狀態。

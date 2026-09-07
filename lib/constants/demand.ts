@@ -167,6 +167,19 @@ export const CHECKLIST_MARK_MAP: Record<string, { label: string; icon: string; c
 export const SIGNOFF_KIND_LABELS: Record<string, string> = {
   PHASE: "階段簽核",
   DESIGN_CHANGE: "設計變更",
+  CLOSING_SP: "結案 SP 調整",
+}
+
+/** 設計變更審核階段標籤 */
+export const DESIGN_CHANGE_STAGE_LABELS: Record<string, string> = {
+  GATE: "設計變更確認",
+  CONTENT: "逐條確認",
+}
+
+/** 設計變更審核階段說明（顯示於審核介面，讓簽核人知道自己在裁決什麼） */
+export const DESIGN_CHANGE_STAGE_DESCRIPTIONS: Record<string, string> = {
+  GATE: "由董事會與需求窗口決定「這個設計變更准不准開」。兩方皆同意後，才會開放需求方逐條確認內容。",
+  CONTENT: "需求方逐項確認變更內容，全部確認後此設計變更才算通過。",
 }
 
 /** SP 單價 (NT$) */

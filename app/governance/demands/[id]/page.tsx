@@ -1265,8 +1265,11 @@ export default function DemandDetailPage() {
               const needsAssignment = (currentPhase === "PRD_REVIEW" || currentPhase === "SP_REVIEW" || currentPhase === "DEVELOPING") && !demand.manager && !demand.developer
               const hasSignoff = currentPhaseSignoff != null
               const hasDesignChange = currentDesignChangeSignoffs.length > 0
-              const myDcReview = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; affectsSp: boolean } | null }).myDesignChangeReview
+              const myDcReview = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; stage?: string; affectsSp: boolean } | null }).myDesignChangeReview
               const dcRoleLabel = myDcReview ? (myDcReview.role === "BOARD" ? "董事會" : myDcReview.role === "MANAGER" ? "需求主管" : "需求窗口") : ""
+              // 兩階段流程：第一關裁決「准不准開」，第二關才逐項確認內容。
+              // 提示需寫明是哪一關，否則需求者會誤以為同一件事被要求簽兩次。
+              const dcIsContent = myDcReview?.stage === "CONTENT"
 
               if (missingDocs.length === 0 && !needsAssignment && actions.length === 0 && !hasSignoff && !hasDesignChange && !myDcReview && !(canManage && canTerminate)) return null
 
@@ -1384,8 +1387,15 @@ export default function DemandDetailPage() {
                     <div className="mt-2.5 pt-2.5 border-t border-blue-200/70 flex items-start gap-2.5">
                       <FileEdit className="h-4 w-4 shrink-0 text-indigo-600 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-indigo-800">您有一筆設計變更待您確認{myDcReview.affectsSp ? "（SP 調整）" : ""}</p>
-                        <p className="text-[11px] text-indigo-600/80 mt-0.5">DC-{String(myDcReview.seq).padStart(2, "0")}「{myDcReview.title}」，需您以「{dcRoleLabel}」身分審核{myDcReview.affectsSp ? "此變更的 SP 調整" : ""}。</p>
+                        <p className="text-xs font-semibold text-indigo-800">
+                          {dcIsContent ? "設計變更已開立，請逐項確認內容" : "您有一筆設計變更待您確認"}
+                        </p>
+                        <p className="text-[11px] text-indigo-600/80 mt-0.5">
+                          DC-{String(myDcReview.seq).padStart(2, "0")}「{myDcReview.title}」
+                          {dcIsContent
+                            ? "已通過第一關的設計變更確認，現在進入第二關：請以「" + dcRoleLabel + "」身分逐項確認變更內容。"
+                            : "，需您以「" + dcRoleLabel + "」身分裁決是否同意開立此變更。"}
+                        </p>
                       </div>
                       <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 h-8" onClick={() => setActiveTab("design-changes")}>
                         <FileEdit className="h-3.5 w-3.5 mr-1" />前往審核

@@ -8,6 +8,7 @@ import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers, getAdminUserIds, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
+import { parseClosingSpPayload } from "@/lib/closing-sp"
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -366,6 +367,162 @@ export async function PATCH(
             respondedAt: new Date(),
           },
         })
+      }
+    }
+
+    // ── 結案 SP 調整 (kind = CLOSING_SP) ──
+    // 董事會全數同意後才實際套用 SP 並結案；任一人退回則需求維持原狀態，
+    // 由管理者修正後重新發起（見 app/api/demands/[id]/closing-sp/route.ts）。
+    if (signoff.kind === "CLOSING_SP") {
+      if (action === "approve") {
+        const roundTime = signoff.requestedAt.getTime()
+        const round = await prisma.phaseSignoff.findMany({
+          where: {
+            demandId: id,
+            kind: "CLOSING_SP",
+            requestedAt: { gte: new Date(roundTime - 5000), lte: new Date(roundTime + 5000) },
+          },
+          select: { status: true },
+        })
+        const payload = parseClosingSpPayload(signoff.payload)
+
+        if (payload && round.every((s) => s.status === "APPROVED")) {
+          const dem = await prisma.demand.findUnique({
+            where: { id },
+            select: {
+              status: true, confirmedSp: true, estimatedSp: true, organizationId: true,
+              vendor: true, demandNumber: true, title: true,
+            },
+          })
+
+          if (dem && dem.status !== "CLOSED") {
+            const now = new Date()
+            const fromStatus = dem.status
+            const oldSp = dem.confirmedSp ?? dem.estimatedSp
+            const newSp = payload.newSp
+            const year = now.getFullYear()
+
+            // 結案為 100% 消耗；差額 = 新結算值 - 目前階段已認列值
+            const oldUsed = Math.round(oldSp * (SP_PROGRESS_RATE[fromStatus] ?? 0))
+            const newUsed = Math.round(newSp * (SP_PROGRESS_RATE.CLOSED ?? 1))
+            const delta = newUsed - oldUsed
+
+            await prisma.$transaction(async (tx) => {
+              await tx.demand.update({
+                where: { id },
+                data: {
+                  status: "CLOSED",
+                  confirmedSp: newSp,
+                  ...(payload.completedDate ? { completedDate: new Date(payload.completedDate) } : {}),
+                },
+              })
+
+              const existingPlans = await tx.demandPhasePlan.findMany({
+                where: { demandId: id },
+                select: { phase: true, plannedSp: true, originalPlannedSp: true },
+              })
+              const existingMap = Object.fromEntries(existingPlans.map((p) => [p.phase, p]))
+
+              await tx.demandStatusHistory.create({
+                data: {
+                  demandId: id,
+                  fromStatus,
+                  toStatus: "CLOSED",
+                  comment: JSON.stringify({
+                    type: "SP_ADJUSTMENT",
+                    oldSp,
+                    newSp,
+                    reason: payload.reason,
+                    designChangeIds: payload.designChangeIds,
+                    boardApproved: true,
+                    originalPhaseAllocations: Object.fromEntries(
+                      existingPlans.filter((p) => p.plannedSp != null).map((p) => [p.phase, p.plannedSp])
+                    ),
+                    phaseAllocations: payload.phaseAllocations,
+                  }),
+                  changedBy: auth.userId,
+                },
+              })
+
+              // 各階段 SP 重新分配（保留調整前的原始分配供對照）
+              if (payload.phaseAllocations) {
+                for (const step of PIPELINE_STEPS) {
+                  if (step === "CLOSED") continue
+                  const plannedSp = payload.phaseAllocations[step] ?? 0
+                  const existing = existingMap[step]
+                  const originalSp = existing?.originalPlannedSp ?? existing?.plannedSp ?? null
+                  await tx.demandPhasePlan.upsert({
+                    where: { demandId_phase: { demandId: id, phase: step as DemandStatus } },
+                    create: { demandId: id, phase: step as DemandStatus, plannedSp, originalPlannedSp: originalSp },
+                    update: {
+                      plannedSp,
+                      ...(existing?.originalPlannedSp == null ? { originalPlannedSp: existing?.plannedSp ?? null } : {}),
+                    },
+                  })
+                }
+              }
+
+              // 收尾目前階段、開啟結案階段的實際時間
+              if (PIPELINE_STEPS.indexOf(fromStatus as typeof PIPELINE_STEPS[number]) >= 0) {
+                await tx.demandPhasePlan.upsert({
+                  where: { demandId_phase: { demandId: id, phase: fromStatus } },
+                  create: { demandId: id, phase: fromStatus, actualEnd: now },
+                  update: { actualEnd: now },
+                })
+              }
+              await tx.demandPhasePlan.upsert({
+                where: { demandId_phase: { demandId: id, phase: "CLOSED" } },
+                create: { demandId: id, phase: "CLOSED", actualStart: now },
+                update: { actualStart: now },
+              })
+
+              if (delta !== 0) {
+                await tx.spWallet.upsert({
+                  where: { organizationId_year_vendor: { organizationId: dem.organizationId, year, vendor: dem.vendor } },
+                  create: {
+                    organizationId: dem.organizationId, year, vendor: dem.vendor,
+                    totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0,
+                  },
+                  update: { usedSp: { increment: delta } },
+                })
+              }
+            })
+
+            const fromLabel = STATUS_MAP[fromStatus]?.label ?? fromStatus
+            Promise.all([getDemandStakeholderIds(id), getOrgSubsidiaryUserIds(dem.organizationId)]).then(([sIds, oIds]) => {
+              const recipients = [...new Set([...sIds, ...oIds])].filter((uid) => uid !== auth.userId)
+              notifyUsers(recipients, {
+                type: "DEMAND_STATUS",
+                title: "需求結案",
+                message: `需求 ${dem.demandNumber}「${dem.title}」的結案 SP 調整（${oldSp} → ${newSp}）已經董事會同意，已從「${fromLabel}」結案。`,
+                linkUrl: `/demands/${id}`,
+              })
+            })
+            logAudit({
+              userId: auth.userId,
+              action: "STATUS_CHANGE",
+              entity: "DEMAND",
+              entityId: id,
+              demandId: id,
+              details: {
+                fromStatus, toStatus: "CLOSED", oldSp, newSp,
+                designChangeIds: payload.designChangeIds, via: "CLOSING_SP_BOARD_APPROVAL",
+              },
+              request,
+            })
+          }
+        }
+      } else {
+        // 退回：需求不結案，通知發起者修正後重送
+        const requesterId = signoff.requestedById
+        if (requesterId !== auth.userId) {
+          notifyUsers([requesterId], {
+            type: "SIGNOFF",
+            title: "結案 SP 調整已退回",
+            message: `需求 ${signoff.demand.demandNumber}「${signoff.demand.title}」的結案 SP 調整遭董事會退回${comment ? `：${comment.trim()}` : ""}，需求維持原狀態。`,
+            linkUrl: `/demands/${id}`,
+          })
+        }
       }
     }
 

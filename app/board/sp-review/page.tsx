@@ -59,15 +59,31 @@ interface SpReviewItem {
 
 interface DesignChangeSp {
   reviewId: string
+  revisionId: string
   dcId: string
   seq: number
   dcTitle: string
   version: number
+  /** "GATE"(設計變更確認) | "CONTENT"(逐條確認) */
+  stage: string
+  affectsSp: boolean
   spCurrent: number | null
   spDelta: number | null
   spNote: string | null
   summary: string
   demand: { id: string; demandNumber: string; title: string; organization: { id: string; name: string } | null }
+}
+
+/** 結案時的 SP 調整，需董事會同意後才真正結案 */
+interface ClosingSpItem {
+  signoffId: string
+  requestedAt: string
+  requestedBy: { id: string; name: string } | null
+  oldSp: number
+  newSp: number | null
+  reason: string | null
+  designChanges: { id: string; seq: number; title: string }[]
+  demand: { id: string; demandNumber: string; title: string; status: string; organization: { id: string; name: string } | null }
 }
 
 function formatFileSize(bytes: number) {
@@ -76,45 +92,319 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function DesignChangeSpCard({ dc }: { dc: DesignChangeSp }) {
+function DesignChangeSpCard({ dc, token, onComplete }: {
+  dc: DesignChangeSp
+  token: string | null
+  onComplete: () => void
+}) {
   const after = (dc.spCurrent ?? 0) + (dc.spDelta ?? 0)
+  const isGate = dc.stage === "GATE"
+
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState("")
+  const [showRejectDialog, setShowRejectDialog] = useState(false)
+  const [rejectReason, setRejectReason] = useState("")
+
+  // 設計變更確認只裁決准不准開，無需逐條勾選，故可直接於此送出
+  const handleAction = async (decision: "APPROVED" | "REJECTED") => {
+    if (decision === "REJECTED" && !rejectReason.trim()) {
+      setActionError("駁回時必須填寫原因")
+      return
+    }
+    if (!token) return
+    setActionLoading(true)
+    setActionError("")
+    try {
+      const fd = new FormData()
+      fd.append("revisionId", dc.revisionId)
+      fd.append("decision", decision)
+      if (decision === "REJECTED") fd.append("comment", rejectReason.trim())
+      fd.append("items", "[]")
+      const res = await fetch(`/api/demands/${dc.demand.id}/design-changes/${dc.dcId}/reviews`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      })
+      if (res.ok) {
+        setShowRejectDialog(false)
+        onComplete()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setActionError(data.error || "操作失敗")
+      }
+    } catch {
+      setActionError("網路錯誤")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   return (
+    <>
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-3 sm:p-4 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-mono text-muted-foreground">{dc.demand.demandNumber} · DC-{String(dc.seq).padStart(2, "0")}</span>
-          <Badge className="bg-violet-100 text-violet-700 gap-1 shrink-0 text-[10px] sm:text-xs"><CircleDollarSign className="h-3 w-3" />SP 調整</Badge>
+          <Badge className="bg-amber-100 text-amber-700 gap-1 shrink-0 text-[10px] sm:text-xs">
+            <ShieldCheck className="h-3 w-3" />{isGate ? "設計變更確認" : "逐條確認"}
+          </Badge>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="outline" className="text-[10px] sm:text-xs gap-1"><Building2 className="h-3 w-3" />{dc.demand.organization?.name}</Badge>
           <Badge className="text-[10px] sm:text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 gap-0.5"><FileEdit className="h-3 w-3" />設計變更</Badge>
+          {dc.affectsSp && (
+            <Badge className="bg-violet-100 text-violet-700 gap-1 text-[10px] sm:text-xs"><CircleDollarSign className="h-3 w-3" />影響 SP</Badge>
+          )}
         </div>
         <p className="font-semibold leading-snug text-sm sm:text-base">{dc.demand.title}</p>
         <p className="text-xs text-muted-foreground">變更：{dc.dcTitle}（v{dc.version}）</p>
+        {dc.summary && (
+          <p className="text-xs text-muted-foreground/90 line-clamp-3 whitespace-pre-line">{dc.summary}</p>
+        )}
 
-        {/* SP change */}
-        <div className="rounded-md border border-violet-200 bg-violet-50 px-2.5 py-2 text-xs text-violet-900">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <CircleDollarSign className="h-3.5 w-3.5 shrink-0 text-violet-600" />
-            <span className="font-medium">SP 影響</span>
-            <span>目前 <strong>{dc.spCurrent}</strong> → 調整後 <strong>{after}</strong></span>
-            <Badge className={`text-[10px] ${(dc.spDelta ?? 0) > 0 ? "bg-emerald-100 text-emerald-700" : (dc.spDelta ?? 0) < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
-              {(dc.spDelta ?? 0) > 0 ? `上調 +${dc.spDelta}` : (dc.spDelta ?? 0) < 0 ? `下降 ${dc.spDelta}` : "±0"} SP
-            </Badge>
+        {/* SP 影響（僅在該版本確實會動到 SP 時顯示） */}
+        {dc.affectsSp && (
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-2.5 py-2 text-xs text-violet-900">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <CircleDollarSign className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+              <span className="font-medium">SP 影響</span>
+              <span>目前 <strong>{dc.spCurrent}</strong> → 調整後 <strong>{after}</strong></span>
+              <Badge className={`text-[10px] ${(dc.spDelta ?? 0) > 0 ? "bg-emerald-100 text-emerald-700" : (dc.spDelta ?? 0) < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+                {(dc.spDelta ?? 0) > 0 ? `上調 +${dc.spDelta}` : (dc.spDelta ?? 0) < 0 ? `下降 ${dc.spDelta}` : "±0"} SP
+              </Badge>
+            </div>
+            {dc.spNote && <p className="mt-1 text-violet-700/80 whitespace-pre-line">{dc.spNote}</p>}
           </div>
-          {dc.spNote && <p className="mt-1 text-violet-700/80 whitespace-pre-line">{dc.spNote}</p>}
-        </div>
+        )}
+
+        {actionError && (
+          <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />{actionError}</p>
+        )}
 
         <hr className="border-border/60" />
-        <div className="flex justify-end">
-          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white h-9" asChild>
-            <Link href={`/governance/demands/${dc.demand.id}?tab=design-changes`}>
-              <ExternalLink className="h-3.5 w-3.5 mr-1" />前往審核 SP 調整
-            </Link>
-          </Button>
-        </div>
+        {isGate ? (
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Button size="sm" variant="ghost" className="text-muted-foreground justify-start h-8 sm:h-9" asChild>
+              <Link href={`/governance/demands/${dc.demand.id}?tab=design-changes`}>
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                查看詳情
+              </Link>
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white h-10 sm:h-9 flex-1 sm:flex-none"
+                onClick={() => handleAction("APPROVED")}
+                disabled={actionLoading}
+              >
+                {actionLoading && !showRejectDialog ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                同意開立
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-50 h-10 sm:h-9 flex-1 sm:flex-none"
+                onClick={() => setShowRejectDialog(true)}
+                disabled={actionLoading}
+              >
+                <X className="h-4 w-4 mr-1" />
+                駁回
+              </Button>
+            </div>
+          </div>
+        ) : (
+          // 逐條確認需逐項標記 checklist，仍須進專案詳情
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground">需逐項確認變更內容</span>
+            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white h-9" asChild>
+              <Link href={`/governance/demands/${dc.demand.id}?tab=design-changes`}>
+                <ExternalLink className="h-3.5 w-3.5 mr-1" />前往審核
+              </Link>
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
+
+    <Dialog open={showRejectDialog} onOpenChange={(o) => { if (!actionLoading && !o) { setShowRejectDialog(false); setRejectReason(""); setActionError("") } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>駁回設計變更</DialogTitle>
+          <DialogDescription>
+            駁回後此設計變更即中止，不會進入逐條確認。開發端可修訂後重新提出新版本。
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          placeholder="請說明駁回原因…"
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          rows={4}
+        />
+        {actionError && <p className="text-xs text-red-600">{actionError}</p>}
+        <DialogFooter>
+          <Button variant="outline" disabled={actionLoading} onClick={() => { setShowRejectDialog(false); setRejectReason(""); setActionError("") }}>取消</Button>
+          <Button variant="destructive" disabled={actionLoading} onClick={() => handleAction("REJECTED")}>
+            {actionLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <X className="h-4 w-4 mr-1" />}
+            確認駁回
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
+  )
+}
+
+/** 結案 SP 調整卡片：可直接在此通過／退回，不必進專案詳情 */
+function ClosingSpCard({ item, token, onComplete }: {
+  item: ClosingSpItem
+  token: string | null
+  onComplete: () => void
+}) {
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState("")
+  const [showRejectDialog, setShowRejectDialog] = useState(false)
+  const [rejectReason, setRejectReason] = useState("")
+
+  const delta = item.newSp != null ? item.newSp - item.oldSp : 0
+
+  const handleAction = async (action: "approve" | "reject") => {
+    if (action === "reject" && !rejectReason.trim()) {
+      setActionError("退回時必須填寫原因")
+      return
+    }
+    if (!token) return
+    setActionLoading(true)
+    setActionError("")
+    try {
+      const formData = new FormData()
+      formData.append("action", action)
+      if (action === "reject") formData.append("comment", rejectReason.trim())
+      const res = await fetch(`/api/demands/${item.demand.id}/signoffs/${item.signoffId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      if (res.ok) {
+        setShowRejectDialog(false)
+        onComplete()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setActionError(data.error || "操作失敗")
+      }
+    } catch {
+      setActionError("網路錯誤")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <Card className="hover:shadow-md transition-shadow">
+        <CardContent className="p-3 sm:p-4 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-mono text-muted-foreground">{item.demand.demandNumber}</span>
+            <Badge className="bg-orange-100 text-orange-700 gap-1 shrink-0 text-[10px] sm:text-xs">
+              <CircleDollarSign className="h-3 w-3" />結案 SP 調整
+            </Badge>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge variant="outline" className="text-[10px] sm:text-xs gap-1"><Building2 className="h-3 w-3" />{item.demand.organization?.name}</Badge>
+            <Badge variant="outline" className="text-[10px] sm:text-xs">{STATUS_MAP[item.demand.status]?.label ?? item.demand.status}</Badge>
+          </div>
+          <p className="font-semibold leading-snug text-sm sm:text-base">{item.demand.title}</p>
+
+          {/* SP 調整 */}
+          <div className="rounded-md border border-orange-200 bg-orange-50 px-2.5 py-2 text-xs text-orange-900">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <CircleDollarSign className="h-3.5 w-3.5 shrink-0 text-orange-600" />
+              <span className="font-medium">結案 SP</span>
+              <span>目前 <strong>{item.oldSp}</strong> → 結算 <strong>{item.newSp ?? "—"}</strong></span>
+              <Badge className={`text-[10px] ${delta > 0 ? "bg-emerald-100 text-emerald-700" : delta < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+                {delta > 0 ? `上調 +${delta}` : delta < 0 ? `下降 ${delta}` : "±0"} SP
+              </Badge>
+            </div>
+            {item.reason && <p className="mt-1 text-orange-700/80 whitespace-pre-line">原因：{item.reason}</p>}
+          </div>
+
+          {/* 造成調整的設計變更（皆已經您簽核通過） */}
+          <div className="space-y-1">
+            <p className="text-[11px] text-muted-foreground">關聯設計變更</p>
+            {item.designChanges.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {item.designChanges.map((d) => (
+                  <span key={d.id} className="text-[11px] rounded border px-1.5 py-0.5 bg-muted/40">
+                    DC-{String(d.seq).padStart(2, "0")} {d.title}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground/80">無（以調整原因說明）</p>
+            )}
+          </div>
+
+          {actionError && (
+            <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />{actionError}</p>
+          )}
+
+          <hr className="border-border/60" />
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Button size="sm" variant="ghost" className="text-muted-foreground justify-start h-8 sm:h-9" asChild>
+              <Link href={`/governance/demands/${item.demand.id}?tab=signoffs`}>
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                查看詳情
+              </Link>
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white h-10 sm:h-9 flex-1 sm:flex-none"
+                onClick={() => handleAction("approve")}
+                disabled={actionLoading}
+              >
+                {actionLoading && !showRejectDialog ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                同意並結案
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-50 h-10 sm:h-9 flex-1 sm:flex-none"
+                onClick={() => setShowRejectDialog(true)}
+                disabled={actionLoading}
+              >
+                <X className="h-4 w-4 mr-1" />
+                退回修改
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={showRejectDialog} onOpenChange={(o) => { if (!actionLoading && !o) { setShowRejectDialog(false); setRejectReason(""); setActionError("") } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>退回結案 SP 調整</DialogTitle>
+            <DialogDescription>
+              退回後此需求不會結案，維持原狀態，管理者可修正後重新送審。
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="請說明退回原因…"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            rows={4}
+          />
+          {actionError && <p className="text-xs text-red-600">{actionError}</p>}
+          <DialogFooter>
+            <Button variant="outline" disabled={actionLoading} onClick={() => { setShowRejectDialog(false); setRejectReason(""); setActionError("") }}>取消</Button>
+            <Button variant="destructive" disabled={actionLoading} onClick={() => handleAction("reject")}>
+              {actionLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <X className="h-4 w-4 mr-1" />}
+              確認退回
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -558,6 +848,7 @@ export default function SpReviewPage() {
   const { token } = useAuth()
   const [items, setItems] = useState<SpReviewItem[]>([])
   const [designChanges, setDesignChanges] = useState<DesignChangeSp[]>([])
+  const [closingSp, setClosingSp] = useState<ClosingSpItem[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchItems = useCallback(async () => {
@@ -567,7 +858,7 @@ export default function SpReviewPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
-      if (res.ok) { setItems(data.items || []); setDesignChanges(data.designChanges || []) }
+      if (res.ok) { setItems(data.items || []); setDesignChanges(data.designChanges || []); setClosingSp(data.closingSp || []) }
     } catch {
       // ignore
     } finally {
@@ -583,7 +874,15 @@ export default function SpReviewPage() {
     setItems((prev) => prev.filter((item) => item.signoff.id !== signoffId))
   }
 
-  const total = items.length + designChanges.length
+  const handleClosingComplete = (signoffId: string) => {
+    setClosingSp((prev) => prev.filter((c) => c.signoffId !== signoffId))
+  }
+
+  const handleDcComplete = (reviewId: string) => {
+    setDesignChanges((prev) => prev.filter((d) => d.reviewId !== reviewId))
+  }
+
+  const total = items.length + designChanges.length + closingSp.length
 
   return (
     <AppLayout userRole="viewer">
@@ -596,7 +895,7 @@ export default function SpReviewPage() {
               <Badge className="bg-amber-100 text-amber-700 text-sm">{total} 件待審</Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求、專案 Master 代簽，以及設計變更的 SP 調整</p>
+          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求、專案 Master 代簽、設計變更，以及結案時的 SP 調整</p>
         </div>
 
         {/* Content */}
@@ -612,8 +911,12 @@ export default function SpReviewPage() {
                 {items.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{items.length}</Badge>}
               </TabsTrigger>
               <TabsTrigger value="design-changes" className="gap-1.5">
-                <CircleDollarSign className="h-3.5 w-3.5" />設計變更 SP 調整
-                {designChanges.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-violet-100 text-violet-700">{designChanges.length}</Badge>}
+                <FileEdit className="h-3.5 w-3.5" />設計變更
+                {designChanges.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-indigo-100 text-indigo-700">{designChanges.length}</Badge>}
+              </TabsTrigger>
+              <TabsTrigger value="closing-sp" className="gap-1.5">
+                <CircleDollarSign className="h-3.5 w-3.5" />結案 SP 調整
+                {closingSp.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-orange-100 text-orange-700">{closingSp.length}</Badge>}
               </TabsTrigger>
             </TabsList>
 
@@ -635,15 +938,34 @@ export default function SpReviewPage() {
               )}
             </TabsContent>
 
+            <TabsContent value="closing-sp" className="mt-4">
+              {closingSp.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 sm:py-16 text-center">
+                    <CheckCircle2 className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-3 sm:mb-4 text-emerald-500/60" />
+                    <p className="text-muted-foreground font-medium">目前沒有待審核的結案 SP 調整</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+                  {closingSp.map((c) => (
+                    <ClosingSpCard key={c.signoffId} item={c} token={token} onComplete={() => handleClosingComplete(c.signoffId)} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="design-changes" className="mt-4">
               {designChanges.length === 0 ? (
                 <Card><CardContent className="flex flex-col items-center justify-center py-20">
                   <CheckCircle2 className="h-12 w-12 text-emerald-300 mb-4" />
-                  <p className="text-muted-foreground font-medium">目前沒有待審核的設計變更 SP 調整</p>
+                  <p className="text-muted-foreground font-medium">目前沒有待審核的設計變更</p>
                 </CardContent></Card>
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
-                  {designChanges.map((dc) => <DesignChangeSpCard key={dc.reviewId} dc={dc} />)}
+                  {designChanges.map((dc) => (
+                    <DesignChangeSpCard key={dc.reviewId} dc={dc} token={token} onComplete={() => handleDcComplete(dc.reviewId)} />
+                  ))}
                 </div>
               )}
             </TabsContent>

@@ -6,7 +6,7 @@ import { verifyAuth, verifyRole, AuthError } from "@/lib/auth"
 import { canAccessDemand, canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { DESIGN_CHANGE_ALLOWED_PHASES, STATUS_MAP } from "@/lib/constants/demand"
-import { parseChecklistMarkdown, resolveDesignChangeReviewers } from "@/lib/design-change"
+import { parseChecklistMarkdown, resolveGateReviewers } from "@/lib/design-change"
 import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 
@@ -145,7 +145,8 @@ export async function POST(
       return NextResponse.json({ error: "請先指派需求窗口" }, { status: 400 })
     }
 
-    const reviewers = resolveDesignChangeReviewers(demand, { contactPersonOverride: finalContactPersonId })
+    // 第一關「設計變更確認」：董事會 + 需求窗口，不論是否影響 SP 都必須經過
+    const reviewers = await resolveGateReviewers(demand, { contactPersonOverride: finalContactPersonId })
     const checklistItems = parseChecklistMarkdown(checklistMd)
     // SP 影響：現值快照（伺服器端），增減量由前端提供（正=上調，負=下降）
     const spCurrent = affectsSp ? (demand.confirmedSp ?? demand.estimatedSp) : null
@@ -181,7 +182,7 @@ export async function POST(
       }
       if (reviewers.length > 0) {
         await tx.designChangeReview.createMany({
-          data: reviewers.map((r) => ({ revisionId: rev.id, reviewerId: r.userId, role: r.role, decision: "PENDING" as const })),
+          data: reviewers.map((r) => ({ revisionId: rev.id, reviewerId: r.userId, role: r.role, stage: "GATE", decision: "PENDING" as const })),
         })
       }
       return { dc, rev }
@@ -211,15 +212,15 @@ export async function POST(
     if (recipients.length > 0) {
       notifyUsers([...new Set(recipients)], {
         type: "SIGNOFF",
-        title: "設計變更待確認",
-        message: `需求 ${demand.demandNumber}「${demand.title}」在「${phaseLabel}」提出設計變更「${title}」，請您逐項確認。`,
+        title: "設計變更待開案確認",
+        message: `需求 ${demand.demandNumber}「${demand.title}」在「${phaseLabel}」提出設計變更「${title}」，請您確認是否同意開立此變更。`,
         linkUrl: `/demands/${id}`,
       })
     }
     logAudit({
       userId: auth.userId, action: "SIGNOFF_REQUEST", entity: "SIGNOFF",
       entityId: created.dc.id, demandId: id,
-      details: { kind: "DESIGN_CHANGE_V2", seq, title, affectsSp, phase: demand.status },
+      details: { kind: "DESIGN_CHANGE_V2", stage: "GATE", seq, title, affectsSp, phase: demand.status },
       request,
     })
 

@@ -548,7 +548,10 @@ model PhaseSignoff {
   demandId      String
   demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   phase         DemandStatus
-  kind          String        @default("PHASE") /// "PHASE" (階段簽核) | "DESIGN_CHANGE" (設計變更)
+  kind          String        @default("PHASE") /// "PHASE" (階段簽核) | "DESIGN_CHANGE" (設計變更) | "CLOSING_SP" (結案 SP 調整)
+  /// kind = CLOSING_SP 專用：暫存待董事會核准的結案內容
+  /// { oldSp, newSp, reason, phaseAllocations, completedDate, designChangeIds[] }
+  payload       String?       @db.Text
   status        SignoffStatus @default(PENDING)
   targetUserId  String?       /// 指定簽核人 (null = 舊資料, 任何有權限的人可簽)
   targetUser    User?         @relation("SignoffTarget", fields: [targetUserId], references: [id])
@@ -606,6 +609,8 @@ model DesignChangeRevision {
   spDelta        Float?             /// 預計增減 SP（正=上調，負=下降）
   spNote         String?            @db.Text /// SP 影響補充說明
   status         DesignChangeStatus @default(PENDING)
+  /// 開案閘門結果（董事會 + 需求窗口皆須同意）；APPROVED 後才開放逐條確認
+  gateStatus     DesignChangeStatus @default(PENDING)
   submittedById  String
   submittedBy    User               @relation("DCRevSubmitter", fields: [submittedById], references: [id])
   submittedAt    DateTime           @default(now())
@@ -658,11 +663,14 @@ model DesignChangeReview {
   reviewerId String
   reviewer   User               @relation("DCReviewer", fields: [reviewerId], references: [id])
   role       String             /// REQUESTER / MANAGER / BOARD
+  /// 審核階段："GATE"(開案閘門：董事會+需求窗口) | "CONTENT"(逐條確認)
+  /// 同一人可能在兩個階段各簽一次，故唯一鍵須含 stage
+  stage      String             @default("CONTENT")
   decision   DesignChangeStatus @default(PENDING)
   comment    String?            @db.Text
   decidedAt  DateTime?
 
-  @@unique([revisionId, reviewerId])
+  @@unique([revisionId, reviewerId, stage])
   @@index([revisionId])
   @@map("design_change_reviews")
 }

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
+import { parseClosingSpPayload } from "@/lib/closing-sp"
 
 /**
  * GET /api/board/sp-review
- * Returns pending SP_REVIEW signoffs AND BOARD_OVERRIDE signoffs for the current board member.
+ * Returns everything awaiting this board member:
+ *  - items        : 開案審核 (SP_REVIEW) 與專案 Master 代簽
+ *  - designChanges: 設計變更（設計變更確認）——不論是否影響 SP，董事會皆須背書
+ *  - closingSp    : 結案 SP 調整（kind = CLOSING_SP）
  * ?countOnly=true  → { count } (lightweight, for nav badge)
- * Otherwise        → { count, items: [{ signoff, demand }] }
  */
 export async function GET(request: NextRequest) {
   try {
@@ -39,13 +42,14 @@ export async function GET(request: NextRequest) {
       ],
     }
 
-    // 設計變更 SP 審核：本董事有待審(PENDING)的 BOARD 裁決，且該版影響 SP、且為最新版本
+    // 設計變更：本董事有待審(PENDING)的 BOARD 裁決且為最新版本。
+    // 新流程改為「設計變更確認」——不論是否影響 SP，董事會都必須背書，故不再以 affectsSp 過濾。
     const dcBoardReviews = await prisma.designChangeReview.findMany({
-      where: { reviewerId: auth.userId, role: "BOARD", decision: "PENDING", revision: { status: "PENDING", affectsSp: true } },
+      where: { reviewerId: auth.userId, role: "BOARD", decision: "PENDING", revision: { status: "PENDING" } },
       include: {
         revision: {
           select: {
-            id: true, version: true, spCurrent: true, spDelta: true, spNote: true, summary: true,
+            id: true, version: true, affectsSp: true, spCurrent: true, spDelta: true, spNote: true, summary: true,
             designChange: {
               select: {
                 id: true, seq: true, title: true, currentVersion: true,
@@ -61,10 +65,13 @@ export async function GET(request: NextRequest) {
       .filter((r) => !user.restrictBoardToOrg || !user.organizationId || r.revision.designChange.demand.organization?.id === user.organizationId)
       .map((r) => ({
         reviewId: r.id,
+        revisionId: r.revision.id,
         dcId: r.revision.designChange.id,
         seq: r.revision.designChange.seq,
         dcTitle: r.revision.designChange.title,
         version: r.revision.version,
+        stage: r.stage,
+        affectsSp: r.revision.affectsSp,
         spCurrent: r.revision.spCurrent,
         spDelta: r.revision.spDelta,
         spNote: r.revision.spNote,
@@ -72,9 +79,64 @@ export async function GET(request: NextRequest) {
         demand: r.revision.designChange.demand,
       }))
 
+    // 結案 SP 調整：待本董事簽核者（phase=CLOSED、targetRole=BOARD，不會與上方 whereClause 重疊）
+    const closingSignoffs = await prisma.phaseSignoff.findMany({
+      where: {
+        status: "PENDING", kind: "CLOSING_SP", targetUserId: auth.userId, demand: orgDemandFilter,
+      },
+      include: {
+        demand: {
+          select: {
+            id: true, demandNumber: true, title: true, status: true,
+            estimatedSp: true, confirmedSp: true,
+            organization: { select: { id: true, name: true } },
+          },
+        },
+        requestedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { requestedAt: "desc" },
+    })
+
+    // 一次撈齊所有被勾選的設計變更，避免逐筆查詢
+    const allDcIds = [
+      ...new Set(
+        closingSignoffs.flatMap((s) => parseClosingSpPayload(s.payload)?.designChangeIds ?? [])
+      ),
+    ]
+    const dcMap = new Map<string, { id: string; seq: number; title: string }>()
+    if (allDcIds.length > 0) {
+      const dcs = await prisma.designChange.findMany({
+        where: { id: { in: allDcIds } },
+        select: { id: true, seq: true, title: true },
+      })
+      for (const d of dcs) dcMap.set(d.id, d)
+    }
+
+    const closingSp = closingSignoffs.map((s) => {
+      const payload = parseClosingSpPayload(s.payload)
+      return {
+        signoffId: s.id,
+        requestedAt: s.requestedAt,
+        requestedBy: s.requestedBy,
+        oldSp: payload?.oldSp ?? (s.demand.confirmedSp ?? s.demand.estimatedSp),
+        newSp: payload?.newSp ?? null,
+        reason: payload?.reason ?? null,
+        designChanges: (payload?.designChangeIds ?? [])
+          .map((did) => dcMap.get(did))
+          .filter((d): d is { id: string; seq: number; title: string } => !!d),
+        demand: {
+          id: s.demand.id,
+          demandNumber: s.demand.demandNumber,
+          title: s.demand.title,
+          status: s.demand.status,
+          organization: s.demand.organization,
+        },
+      }
+    })
+
     if (countOnly) {
       const count = await prisma.phaseSignoff.count({ where: whereClause })
-      return NextResponse.json({ count: count + designChanges.length })
+      return NextResponse.json({ count: count + designChanges.length + closingSp.length })
     }
 
     const pendingSignoffs = await prisma.phaseSignoff.findMany({
@@ -126,7 +188,10 @@ export async function GET(request: NextRequest) {
       },
     }))
 
-    return NextResponse.json({ count: items.length + designChanges.length, items, designChanges })
+    return NextResponse.json({
+      count: items.length + designChanges.length + closingSp.length,
+      items, designChanges, closingSp,
+    })
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode })

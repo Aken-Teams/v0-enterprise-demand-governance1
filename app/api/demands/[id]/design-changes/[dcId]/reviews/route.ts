@@ -4,7 +4,7 @@ import path from "path"
 import crypto from "crypto"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
-import { resolveBoardReviewers } from "@/lib/design-change"
+import type { DesignChangeStage } from "@/lib/design-change"
 import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 
@@ -58,7 +58,16 @@ export async function POST(
     const revision = await prisma.designChangeRevision.findUnique({
       where: { id: revisionId },
       include: {
-        designChange: { include: { demand: { select: { id: true, demandNumber: true, title: true, organizationId: true } } } },
+        designChange: {
+          include: {
+            demand: {
+              select: {
+                id: true, demandNumber: true, title: true, organizationId: true,
+                contactPersonId: true, demandManagerId: true,
+              },
+            },
+          },
+        },
         reviews: true,
         items: { select: { id: true } },
       },
@@ -71,9 +80,13 @@ export async function POST(
       return NextResponse.json({ error: "僅能審核最新版本" }, { status: 400 })
     }
 
-    const myReview = revision.reviews.find((r) => r.reviewerId === auth.userId)
+    // 兩階段流程：設計變更確認(GATE) 未通過前一律為 GATE 階段，通過後才進入逐條確認(CONTENT)
+    const activeStage: DesignChangeStage = revision.gateStatus === "APPROVED" ? "CONTENT" : "GATE"
+    const stageReviews = revision.reviews.filter((r) => r.stage === activeStage)
+
+    const myReview = stageReviews.find((r) => r.reviewerId === auth.userId)
     if (!myReview && auth.role !== "admin") {
-      return NextResponse.json({ error: "您非此設計變更的指定審核人" }, { status: 403 })
+      return NextResponse.json({ error: "您非此設計變更於目前階段的指定審核人" }, { status: 403 })
     }
     if (myReview && myReview.decision !== "PENDING") {
       return NextResponse.json({ error: "您已審核過此版本" }, { status: 400 })
@@ -89,8 +102,8 @@ export async function POST(
     if (decision === "REJECTED" && !overallComment && !items.some((it) => it.mark === "CROSS" || it.mark === "WARN")) {
       return NextResponse.json({ error: "駁回請填寫總回應或標記問題項目" }, { status: 400 })
     }
-    // 通過必須每一條 checklist 都確認（董事會第二階段只審 SP，不受此限）
-    if (decision === "APPROVED" && myReview?.role !== "BOARD") {
+    // 通過必須每一條 checklist 都確認；設計變更確認只裁決「准不准開」，不受此限
+    if (decision === "APPROVED" && activeStage === "CONTENT") {
       const confirmed = new Set(items.filter((it) => it.mark === "CONFIRMED").map((it) => it.itemId))
       const allConfirmed = revision.items.every((it) => confirmed.has(it.id))
       if (!allConfirmed) {
@@ -98,9 +111,17 @@ export async function POST(
       }
     }
 
-    // 兩段式：需求方全部通過後，若該版影響 SP，才把董事會加入為第二階段審核人
-    const boardCandidates = revision.affectsSp ? await resolveBoardReviewers(revision.designChange.demand.organizationId) : []
-    type Outcome = "REJECTED" | "APPROVED" | "TO_BOARD" | "PENDING"
+    // 設計變更確認通過後要建立的逐條確認審核人：
+    // 沿用第一階段的需求窗口（保留當初手動指定的對象）+ 需求主管（若有）
+    const gateRequesterId =
+      revision.reviews.find((r) => r.stage === "GATE" && r.role === "REQUESTER")?.reviewerId ??
+      revision.designChange.demand.contactPersonId
+    const contentTargets: { userId: string; role: string }[] = []
+    if (gateRequesterId) contentTargets.push({ userId: gateRequesterId, role: "REQUESTER" })
+    const mgrId = revision.designChange.demand.demandManagerId
+    if (mgrId && mgrId !== gateRequesterId) contentTargets.push({ userId: mgrId, role: "MANAGER" })
+
+    type Outcome = "REJECTED" | "APPROVED" | "TO_CONTENT" | "PENDING"
 
     const now = new Date()
     const outcome: Outcome = await prisma.$transaction(async (tx): Promise<Outcome> => {
@@ -116,25 +137,46 @@ export async function POST(
       if (myReview) {
         await tx.designChangeReview.update({ where: { id: myReview.id }, data: { decision, comment: overallComment, decidedAt: now } })
       } else {
-        await tx.designChangeReview.create({ data: { revisionId, reviewerId: auth.userId, role: "MANAGER", decision, comment: overallComment, decidedAt: now } })
+        // 管理者代審：補一筆該階段的審核紀錄
+        await tx.designChangeReview.create({
+          data: { revisionId, reviewerId: auth.userId, role: "MANAGER", stage: activeStage, decision, comment: overallComment, decidedAt: now },
+        })
       }
-      const allReviews = await tx.designChangeReview.findMany({ where: { revisionId }, select: { decision: true, role: true } })
-      if (allReviews.some((r) => r.decision === "REJECTED")) {
+      // 只彙總「目前階段」的裁決——設計變更確認與逐條確認各自獨立結算
+      const stageAll = await tx.designChangeReview.findMany({
+        where: { revisionId, stage: activeStage },
+        select: { decision: true },
+      })
+      if (stageAll.some((r) => r.decision === "REJECTED")) {
         result = "REJECTED"
-      } else if (allReviews.every((r) => r.decision === "APPROVED")) {
-        const hasBoard = allReviews.some((r) => r.role === "BOARD")
-        if (revision.affectsSp && !hasBoard && boardCandidates.length > 0) {
-          // 需求方全數通過 → 進董事會階段（版本維持待確認）
+      } else if (stageAll.every((r) => r.decision === "APPROVED")) {
+        result = activeStage === "GATE" ? "TO_CONTENT" : "APPROVED"
+      }
+
+      if (result === "TO_CONTENT") {
+        // 設計變更確認通過 → 記錄結果並開啟逐條確認（版本本身維持待確認）
+        await tx.designChangeRevision.update({ where: { id: revisionId }, data: { gateStatus: "APPROVED" } })
+        if (contentTargets.length > 0) {
           await tx.designChangeReview.createMany({
-            data: boardCandidates.map((b) => ({ revisionId, reviewerId: b.userId, role: "BOARD", decision: "PENDING" as const })),
+            data: contentTargets.map((t) => ({
+              revisionId, reviewerId: t.userId, role: t.role, stage: "CONTENT", decision: "PENDING" as const,
+            })),
           })
-          result = "TO_BOARD"
         } else {
+          // 無可指派的逐條確認人 → 視同直接通過，避免流程卡死
           result = "APPROVED"
         }
       }
       if (result === "REJECTED" || result === "APPROVED") {
-        await tx.designChangeRevision.update({ where: { id: revisionId }, data: { status: result, decidedAt: now } })
+        await tx.designChangeRevision.update({
+          where: { id: revisionId },
+          data: {
+            status: result,
+            decidedAt: now,
+            // 第一階段被駁回 → 一併記錄該階段結果
+            ...(activeStage === "GATE" ? { gateStatus: result } : {}),
+          },
+        })
         await tx.designChange.update({ where: { id: dcId }, data: { status: result } })
       }
       return result
@@ -160,13 +202,13 @@ export async function POST(
 
     const dm = revision.designChange.demand
     const dcTitle = revision.designChange.title
-    if (outcome === "TO_BOARD") {
-      const boardIds = [...new Set(boardCandidates.map((b) => b.userId).filter((uid) => uid !== auth.userId))]
-      if (boardIds.length > 0) {
-        notifyUsers(boardIds, {
+    if (outcome === "TO_CONTENT") {
+      const contentIds = [...new Set(contentTargets.map((t) => t.userId).filter((uid) => uid !== auth.userId))]
+      if (contentIds.length > 0) {
+        notifyUsers(contentIds, {
           type: "SIGNOFF",
-          title: "設計變更待董事會審核 SP",
-          message: `需求 ${dm.demandNumber}「${dm.title}」的設計變更「${dcTitle}」需求方已確認，且影響 SP（${revision.spCurrent} → ${(revision.spCurrent ?? 0) + (revision.spDelta ?? 0)}），請董事會審核。`,
+          title: "設計變更待逐項確認",
+          message: `需求 ${dm.demandNumber}「${dm.title}」的設計變更「${dcTitle}」已通過設計變更確認（董事會與需求窗口皆同意），請您逐項確認變更內容。`,
           linkUrl: `/demands/${id}`,
         })
       }
@@ -185,7 +227,7 @@ export async function POST(
     logAudit({
       userId: auth.userId, action: decision === "APPROVED" ? "SIGNOFF_APPROVE" : "SIGNOFF_REJECT",
       entity: "SIGNOFF", entityId: dcId, demandId: id,
-      details: { kind: "DESIGN_CHANGE_REVIEW", version: revision.version, decision, outcome, itemCount: items.length, files: files.length },
+      details: { kind: "DESIGN_CHANGE_REVIEW", stage: activeStage, version: revision.version, decision, outcome, itemCount: items.length, files: files.length },
       request,
     })
 
@@ -242,8 +284,9 @@ export async function PATCH(
     if (revision.version !== revision.designChange.currentVersion) {
       return NextResponse.json({ error: "僅能暫存最新版本" }, { status: 400 })
     }
-    const myReview = revision.reviews.find((r) => r.reviewerId === auth.userId)
-    if (!myReview) return NextResponse.json({ error: "您非此設計變更的指定審核人" }, { status: 403 })
+    const activeStage: DesignChangeStage = revision.gateStatus === "APPROVED" ? "CONTENT" : "GATE"
+    const myReview = revision.reviews.find((r) => r.reviewerId === auth.userId && r.stage === activeStage)
+    if (!myReview) return NextResponse.json({ error: "您非此設計變更於目前階段的指定審核人" }, { status: 403 })
     if (myReview.decision !== "PENDING") return NextResponse.json({ error: "您已審核過此版本" }, { status: 400 })
 
     const validItemIds = new Set(revision.items.map((it) => it.id))

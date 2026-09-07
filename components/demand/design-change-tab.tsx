@@ -27,7 +27,7 @@ type Mark = "PENDING" | "CONFIRMED" | "CROSS" | "WARN"
 
 interface Feedback { reviewerId: string; reviewer: { id: string; name: string }; mark: Mark; comment: string | null }
 interface Item { id: string; orderIndex: number; text: string; devChecked: boolean; feedback: Feedback[] }
-interface Review { reviewerId: string; reviewer: { id: string; name: string }; role: string; decision: string; comment: string | null; decidedAt: string | null }
+interface Review { reviewerId: string; reviewer: { id: string; name: string }; role: string; stage: string; decision: string; comment: string | null; decidedAt: string | null }
 interface DcDocument { id: string; fileName: string; fileUrl: string | null; fileSize: number | null; docGroup: string | null; fileVersion: number; checklistItemId: string | null; uploadedBy: { id: string; name: string }; createdAt: string }
 
 const SEG: { m: Mark; label: string; icon: string; active: string }[] = [
@@ -38,6 +38,8 @@ const SEG: { m: Mark; label: string; icon: string; active: string }[] = [
 interface Revision {
   id: string; version: number; summary: string; checklistMd: string | null
   affectsSp: boolean; spCurrent: number | null; spDelta: number | null; spNote: string | null; status: string
+  /** 設計變更確認結果；APPROVED 後才進入逐條確認 */
+  gateStatus: string
   submittedBy: { name: string }; submittedAt: string; decidedAt: string | null
   items: Item[]; reviews: Review[]; documents: DcDocument[]
 }
@@ -48,6 +50,8 @@ interface DesignChange {
 
 export interface PreviewableDoc { id: string; type: string; fileName: string; fileUrl: string | null; fileSize: number | null }
 const ROLE_LABELS: Record<string, string> = { REQUESTER: "需求窗口", MANAGER: "需求主管", BOARD: "董事會" }
+/** 目前所處階段：設計變更確認（董事會+需求窗口）通過後，才進入逐條確認 */
+const activeStageOf = (rev: { gateStatus: string }) => (rev.gateStatus === "APPROVED" ? "CONTENT" : "GATE")
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 function StatusBadge({ status }: { status: string }) {
@@ -125,14 +129,15 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           for (const dc of list) {
             const rev = dc.revisions[dc.revisions.length - 1]
             if (!rev) continue
-            const minePending = rev.status === "PENDING" && rev.reviews.some((r) => r.reviewerId === currentUserId && r.decision === "PENDING")
+            const stage = activeStageOf(rev)
+            const minePending = rev.status === "PENDING" && rev.reviews.some((r) => r.stage === stage && r.reviewerId === currentUserId && r.decision === "PENDING")
             if (minePending && !seededRef.current.has(dc.id)) {
               const items: Record<string, { mark: Mark; comment: string }> = {}
               for (const it of rev.items) {
                 const mine = it.feedback.find((f) => f.reviewerId === currentUserId)
                 if (mine && mine.mark !== "PENDING") items[it.id] = { mark: mine.mark, comment: mine.comment ?? "" }
               }
-              const myRev = rev.reviews.find((r) => r.reviewerId === currentUserId)
+              const myRev = rev.reviews.find((r) => r.stage === stage && r.reviewerId === currentUserId)
               next[dc.id] = { items, comment: myRev?.comment ?? "", files: [], itemFiles: {} }
               seededRef.current.add(dc.id)
             }
@@ -150,7 +155,9 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
     return dc.revisions.find((r) => r.version === ver) ?? dc.revisions[dc.revisions.length - 1]
   }
   const latestRevOf = (dc: DesignChange) => dc.revisions[dc.revisions.length - 1]
-  const myPendingReview = (rev: Revision) => rev.status === "PENDING" && rev.reviews.some((r) => r.reviewerId === currentUserId && r.decision === "PENDING")
+  const myPendingReview = (rev: Revision) =>
+    rev.status === "PENDING" &&
+    rev.reviews.some((r) => r.stage === activeStageOf(rev) && r.reviewerId === currentUserId && r.decision === "PENDING")
 
   const selOf = (dc: DesignChange, rev: Revision): Selection | null => {
     const s = sel[dc.id]
@@ -328,32 +335,65 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           const selection = selOf(dc, rev)
           const cur = dd(dc.id)
           const allConfirmed = rev.items.length > 0 && rev.items.every((it) => (cur.items[it.id]?.mark ?? "PENDING") === "CONFIRMED")
-          // 董事會第二階段只審 SP，不受「全部確認」限制
-          const iAmBoard = rev.reviews.some((r) => r.reviewerId === currentUserId && r.role === "BOARD")
-          const canApprove = allConfirmed || iAmBoard
+          // 設計變更確認只裁決「准不准開」，不受「全部確認」限制；逐條確認才需全數確認
+          const activeStage = activeStageOf(rev)
+          const canApprove = allConfirmed || activeStage === "GATE"
           // 版本層級附件依上傳者分類：需求方(審核人)佐證 vs 開發端文件
           const reviewerIds = new Set(rev.reviews.map((r) => r.reviewerId))
           const versionDocs = rev.documents.filter((d) => !d.checklistItemId)
           const devDocs = versionDocs.filter((d) => !reviewerIds.has(d.uploadedBy.id))
           const reviewerDocs = versionDocs.filter((d) => reviewerIds.has(d.uploadedBy.id))
           const decidedReviews = rev.reviews.filter((r) => r.decision !== "PENDING")
-          // 簽核流程（依版本而異）：需求方 →（若影響 SP）董事會
-          const stage1Reviews = rev.reviews.filter((r) => r.role === "REQUESTER" || r.role === "MANAGER")
-          const boardReviews = rev.reviews.filter((r) => r.role === "BOARD")
-          const boardUpcoming = rev.affectsSp && boardReviews.length === 0
-          const boardAgg = boardReviews.length === 0 ? undefined
-            : boardReviews.some((r) => r.decision === "REJECTED") ? "REJECTED"
-            : boardReviews.every((r) => r.decision === "APPROVED") ? "APPROVED" : "PENDING"
-          const flowItems: { key: string; roleLabel: string; name: string; decision?: string; upcoming?: boolean }[] = [
-            ...stage1Reviews.map((r) => ({ key: r.reviewerId, roleLabel: ROLE_LABELS[r.role] ?? r.role, name: r.reviewer.name, decision: r.decision })),
-            ...(boardReviews.length > 0
-              ? [{ key: "board", roleLabel: "董事會", name: boardReviews.length > 1 ? `${boardReviews.filter((r) => r.decision === "APPROVED").length}/${boardReviews.length}` : boardReviews[0].reviewer.name, decision: boardAgg }]
-              : boardUpcoming ? [{ key: "board-upcoming", roleLabel: "董事會", name: "", upcoming: true }] : []),
-          ]
-          const pendingStage1 = stage1Reviews.filter((r) => r.decision === "PENDING")
+          // 簽核流程：設計變更確認（需求窗口 + 董事會）→ 逐條確認（需求窗口 + 需求主管）
+          const gateReviews = rev.reviews.filter((r) => r.stage === "GATE")
+          const contentReviews = rev.reviews.filter((r) => r.stage === "CONTENT")
+          const gateRejected = gateReviews.some((r) => r.decision === "REJECTED")
+          // 同一階段內的審核人是「併行」的——誰先簽都可以，全部同意才推進到下一階段。
+          // 因此階段內以「＋」並列，只有階段與階段之間才用「→」表示先後。
+          type FlowNodeItem = { key: string; roleLabel: string; name: string; decision?: string; upcoming?: boolean }
+          type GroupState = "done" | "active" | "upcoming" | "rejected"
+          const stateOfGroup = (nodes: FlowNodeItem[]): GroupState => {
+            if (nodes.some((n) => n.upcoming)) return "upcoming"
+            if (nodes.some((n) => n.decision === "REJECTED")) return "rejected"
+            if (nodes.every((n) => n.decision === "APPROVED")) return "done"
+            return "active"
+          }
+          const flowGroups: { key: string; label: string; nodes: FlowNodeItem[] }[] = []
+          if (gateReviews.length > 0) {
+            flowGroups.push({
+              key: "gate",
+              label: gateReviews.length > 1 ? "設計變更確認 · 併行" : "設計變更確認",
+              nodes: gateReviews.map((r) => ({
+                key: `gate-${r.reviewerId}`,
+                roleLabel: ROLE_LABELS[r.role] ?? r.role,
+                name: r.reviewer.name,
+                decision: r.decision,
+              })),
+            })
+          }
+          if (contentReviews.length > 0) {
+            flowGroups.push({
+              key: "content",
+              label: contentReviews.length > 1 ? "逐條確認 · 併行" : "逐條確認",
+              nodes: contentReviews.map((r) => ({
+                key: `content-${r.reviewerId}`,
+                roleLabel: ROLE_LABELS[r.role] ?? r.role,
+                name: r.reviewer.name,
+                decision: r.decision,
+              })),
+            })
+          } else if (!gateRejected && rev.status === "PENDING") {
+            flowGroups.push({
+              key: "content-upcoming",
+              label: "逐條確認",
+              nodes: [{ key: "content-upcoming", roleLabel: "前一階段通過後開放", name: "", upcoming: true }],
+            })
+          }
+          const pendingInStage = (activeStage === "GATE" ? gateReviews : contentReviews).filter((r) => r.decision === "PENDING")
           const currentTurn = rev.status !== "PENDING" ? null
-            : pendingStage1.length > 0 ? pendingStage1.map((r) => ROLE_LABELS[r.role] ?? r.role).join("、")
-            : boardReviews.some((r) => r.decision === "PENDING") ? "董事會" : null
+            : pendingInStage.length > 0
+              ? `${activeStage === "GATE" ? "設計變更確認" : "逐條確認"}／${pendingInStage.map((r) => ROLE_LABELS[r.role] ?? r.role).join("、")}`
+              : null
           return (
             <Card key={dc.id} className="overflow-hidden p-0">
               {/* Header */}
@@ -438,20 +478,49 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                     )}
                   </div>
 
-                  {/* 簽核流程（依版本而異：需求方 →（影響 SP 才有）董事會） */}
-                  {flowItems.length > 0 && (
+                  {/* 簽核流程：設計變更確認（併行）→ 逐條確認（併行） */}
+                  {flowGroups.length > 0 && (
                     <div className="px-3 sm:px-4 py-2.5 border-b">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <p className="text-[11px] font-semibold text-muted-foreground">簽核流程</p>
-                        {currentTurn && <span className="text-[11px] text-muted-foreground">目前待簽：<strong className="text-amber-700">{currentTurn}</strong></span>}
+                        <p className="text-xs font-semibold text-muted-foreground">簽核流程</p>
+                        {currentTurn && <span className="text-xs text-muted-foreground">目前待簽：<strong className="text-amber-700">{currentTurn}</strong></span>}
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {flowItems.map((it, i) => (
-                          <div key={it.key} className="flex items-center gap-1.5">
-                            <FlowNode roleLabel={it.roleLabel} name={it.name} decision={it.decision} upcoming={it.upcoming} />
-                            {i < flowItems.length - 1 && <span className="text-muted-foreground text-xs">→</span>}
-                          </div>
-                        ))}
+                        {flowGroups.map((g, gi) => {
+                          const gs = stateOfGroup(g.nodes)
+                          // 已完成的階段淡化、進行中的階段強調——避免需求者誤以為又要重簽同一關
+                          const boxCls =
+                            gs === "done" ? "border-emerald-200 bg-emerald-50/50"
+                            : gs === "rejected" ? "border-red-200 bg-red-50/50"
+                            : gs === "active" ? "border-amber-300 bg-amber-50 ring-1 ring-amber-200"
+                            : "border-dashed border-slate-200 bg-slate-50/60"
+                          const stateText =
+                            gs === "done" ? "已完成" : gs === "rejected" ? "已駁回" : gs === "active" ? "進行中" : "尚未開始"
+                          const stateCls =
+                            gs === "done" ? "bg-emerald-100 text-emerald-700"
+                            : gs === "rejected" ? "bg-red-100 text-red-700"
+                            : gs === "active" ? "bg-amber-200 text-amber-800"
+                            : "bg-slate-100 text-slate-500"
+                          return (
+                            <div key={g.key} className="flex items-center gap-1.5">
+                              <div className={cn("rounded-lg border px-2.5 py-2", boxCls)}>
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                  <span className="text-xs font-medium text-foreground/80">{g.label}</span>
+                                  <span className={cn("text-[11px] rounded px-1.5 py-px font-medium", stateCls)}>{stateText}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {g.nodes.map((it, i) => (
+                                    <div key={it.key} className="flex items-center gap-1.5">
+                                      <FlowNode roleLabel={it.roleLabel} name={it.name} decision={it.decision} upcoming={it.upcoming} />
+                                      {i < g.nodes.length - 1 && <span className="text-muted-foreground text-xs">＋</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              {gi < flowGroups.length - 1 && <span className="text-muted-foreground text-xs">→</span>}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}
@@ -695,10 +764,15 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                               ))}
                             </div>
                           )}
-                          {iAmBoard && (
-                            <p className="text-[11px] text-indigo-600">董事會審核：請確認 SP 影響後通過或駁回（無需逐條勾選 checklist）。</p>
+                          {activeStage === "GATE" && (
+                            <p className="text-xs sm:text-sm text-indigo-700">設計變更確認：請裁決是否同意開立此設計變更。董事會與需求窗口皆同意後，才會開放逐條確認。</p>
                           )}
-                          {!canApprove && !iAmBoard && (
+                          {activeStage === "CONTENT" && (
+                            <p className="text-xs sm:text-sm text-indigo-700">
+                              逐條確認（第二關）：此變更已通過第一關的「設計變更確認」，現在請逐項確認變更內容的細節。
+                            </p>
+                          )}
+                          {!canApprove && activeStage === "CONTENT" && (
                             <p className="text-[11px] text-amber-600">需將全部檢查項目標記為「確認」才能通過（有疑慮/問題請駁回）。</p>
                           )}
                           <p className="text-[11px] text-muted-foreground/80">不必一次審完 —— 標記或附加檔案都會自動暫存，可分次完成，最後再按通過／駁回送出。</p>
@@ -796,7 +870,11 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
         demandId={demandId} demandNumber={demandNumber} phaseLabel={phaseLabel} token={token} currentSp={currentSp}
         mode={editorMode} dcId={reviseTarget?.id}
         windowCandidates={windowCandidates} contactPersonId={contactPersonId}
-        initialWindowId={editorMode === "edit" && reviseTarget ? (latestRevOf(reviseTarget).reviews.find((r) => r.role === "REQUESTER")?.reviewerId ?? null) : null}
+        initialWindowId={editorMode === "edit" && reviseTarget
+          ? (latestRevOf(reviseTarget).reviews.find((r) => r.stage === "GATE" && r.role === "REQUESTER")?.reviewerId
+            ?? latestRevOf(reviseTarget).reviews.find((r) => r.role === "REQUESTER")?.reviewerId
+            ?? null)
+          : null}
         initial={(editorMode === "revise" || editorMode === "edit") && reviseTarget ? {
           title: reviseTarget.title,
           summary: latestRevOf(reviseTarget).summary,
@@ -871,7 +949,7 @@ function FlowNode({ roleLabel, name, decision, upcoming }: { roleLabel: string; 
     else { cls = "border-amber-200 bg-amber-50 text-amber-700"; icon = "⏱" }
   }
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]", cls)} title={name}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs", cls)} title={name}>
       <span className="font-bold">{icon}</span>
       <span className="font-medium">{roleLabel}</span>
       {name && <span className="opacity-60">{name}</span>}
