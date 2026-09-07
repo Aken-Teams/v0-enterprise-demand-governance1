@@ -209,6 +209,7 @@ model User {
   sentMailLogs       MailLog[]
   apiKeys            ApiKey[]
   processDocs        ProcessDoc[]
+  processDocShares   ProcessDocShare[]
 
   @@map("users")
 }
@@ -762,6 +763,22 @@ model ProcessDoc {
 
   @@index([seq])
   @@map("process_docs")
+}
+
+/// 開發流程文件的公開分享連結
+/// 供沒有平台帳號者檢視最新版流程規範；固定顯示最新版本，不指向特定版次。
+model ProcessDocShare {
+  id          String    @id @default(cuid())
+  token       String    @unique /// nanoid 短碼 (12 字元)
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  expiresAt   DateTime  /// 建立時 +7 天
+  revokedAt   DateTime? /// 手動撤銷時間
+  viewCount   Int       @default(0) /// 開啟次數，供追蹤外流風險
+  createdAt   DateTime  @default(now())
+
+  @@index([token])
+  @@map("process_doc_shares")
 }
 
 /// 外部 API 金鑰

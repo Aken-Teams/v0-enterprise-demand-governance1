@@ -28,6 +28,7 @@ import { diffLines, diffStats, toHunks, changedSections } from "@/lib/diff"
 import { preprocessMarkdown } from "@/lib/markdown"
 import {
   FileText, GitCompare, Loader2, Upload, History, ShieldAlert, Trash2, Info, X, FileUp, ClipboardType, CheckCircle2, ChevronRight,
+  Share2, Copy, Check, Link2,
 } from "lucide-react"
 
 interface VersionRow {
@@ -48,6 +49,15 @@ interface PrevPayload {
   seq: number
   versionLabel: string
   content: string
+}
+
+interface ShareRow {
+  id: string
+  token: string
+  expiresAt: string
+  viewCount: number
+  createdAt: string
+  createdBy: { id: string; name: string } | null
 }
 
 type ViewMode = "doc" | "diff"
@@ -76,6 +86,79 @@ export default function ProcessPage() {
   const [sourceMode, setSourceMode] = useState<"file" | "paste">("file")
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // 分享連結（公開、7 天到期、固定顯示最新版）
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shares, setShares] = useState<ShareRow[]>([])
+  const [shareLoading, setShareLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
+
+  const shareUrlOf = (t: string) =>
+    typeof window === "undefined" ? `/process/share/${t}` : `${window.location.origin}/process/share/${t}`
+
+  const loadShares = useCallback(async () => {
+    if (!token) return
+    setShareLoading(true)
+    try {
+      const res = await fetch("/api/process-docs/share", { headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) setShares((await res.json()).shares ?? [])
+    } catch { /* 略過：對話框仍可建立新連結 */ } finally {
+      setShareLoading(false)
+    }
+  }, [token])
+
+  const createShare = async () => {
+    if (!token) return
+    setCreating(true)
+    try {
+      const res = await fetch("/api/process-docs/share", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        await loadShares()
+        // 建立後直接複製，省去再點一次
+        try {
+          await navigator.clipboard.writeText(shareUrlOf(data.token))
+          setCopiedToken(data.token)
+          toast.success("已建立分享連結並複製到剪貼簿")
+        } catch {
+          toast.success("已建立分享連結")
+        }
+      } else {
+        const e = await res.json().catch(() => ({}))
+        toast.error(e.error || "建立失敗")
+      }
+    } catch {
+      toast.error("網路錯誤")
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const revokeShare = async (t: string) => {
+    if (!token) return
+    try {
+      const res = await fetch(`/api/process-docs/share?token=${t}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) { toast.success("已撤銷"); await loadShares() }
+      else { const e = await res.json().catch(() => ({})); toast.error(e.error || "撤銷失敗") }
+    } catch { toast.error("網路錯誤") }
+  }
+
+  const copyShare = async (t: string) => {
+    try {
+      await navigator.clipboard.writeText(shareUrlOf(t))
+      setCopiedToken(t)
+      toast.success("已複製連結")
+    } catch {
+      toast.error("複製失敗，請手動選取")
+    }
+  }
 
   const hasContent = sourceMode === "file" ? !!file : !!pasted.trim()
   const canSubmit = !!versionLabel.trim() && hasContent
@@ -196,14 +279,20 @@ export default function ProcessPage() {
           </div>
           {isAdmin && (
             <div className="flex items-center gap-2">
-              {doc && isLatest && (
-                <Button variant="outline" size="sm" className="h-9 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteOpen(true)}>
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />刪除此版
+              {doc && (
+                <Button variant="outline" size="sm" className="h-9"
+                  onClick={() => { setShareOpen(true); loadShares() }}>
+                  <Share2 className="h-3.5 w-3.5 mr-1" />分享
                 </Button>
               )}
               <Button size="sm" className="h-9" onClick={() => setUploadOpen(true)}>
                 <Upload className="h-3.5 w-3.5 mr-1" />上傳新版本
               </Button>
+              {doc && isLatest && (
+                <Button variant="outline" size="sm" className="h-9 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteOpen(true)}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />刪除此版
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -331,6 +420,64 @@ export default function ProcessPage() {
           </>
         )}
       </div>
+
+      {/* 分享連結 */}
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>分享開發流程</DialogTitle>
+            <DialogDescription>
+              產生公開連結，供沒有平台帳號者檢視。連結固定顯示<strong>最新版本</strong>，7 天後自動失效。
+            </DialogDescription>
+          </DialogHeader>
+
+
+          <div className="space-y-2 max-h-[45vh] overflow-y-auto">
+            {shareLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin inline mr-1" />載入中…
+              </p>
+            ) : shares.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">目前沒有有效的分享連結</p>
+            ) : (
+              shares.map((sh) => (
+                <div key={sh.id} className="rounded-lg border p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <code className="text-xs truncate flex-1 bg-muted/50 rounded px-1.5 py-0.5">
+                      {shareUrlOf(sh.token)}
+                    </code>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
+                      title="複製連結" onClick={() => copyShare(sh.token)}>
+                      {copiedToken === sh.token
+                        ? <Check className="h-4 w-4 text-emerald-600" />
+                        : <Copy className="h-4 w-4" />}
+                    </Button>
+                    <Button size="sm" variant="ghost"
+                      className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-red-600"
+                      title="撤銷連結" onClick={() => revokeShare(sh.token)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground pl-5 flex-wrap">
+                    <span>{new Date(sh.expiresAt).toLocaleDateString("zh-TW")} 到期</span>
+                    <span>已開啟 {sh.viewCount} 次</span>
+                    {sh.createdBy && <span>由 {sh.createdBy.name} 建立</span>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShareOpen(false)}>關閉</Button>
+            <Button disabled={creating} onClick={createShare}>
+              {creating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Share2 className="h-4 w-4 mr-1" />}
+              建立新連結
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 刪除版本確認 */}
       <AlertDialog open={deleteOpen} onOpenChange={(o) => { if (!deleting) setDeleteOpen(o) }}>
