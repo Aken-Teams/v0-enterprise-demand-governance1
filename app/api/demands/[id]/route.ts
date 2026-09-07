@@ -317,6 +317,62 @@ export async function PATCH(
       }
     }
 
+    // 只略過本階段待簽核，不推進狀態。
+    // 讓「略過簽核」與「推進／結案」成為兩件獨立的事——否則結案前的略過
+    // 會被綁進結案流程，既無法單獨生效，也讓人分不清自己按下的是哪一件事。
+    if (body.action === "skipPhaseSignoff") {
+      const skipComment = ((body.comment as string) ?? "").trim()
+      if (!skipComment) {
+        return NextResponse.json({ error: "略過簽核必須填寫原因" }, { status: 400 })
+      }
+      const result = await prisma.phaseSignoff.updateMany({
+        where: { demandId: id, phase: demand.status, kind: "PHASE", status: "PENDING" },
+        data: {
+          status: "SKIPPED",
+          comment: skipComment,
+          respondedAt: new Date(),
+          respondedById: auth.userId,
+        },
+      })
+      if (result.count === 0) {
+        return NextResponse.json({ error: "此階段沒有待簽核項目" }, { status: 400 })
+      }
+      logAudit({
+        userId: auth.userId, action: "UPDATE", entity: "SIGNOFF", entityId: id, demandId: id,
+        details: { kind: "SKIP_PHASE_SIGNOFF", phase: demand.status, count: result.count, comment: skipComment },
+        request,
+      })
+      return NextResponse.json({ success: true, skipped: result.count })
+    }
+
+    // 只略過本階段待簽核，不推進狀態。
+    // 讓「略過簽核」與「推進／結案」成為兩件獨立的事——否則結案前的略過
+    // 會被綁進結案流程，既無法單獨生效，也讓人分不清自己按下的是哪一件事。
+    if (body.action === "skipPhaseSignoff") {
+      const skipComment = ((body.comment as string) ?? "").trim()
+      if (!skipComment) {
+        return NextResponse.json({ error: "略過簽核必須填寫原因" }, { status: 400 })
+      }
+      const result = await prisma.phaseSignoff.updateMany({
+        where: { demandId: id, phase: demand.status, kind: "PHASE", status: "PENDING" },
+        data: {
+          status: "SKIPPED",
+          comment: skipComment,
+          respondedAt: new Date(),
+          respondedById: auth.userId,
+        },
+      })
+      if (result.count === 0) {
+        return NextResponse.json({ error: "此階段沒有待簽核項目" }, { status: 400 })
+      }
+      logAudit({
+        userId: auth.userId, action: "UPDATE", entity: "SIGNOFF", entityId: id, demandId: id,
+        details: { kind: "SKIP_PHASE_SIGNOFF", phase: demand.status, count: result.count, comment: skipComment },
+        request,
+      })
+      return NextResponse.json({ success: true, skipped: result.count })
+    }
+
     // 智合移轉強合授權 SP：記錄移轉的 SP + 說明（僅管理者）
     if (body.action === "setZhiheSp") {
       if (auth.role !== "admin") {

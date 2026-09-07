@@ -1502,6 +1502,7 @@ export default function DemandDetailPage() {
                 completedDate={demand.completedDate}
                 onStatusChange={() => { setActiveTab("overview"); setDocPhaseKey((k) => k + 1); fetchDemand() }}
                 pendingSignoff={currentPhaseSignoff}
+                closingSpPending={(demand as unknown as { hasPendingClosingSp?: boolean }).hasPendingClosingSp}
                 onRefresh={fetchDemand}
                 hideSignoffIndicator
                 estimatedSp={demand.estimatedSp}

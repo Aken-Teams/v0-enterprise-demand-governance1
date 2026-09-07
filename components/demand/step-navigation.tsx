@@ -12,7 +12,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2, Paperclip, FileIcon, Trash2, ShieldCheck, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Check, Circle, Info, AlertTriangle, ClipboardCheck, RefreshCw, Loader2, Paperclip, FileIcon, Trash2, ShieldCheck, X, SkipForward } from "lucide-react"
 import {
   PIPELINE_STEPS,
   STATUS_MAP,
@@ -53,6 +53,8 @@ interface StepNavigationProps {
   onRefresh?: () => void
   /** Hide the signoff status indicator (when parent already shows it) */
   hideSignoffIndicator?: boolean
+  /** 是否已有待董事會核准的結案 SP 調整（有的話不可重複送出） */
+  closingSpPending?: boolean
   /** SP fields for closing adjustment */
   estimatedSp?: number
   confirmedSp?: number | null
@@ -69,6 +71,7 @@ export function StepNavigation({
   pendingSignoff,
   onRefresh,
   hideSignoffIndicator,
+  closingSpPending,
   estimatedSp,
   confirmedSp,
   phasePlans: propPhasePlans,
@@ -184,6 +187,7 @@ export function StepNavigation({
   const hasPendingSignoff = pendingSignoff?.status === "PENDING"
   const isApproved = pendingSignoff?.status === "APPROVED"
   const isRejected = pendingSignoff?.status === "REJECTED"
+  const isSkipped = pendingSignoff?.status === "SKIPPED"
   // Show re-request button if rejected and no new pending
   const canReRequest = isRejected && !hasPendingSignoff
 
@@ -195,6 +199,10 @@ export function StepNavigation({
 
   const handleClick = (dir: "next" | "prev") => {
     if (dir === "next" && nextPhase === "CLOSED") {
+      if (closingSpPending) {
+        toast.error("已有一筆結案 SP 調整待董事會核准，請等待簽核結果")
+        return
+      }
       setDirection("next")
       // 「略過本階段簽核」與「結案流程」是兩件事，各自獨立：
       // 先用本階段的略過對話框做決定（與其他階段一致），再進入結案精靈。
@@ -333,14 +341,29 @@ export function StepNavigation({
   const handleForceAdvance = async () => {
     if (!token || !forceComment.trim()) return
 
-    // 結案不在這裡送出——略過只是本階段的決定，
-    // 結案仍須走完精靈（文件確認／SP 調整／關聯設計變更／董事會簽核）。
+    // 結案前的略過：只做「略過本階段簽核」這一件事，立即生效並留下紀錄，
+    // 不順便結案。結案仍須另外走完精靈（文件／SP／關聯設計變更／董事會簽核）。
     if (nextPhase === "CLOSED") {
-      setSkipSignoff(true)
-      setShowForceDialog(false)
-      setClosingStep(0)
-      setShowClosingWizard(true)
-      loadApprovedDcs()
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/demands/${demandId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "skipPhaseSignoff", comment: forceComment.trim() }),
+        })
+        if (res.ok) {
+          setSkipSignoff(true)
+          setShowForceDialog(false)
+          setForceComment("")
+          toast.success("已略過本階段簽核，可繼續進行結案")
+          onRefresh?.()
+        } else {
+          const e = await res.json().catch(() => ({}))
+          toast.error(e.error || "略過失敗")
+        }
+      } catch { /* ignore */ } finally {
+        setLoading(false)
+      }
       return
     }
 
@@ -469,7 +492,7 @@ export function StepNavigation({
           <Button
             size="sm"
             className="h-7 sm:h-8 text-xs sm:text-sm px-2.5 sm:px-3"
-            disabled={!canGoNext}
+            disabled={!canGoNext || (!!closingSpPending && nextPhase === "CLOSED")}
             onClick={() => handleClick("next")}
           >
             下一步
@@ -602,7 +625,14 @@ export function StepNavigation({
             {/* Step 1: 簽核與注意事項 */}
             {closingStep === 0 && (
               <div className="space-y-3">
-                {isApproved ? (
+                {isSkipped ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <SkipForward className="h-4 w-4 shrink-0" />
+                      <span className="font-medium">本階段簽核已標記為「管理者略過」</span>
+                    </div>
+                  </div>
+                ) : isApproved ? (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
                     <div className="flex items-center gap-2 text-sm text-emerald-700">
                       <Check className="h-4 w-4 shrink-0" />
@@ -625,18 +655,7 @@ export function StepNavigation({
                   </div>
                 )}
 
-                {/* 略過與否已在前一個對話框決定，這裡只呈現結果 */}
-                {hasPendingSignoff && skipSignoff && (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                      <p className="text-[13px] font-semibold text-amber-800">已選擇略過本階段簽核</p>
-                    </div>
-                    <p className="text-xs text-amber-700">
-                      本輪待簽核將標記為「管理者略過」。原因：{forceComment.trim() || "（未填寫）"}
-                    </p>
-                  </div>
-                )}
+
 
                 <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 space-y-1.5">
                   <div className="flex items-center gap-2">
