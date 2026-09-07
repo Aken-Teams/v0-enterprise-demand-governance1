@@ -102,6 +102,8 @@ export function StepNavigation({
   const [spOverride, setSpOverride] = useState(false)
   /** 推算明細預設收合——設計變更多時整片數字很雜 */
   const [spDetailOpen, setSpDetailOpen] = useState(false)
+  /** 是否略過本階段簽核——由使用者明確勾選，不因前面階段略過而預設 */
+  const [skipSignoff, setSkipSignoff] = useState(false)
 
   // 動態步驟：有 SP 調整才需要「關聯設計變更」
   const closingSteps = hasSpAdjustment
@@ -192,10 +194,14 @@ export function StepNavigation({
   )
 
   const handleClick = (dir: "next" | "prev") => {
-    // 結案必須走精靈（文件確認／SP 調整／關聯設計變更／董事會簽核），
-    // 即使還有待簽核也一樣——略過簽核改在精靈第一步處理，不可整段跳過結案流程。
     if (dir === "next" && nextPhase === "CLOSED") {
       setDirection("next")
+      // 「略過本階段簽核」與「結案流程」是兩件事，各自獨立：
+      // 先用本階段的略過對話框做決定（與其他階段一致），再進入結案精靈。
+      if (hasPendingSignoff && !skipSignoff) {
+        setShowForceDialog(true)
+        return
+      }
       setClosingStep(0)
       setShowClosingWizard(true)
       loadApprovedDcs()
@@ -253,9 +259,14 @@ export function StepNavigation({
 
   const handleClosingConfirm = async () => {
     if (!token) return
-    // 略過簽核必須留下原因（與 handleForceAdvance 一致）
-    if (hasPendingSignoff && !forceComment.trim()) {
-      toast.error("此階段仍有待簽核，請於第一步填寫略過原因")
+    // 尚有待簽核時，必須由使用者明確選擇略過，並留下原因
+    if (hasPendingSignoff && !skipSignoff) {
+      toast.error("此階段仍有待簽核，請先完成簽核，或於第一步勾選「略過此階段簽核」")
+      setClosingStep(0)
+      return
+    }
+    if (skipSignoff && !forceComment.trim()) {
+      toast.error("請於第一步填寫略過簽核的原因")
       setClosingStep(0)
       return
     }
@@ -275,6 +286,9 @@ export function StepNavigation({
             completedDate: inputCompletedDate || null,
             designChangeIds: selectedDcIds,
             override: spOverride,
+            // 略過決定必須跟著送出，否則本階段簽核會一直停在待確認
+            skipSignoff: hasPendingSignoff && skipSignoff,
+            skipComment: forceComment.trim() || null,
           }),
         })
         if (res.ok) {
@@ -294,7 +308,7 @@ export function StepNavigation({
     // SP 未調整 → 照原流程直接結案
     const payload: Record<string, unknown> = { status: "CLOSED" }
     if (inputCompletedDate) payload.completedDate = inputCompletedDate
-    if (hasPendingSignoff) {
+    if (hasPendingSignoff && skipSignoff) {
       payload.forceAdvance = true
       payload.forceComment = forceComment.trim()
     }
@@ -318,6 +332,18 @@ export function StepNavigation({
 
   const handleForceAdvance = async () => {
     if (!token || !forceComment.trim()) return
+
+    // 結案不在這裡送出——略過只是本階段的決定，
+    // 結案仍須走完精靈（文件確認／SP 調整／關聯設計變更／董事會簽核）。
+    if (nextPhase === "CLOSED") {
+      setSkipSignoff(true)
+      setShowForceDialog(false)
+      setClosingStep(0)
+      setShowClosingWizard(true)
+      loadApprovedDcs()
+      return
+    }
+
     setLoading(true)
     const targetStatus = nextPhase
     const payload: Record<string, unknown> = {
@@ -521,6 +547,11 @@ export function StepNavigation({
           setAdjustmentReason("")
           setPhaseAllocations({})
           setInputCompletedDate("")
+          setSkipSignoff(false)
+          setForceComment("")
+          setSpOverride(false)
+          setSpDetailOpen(false)
+          setSelectedDcIds([])
         }
       }}>
         <AlertDialogContent className="max-w-[calc(100%-1rem)] sm:max-w-xl max-h-[90vh] sm:max-h-[85vh] flex flex-col p-0 gap-0">
@@ -594,23 +625,16 @@ export function StepNavigation({
                   </div>
                 )}
 
-                {/* 仍有待簽核 → 必須寫明略過原因，該輪簽核會被標記為「管理者略過」 */}
-                {hasPendingSignoff && (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
+                {/* 略過與否已在前一個對話框決定，這裡只呈現結果 */}
+                {hasPendingSignoff && skipSignoff && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                      <p className="text-sm font-semibold text-amber-800">此階段仍有待簽核，結案將略過簽核</p>
+                      <p className="text-[13px] font-semibold text-amber-800">已選擇略過本階段簽核</p>
                     </div>
                     <p className="text-xs text-amber-700">
-                      繼續結案會把本輪待簽核標記為「管理者略過」，請說明原因以留下紀錄。
+                      本輪待簽核將標記為「管理者略過」。原因：{forceComment.trim() || "（未填寫）"}
                     </p>
-                    <Textarea
-                      value={forceComment}
-                      onChange={(e) => setForceComment(e.target.value)}
-                      placeholder="請說明略過簽核的原因…"
-                      rows={2}
-                      className="bg-background"
-                    />
                   </div>
                 )}
 
@@ -706,7 +730,7 @@ export function StepNavigation({
                           <button
                             type="button"
                             onClick={() => setSpDetailOpen((v) => !v)}
-                            className="ml-auto text-sm text-indigo-600 hover:underline shrink-0"
+                            className="ml-auto text-xs text-indigo-600 hover:underline shrink-0"
                           >
                             {spDetailOpen ? "收合" : `${contributing.length} 筆設計變更明細`}
                           </button>
@@ -728,7 +752,7 @@ export function StepNavigation({
 
                         <label className="flex items-center gap-1.5 cursor-pointer">
                           <Checkbox checked={spOverride} onCheckedChange={(c) => setSpOverride(!!c)} />
-                          <span className="text-sm text-indigo-700">手動覆寫（需說明原因）</span>
+                          <span className="text-xs text-indigo-700">手動覆寫（需說明原因）</span>
                         </label>
                       </div>
                     )
@@ -811,8 +835,8 @@ export function StepNavigation({
             {hasSpAdjustment && closingStep === dcStepIndex && (
               <div className="space-y-3">
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs text-amber-800 font-medium">此次結案調整了 SP，需經董事會簽核</p>
-                  <p className="text-[11px] text-amber-700 mt-1">
+                  <p className="text-[13px] text-amber-800 font-medium">此次結案調整了 SP，需經董事會簽核</p>
+                  <p className="text-xs text-amber-700 mt-1">
                     {dcTotalDelta !== 0
                       ? "影響 SP 的設計變更已自動勾選，數字即依這些變更推算而來。送出後需求不會立即結案，待董事會同意後才完成結案。"
                       : "請勾選造成本次 SP 調整的設計變更，讓董事會了解調整來由（這些變更董事會皆已簽核過）。送出後需求不會立即結案，待董事會同意後才完成結案。"}
@@ -1114,7 +1138,9 @@ export function StepNavigation({
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  如確定要強制推進，系統將記錄為「管理者略過簽核」。請填寫略過原因：
+                  {nextPhase === "CLOSED"
+                    ? "如確定略過，系統將記錄為「管理者略過簽核」；確認後會接著進入結案流程。請填寫略過原因："
+                    : "如確定要強制推進，系統將記錄為「管理者略過簽核」。請填寫略過原因："}
                 </p>
                 <Textarea
                   placeholder="請說明略過簽核的原因（必填）..."
@@ -1133,7 +1159,7 @@ export function StepNavigation({
               disabled={loading || !forceComment.trim()}
               className="bg-amber-600 hover:bg-amber-700"
             >
-              強制推進
+              {nextPhase === "CLOSED" ? "略過並繼續結案" : "強制推進"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -92,6 +92,8 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
   CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
   TERMINATED: { label: "已終止", color: "bg-zinc-200 text-zinc-700" },
+  // 顯示用：結案 SP 調整待董事會核准
+  CLOSING_SP_REVIEW: { label: "結案簽核中", color: "bg-orange-100 text-orange-700" },
 }
 
 export default function InboxPage() {
@@ -726,7 +728,13 @@ function InboxContent() {
               {paginatedDemands.map((demand) => {
                 const statusInfo = demand.hasPendingSettlement
                   ? (STATUS_MAP.TERMINATING ?? { label: "終止簽核中", color: "bg-orange-100 text-orange-700" })
-                  : (STATUS_MAP[(demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated) ? "TERMINATED" : demand.status] || { label: demand.status, color: "bg-gray-100 text-gray-700" })
+                  : (STATUS_MAP[
+                      (demand.status === "CLOSED" && (demand as unknown as { isTerminated?: boolean }).isTerminated)
+                        ? "TERMINATED"
+                        : (demand.status !== "CLOSED" && (demand as unknown as { hasPendingClosingSp?: boolean }).hasPendingClosingSp)
+                          ? "CLOSING_SP_REVIEW"
+                          : demand.status
+                    ] || { label: demand.status, color: "bg-gray-100 text-gray-700" })
                 const pc = demand.phaseCompletion
                 return (
                   <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">

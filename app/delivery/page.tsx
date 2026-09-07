@@ -436,7 +436,7 @@ export default function DeliveryDashboardPage() {
                 ).length
                 const missingDocs = getMissingDocs(demand)
                 const taskWarnings = getTaskWarnings(demand.subTasks)
-                const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)]
+                const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated, (demand as unknown as { hasPendingClosingSp?: boolean }).hasPendingClosingSp)]
                 const isExpanded = expandedIds.has(demand.id)
                 const hasEdits = hasPendingEdits(demand.id)
                 const isSaving = savingDemand === demand.id

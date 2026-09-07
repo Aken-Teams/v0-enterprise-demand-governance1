@@ -828,7 +828,7 @@ export default function DemandDetailPage() {
   )
   const statusInfo = hasPendingSettlement
     ? (STATUS_MAP.TERMINATING ?? { label: "終止簽核中", color: "bg-orange-100 text-orange-700" })
-    : (STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)] || { label: demand.status, color: "bg-gray-100 text-gray-700" })
+    : (STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated, (demand as unknown as { hasPendingClosingSp?: boolean }).hasPendingClosingSp)] || { label: demand.status, color: "bg-gray-100 text-gray-700" })
   const currentStepIndex = PIPELINE_STEPS.indexOf(demand.status as typeof PIPELINE_STEPS[number])
   const isRejected = demand.status === "REJECTED"
   const isOnHold = demand.status === "ON_HOLD"
@@ -1147,6 +1147,11 @@ export default function DemandDetailPage() {
                     ? Math.max(...allStepSignoffs.map(s => new Date(s.requestedAt).getTime()))
                     : 0
                   const stepSignoffs = allStepSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestTime)
+                  // 結案本身不在 SIGNOFF_REQUIRED_PHASES，但 SP 有調整時會有董事會簽核，
+                  // 需要在「已結案」節點標示出來，否則看起來像卡在驗收中
+                  const closingSpPending = step === "CLOSED" && (demand.phaseSignoffs ?? []).some(
+                    (s) => (s as { kind?: string }).kind === "CLOSING_SP" && s.status === "PENDING"
+                  )
                   const stepHasPending = stepSignoffs.some(s => s.status === "PENDING")
                   const stepNonOverride = stepSignoffs.filter(s => s.targetRole !== "BOARD_OVERRIDE")
                   const stepAllApproved = stepSignoffs.length > 0 && (stepSignoffs.every(s => s.status === "APPROVED")
@@ -1204,6 +1209,12 @@ export default function DemandDetailPage() {
                                 <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/40">
                                   <ClipboardCheck className="h-2.5 w-2.5" />
                                   待確認
+                                </span>
+                              )}
+                              {closingSpPending && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-medium rounded-full px-1.5 py-0 text-amber-600 bg-amber-50">
+                                  <Clock className="h-2.5 w-2.5" />
+                                  SP 簽核中
                                 </span>
                               )}
                             </div>

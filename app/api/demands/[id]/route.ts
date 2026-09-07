@@ -256,7 +256,11 @@ export async function GET(
     const canSeeQuote = auth.role === "admin" || !!cu?.canViewSpTransfer
     const canApproveQuote = auth.role === "admin" && cu?.managerCompany === "QIANGHE"
     const isZhiheManager = auth.role === "admin" && cu?.managerCompany === "ZHIHE"
-    const demandOut: Record<string, unknown> = { ...demandRest, contactPerson: contactPersonUser, myDesignChangeReview }
+    // 是否有待董事會核准的結案 SP 調整（供狀態徽章顯示為「結案簽核中」）
+    const hasPendingClosingSp = (demand.phaseSignoffs ?? []).some(
+      (s) => s.kind === "CLOSING_SP" && s.status === "PENDING"
+    )
+    const demandOut: Record<string, unknown> = { ...demandRest, contactPerson: contactPersonUser, myDesignChangeReview, hasPendingClosingSp }
     if (!canSeeQuote) {
       demandOut.zhiheSpTaken = null
       demandOut.zhiheSpNote = null

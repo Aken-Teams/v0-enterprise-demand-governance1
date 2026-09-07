@@ -319,6 +319,7 @@ export async function GET(request: NextRequest) {
             where: {
               OR: [
                 { kind: "DESIGN_CHANGE", status: "PENDING" },
+                { kind: "CLOSING_SP", status: "PENDING" },
                 { kind: "PHASE" },
               ],
             },
@@ -427,6 +428,8 @@ export async function GET(request: NextRequest) {
         // Signoff status for current phase
         const pendingSignoffs = latestRound.filter(s => s.status === "PENDING").length
         const totalSignoffs = latestRound.length
+        // 結案 SP 調整待董事會核准 → 列表顯示為「結案簽核中」而非停留在驗收中
+        const hasPendingClosingSp = signoffs.some(s => s.kind === "CLOSING_SP" && s.status === "PENDING")
 
         return {
           id: d.id,
@@ -435,6 +438,7 @@ export async function GET(request: NextRequest) {
           description: d.description,
           status: d.status,
           isTerminated: (d as unknown as { isTerminated?: boolean }).isTerminated ?? false,
+          hasPendingClosingSp,
           vendor: d.vendor,
           priority: d.priority,
           estimatedSp: d.estimatedSp,

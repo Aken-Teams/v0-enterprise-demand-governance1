@@ -607,7 +607,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
     )
   }
 
-  const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated)] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
+  const statusInfo = STATUS_MAP[demandStatusKey(demand.status, (demand as unknown as { isTerminated?: boolean }).isTerminated, (demand as unknown as { hasPendingClosingSp?: boolean }).hasPendingClosingSp)] || { label: demand.status, color: "bg-gray-100 text-gray-700" }
   const sp = demand.confirmedSp ?? demand.estimatedSp
   const isRejected = demand.status === "REJECTED"
   const isCancelled = demand.status === "CANCELLED"

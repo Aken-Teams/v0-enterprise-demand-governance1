@@ -221,6 +221,14 @@ export async function POST(
     const payloadJson = JSON.stringify(payload)
     const requestedAt = new Date()
 
+    // 送審結案 SP 時若已決定略過本階段簽核，須立即生效——
+    // 否則需求會卡在「待確認」，看起來像沒做過那個決定。
+    const skipSignoff = body.skipSignoff === true
+    const skipComment = ((body.skipComment as string) ?? "").trim()
+    if (skipSignoff && !skipComment) {
+      return NextResponse.json({ error: "略過簽核必須填寫原因" }, { status: 400 })
+    }
+
     await prisma.phaseSignoff.createMany({
       data: boardTargets.map((t) => ({
         demandId: id,
@@ -235,6 +243,18 @@ export async function POST(
         requestedAt,
       })),
     })
+
+    if (skipSignoff) {
+      await prisma.phaseSignoff.updateMany({
+        where: { demandId: id, phase: demand.status, kind: "PHASE", status: "PENDING" },
+        data: {
+          status: "SKIPPED",
+          comment: skipComment,
+          respondedAt: requestedAt,
+          respondedById: auth.userId,
+        },
+      })
+    }
 
     const dcLabel = designChangeIds.length > 0
       ? approved
@@ -259,7 +279,7 @@ export async function POST(
       entity: "SIGNOFF",
       entityId: id,
       demandId: id,
-      details: { kind: "CLOSING_SP", oldSp, newSp, expectedSp, dcTotalDelta, override: isOverride, designChangeIds, reason },
+      details: { kind: "CLOSING_SP", oldSp, newSp, expectedSp, dcTotalDelta, override: isOverride, designChangeIds, reason, skipSignoff, skipComment: skipComment || null },
       request,
     })
 

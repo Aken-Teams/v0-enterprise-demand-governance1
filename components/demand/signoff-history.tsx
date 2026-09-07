@@ -38,6 +38,8 @@ interface SignoffRecord {
   requestedBy: { id: string; name: string }
   respondedBy: { id: string; name: string } | null
   documents?: SignoffDocument[]
+  /** kind = CLOSING_SP 專用：結案 SP 調整內容（JSON 字串） */
+  payload?: string | null
 }
 
 const TARGET_ROLE_LABELS: Record<string, string> = {
@@ -904,7 +906,22 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
                 const GroupIcon = STATUS_ICONS[group.groupStatus] || Clock
                 const groupIconColor = STATUS_ICON_COLORS[group.groupStatus] || "text-gray-400"
                 const groupStatusInfo = SIGNOFF_STATUS_MAP[group.groupStatus]
-                const phaseLabel = STATUS_MAP[group.phase]?.label || group.phase
+                const isClosingSp = group.kind === "CLOSING_SP"
+                // 結案 SP 調整的 phase 是 CLOSED，若沿用階段名會顯示成「已結案」而看不出用途
+                const phaseLabel = isClosingSp
+                  ? "結案 SP 調整"
+                  : STATUS_MAP[group.phase]?.label || group.phase
+                // 從 payload 取出前後 SP，讓紀錄本身就看得到當時送審的數字
+                const closingSp = (() => {
+                  if (!isClosingSp) return null
+                  const raw = group.signoffs[0]?.payload
+                  if (!raw) return null
+                  try {
+                    const p = JSON.parse(raw) as { oldSp?: number; newSp?: number }
+                    if (typeof p.oldSp !== "number" || typeof p.newSp !== "number") return null
+                    return { oldSp: p.oldSp, newSp: p.newSp }
+                  } catch { return null }
+                })()
                 const isExpanded = resolvedExpanded.has(group.key)
 
                 // For single-signer groups, use the signoff's own status for the card
@@ -958,6 +975,11 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
                             <span className="ml-1 text-indigo-600">- 設計變更</span>
                           )}
                         </span>
+                        {closingSp && (
+                          <Badge className="text-[9px] sm:text-[10px] shrink-0 bg-orange-100 text-orange-700">
+                            {closingSp.oldSp} → {closingSp.newSp} SP
+                          </Badge>
+                        )}
 
                         {/* Single-signer: role badge + status + name */}
                         {!isMulti && singleSignoff && (

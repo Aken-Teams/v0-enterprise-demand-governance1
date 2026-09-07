@@ -12,14 +12,24 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   TERMINATED: { label: "已終止", color: "bg-zinc-200 text-zinc-700" },
   // 顯示用（非資料庫狀態）：有待客戶 Master 確認的「代簽終止結算」→ 終止簽核中
   TERMINATING: { label: "終止簽核中", color: "bg-orange-100 text-orange-700" },
+  // 顯示用（非資料庫狀態）：結案 SP 調整已送出、等董事會核准 → 結案簽核中
+  CLOSING_SP_REVIEW: { label: "結案簽核中", color: "bg-orange-100 text-orange-700" },
 }
 
 /**
- * 需求「顯示用」狀態鍵：CLOSED 且經代簽終止 → 顯示為 TERMINATED（已終止），其餘照原狀態。
- * 供狀態徽章使用；實際資料庫狀態仍為 CLOSED（SP 結算、分析等不受影響）。
+ * 需求「顯示用」狀態鍵。實際資料庫狀態不受影響（SP 結算、分析等照舊）：
+ *  - CLOSED 且經代簽終止 → TERMINATED（已終止）
+ *  - 尚未結案但已送出結案 SP 調整、等董事會核准 → CLOSING_SP_REVIEW（結案簽核中）
+ *    否則需求會一直顯示「驗收中」，看不出正在等結案簽核。
  */
-export function demandStatusKey(status: string, isTerminated?: boolean | null): string {
-  return status === "CLOSED" && isTerminated ? "TERMINATED" : status
+export function demandStatusKey(
+  status: string,
+  isTerminated?: boolean | null,
+  hasPendingClosingSp?: boolean | null
+): string {
+  if (status === "CLOSED" && isTerminated) return "TERMINATED"
+  if (status !== "CLOSED" && hasPendingClosingSp) return "CLOSING_SP_REVIEW"
+  return status
 }
 
 export const PIPELINE_STEPS = [
