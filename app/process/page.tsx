@@ -18,12 +18,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { diffLines, diffStats, toHunks, changedSections } from "@/lib/diff"
 import { preprocessMarkdown } from "@/lib/markdown"
 import {
-  FileText, GitCompare, Loader2, Upload, History, ShieldAlert, Trash2, Info, X, FileUp, ClipboardType, CheckCircle2,
+  FileText, GitCompare, Loader2, Upload, History, ShieldAlert, Trash2, Info, X, FileUp, ClipboardType, CheckCircle2, ChevronRight,
 } from "lucide-react"
 
 interface VersionRow {
@@ -70,6 +74,8 @@ export default function ProcessPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   /** 內容來源：兩種方式擇一，避免同時填造成「以哪個為準」的疑慮 */
   const [sourceMode, setSourceMode] = useState<"file" | "paste">("file")
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const hasContent = sourceMode === "file" ? !!file : !!pasted.trim()
   const canSubmit = !!versionLabel.trim() && hasContent
@@ -111,7 +117,19 @@ export default function ProcessPage() {
   const diff = useMemo(() => {
     if (!doc || !previous) return null
     const lines = diffLines(previous.content, doc.content)
-    return { lines, stats: diffStats(lines), hunks: toHunks(lines, 3), sections: changedSections(lines) }
+    const hunks = toHunks(lines, 3)
+    const sections = changedSections(lines)
+
+    // 依頂層章節收斂：逐條列出所有小節會變成一面牆，
+    // 收成「章節 + 變更處數」並可點擊跳轉，才真的幫得上忙。
+    const groups: { top: string; count: number; hunkIndex: number }[] = []
+    for (const sec of sections) {
+      const existing = groups.find((g) => g.top === sec.top)
+      if (existing) { existing.count++; continue }
+      const hunkIndex = hunks.findIndex((h) => h.lines.includes(sec.firstChanged))
+      groups.push({ top: sec.top, count: 1, hunkIndex: hunkIndex < 0 ? 0 : hunkIndex })
+    }
+    return { lines, stats: diffStats(lines), hunks, sections, groups }
   }, [doc, previous])
 
   const handleUpload = async () => {
@@ -150,15 +168,15 @@ export default function ProcessPage() {
 
   const handleDeleteLatest = async () => {
     if (!token || !doc) return
-    if (!confirm(`確定刪除最新版本 ${doc.versionLabel}？此操作無法復原。`)) return
+    setDeleting(true)
     try {
       const res = await fetch(`/api/process-docs?seq=${doc.seq}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (res.ok) { toast.success("已刪除"); await load() }
+      if (res.ok) { setDeleteOpen(false); toast.success("已刪除"); await load() }
       else { const e = await res.json().catch(() => ({})); toast.error(e.error || "刪除失敗") }
-    } catch { toast.error("網路錯誤") }
+    } catch { toast.error("網路錯誤") } finally { setDeleting(false) }
   }
 
   const isLatest = doc != null && versions.length > 0 && doc.seq === versions[0].seq
@@ -179,7 +197,7 @@ export default function ProcessPage() {
           {isAdmin && (
             <div className="flex items-center gap-2">
               {doc && isLatest && (
-                <Button variant="outline" size="sm" className="h-9 text-red-600 border-red-200 hover:bg-red-50" onClick={handleDeleteLatest}>
+                <Button variant="outline" size="sm" className="h-9 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteOpen(true)}>
                   <Trash2 className="h-3.5 w-3.5 mr-1" />刪除此版
                 </Button>
               )}
@@ -248,10 +266,10 @@ export default function ProcessPage() {
                     <GitCompare className="h-3.5 w-3.5 mr-1" />
                     版本差異
                     {diff && !diff.stats.identical && (
-                      <span className="ml-1 text-[10px]">
-                        <span className="text-emerald-600">+{diff.stats.added}</span>
-                        {" "}
-                        <span className="text-red-600">−{diff.stats.removed}</span>
+                      <span className="ml-1.5 text-[10px] font-medium">
+                        <span className={mode === "diff" ? "text-emerald-200" : "text-emerald-600"}>+{diff.stats.added}</span>
+                        <span className={cn("mx-0.5", mode === "diff" ? "text-primary-foreground/40" : "text-muted-foreground/40")}>/</span>
+                        <span className={mode === "diff" ? "text-rose-200" : "text-red-600"}>−{diff.stats.removed}</span>
                       </span>
                     )}
                   </Button>
@@ -313,6 +331,34 @@ export default function ProcessPage() {
           </>
         )}
       </div>
+
+      {/* 刪除版本確認 */}
+      <AlertDialog open={deleteOpen} onOpenChange={(o) => { if (!deleting) setDeleteOpen(o) }}>
+        <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除版本 {doc?.versionLabel}？</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>此操作無法復原，該版本的內容與修改摘要將永久移除。</p>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800">
+                  刪除後，開發流程將回到前一版；若此為唯一版本，頁面會回到「尚未上傳流程文件」。
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDeleteLatest() }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              確定刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 上傳新版本 */}
       <Dialog open={uploadOpen} onOpenChange={(o) => { if (!uploading) setUploadOpen(o) }}>
@@ -427,12 +473,21 @@ export default function ProcessPage() {
 
 /** 版本差異檢視：GitHub 風格的行級對照 */
 function DiffView({ diff, fromLabel, toLabel, watermarkBg, selectable }: {
-  diff: { lines: ReturnType<typeof diffLines>; stats: ReturnType<typeof diffStats>; hunks: ReturnType<typeof toHunks>; sections: string[] } | null
+  diff: {
+    lines: ReturnType<typeof diffLines>
+    stats: ReturnType<typeof diffStats>
+    hunks: ReturnType<typeof toHunks>
+    sections: ReturnType<typeof changedSections>
+    groups: { top: string; count: number; hunkIndex: number }[]
+  } | null
   fromLabel: string
   toLabel: string
   watermarkBg: string
   selectable: boolean
 }) {
+  // 變更區塊預設收起：多數時候只需看到「改了幾行」，需要導覽時才展開
+  const [sectionsOpen, setSectionsOpen] = useState(false)
+
   if (!diff) {
     return <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">第一版沒有可比對的前一版</CardContent></Card>
   }
@@ -452,12 +507,33 @@ function DiffView({ diff, fromLabel, toLabel, watermarkBg, selectable }: {
             <span className="ml-2 text-emerald-600 font-medium">+{diff.stats.added} 行</span>
             <span className="text-red-600 font-medium">−{diff.stats.removed} 行</span>
           </div>
-          {diff.sections.length > 0 && (
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1">變更區塊</p>
-              <div className="flex flex-wrap gap-1.5">
-                {diff.sections.map((s) => (
-                  <span key={s} className="text-[11px] rounded border bg-muted/40 px-1.5 py-0.5">{s}</span>
+          {diff.groups.length > 0 && (
+            <div className="border-t pt-2.5">
+              <button
+                type="button"
+                onClick={() => setSectionsOpen((v) => !v)}
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", sectionsOpen && "rotate-90")} />
+                變更區塊
+                <span className="rounded bg-muted px-1.5 py-px text-[11px] font-normal">{diff.groups.length} 個章節</span>
+                {!sectionsOpen && (
+                  <span className="text-[11px] font-normal text-muted-foreground/60">展開可跳至該處</span>
+                )}
+              </button>
+              <div className={cn("flex flex-wrap gap-1.5 mt-2", !sectionsOpen && "hidden")}>
+                {diff.groups.map((g) => (
+                  <button
+                    key={g.top}
+                    type="button"
+                    onClick={() => {
+                      document.getElementById(`hunk-${g.hunkIndex}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs rounded-md border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100 hover:border-indigo-300 transition-colors px-2 py-1 max-w-full"
+                  >
+                    <span className="font-medium text-indigo-900 truncate">{g.top}</span>
+                    <span className="shrink-0 rounded bg-indigo-200/70 text-indigo-800 text-[10px] px-1">{g.count}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -474,7 +550,7 @@ function DiffView({ diff, fromLabel, toLabel, watermarkBg, selectable }: {
         >
           <div className="overflow-x-auto">
             {diff.hunks.map((h, hi) => (
-              <div key={hi} className="border-b last:border-b-0">
+              <div key={hi} id={`hunk-${hi}`} className="border-b last:border-b-0 scroll-mt-4">
                 <div className="bg-muted/50 px-3 py-1 text-[11px] font-mono text-muted-foreground">
                   @@ 舊版 第 {h.oldStart} 行 · 新版 第 {h.newStart} 行 @@
                 </div>

@@ -184,22 +184,55 @@ function makeHunk(lines: DiffLine[]): DiffHunk {
   return { oldStart: firstOld, newStart: firstNew, lines }
 }
 
+/** 一個有變動的章節 */
+export interface ChangedSection {
+  /** 完整路徑，例如「Phase 6 — 結案 › SP 結算規則」 */
+  path: string
+  /** 最上層章節，供分組收斂用 */
+  top: string
+  /** 末層小節 */
+  leaf: string
+  /** 該區段的第一個變更行，供捲動定位 */
+  firstChanged: DiffLine
+}
+
 /**
- * 抓出有變動的 Markdown 章節標題，讓使用者一眼看出「改了哪些區塊」。
- * 依標題層級追蹤，回傳每個變更行所屬的最近標題。
+ * 抓出有變動的 Markdown 章節，讓使用者一眼看出「改了哪些區塊」。
+ *
+ * 以標題層級維護路徑：像「目的」「簽核」「階段產出」這類小標會在多個章節重複出現，
+ * 只回傳最近的標題會失去脈絡，因此一併附上上層章節。
  */
-export function changedSections(lines: DiffLine[]): string[] {
-  const sections: string[] = []
-  let current = ""
+export function changedSections(lines: DiffLine[]): ChangedSection[] {
+  const sections: ChangedSection[] = []
+  const seen = new Set<string>()
+  const stack: { level: number; text: string }[] = []
+
+  const record = (line: DiffLine) => {
+    if (stack.length === 0) return
+    // 最多顯示兩層，過長的路徑反而難讀
+    const parts = stack.slice(-2).map((h) => h.text)
+    const path = parts.join(" › ")
+    if (!path || seen.has(path)) return
+    seen.add(path)
+    sections.push({
+      path,
+      top: stack[0].text,
+      leaf: parts[parts.length - 1],
+      firstChanged: line,
+    })
+  }
+
   for (const l of lines) {
     const m = l.text.match(/^(#{1,6})\s+(.*)$/)
     if (m) {
-      current = m[2].trim()
-      // 標題本身被改動 → 直接列入
-      if (l.op !== "same" && current && !sections.includes(current)) sections.push(current)
+      const level = m[1].length
+      const text = m[2].trim()
+      while (stack.length > 0 && stack[stack.length - 1].level >= level) stack.pop()
+      if (text) stack.push({ level, text })
+      if (l.op !== "same") record(l)
       continue
     }
-    if (l.op !== "same" && current && !sections.includes(current)) sections.push(current)
+    if (l.op !== "same") record(l)
   }
   return sections
 }
