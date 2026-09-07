@@ -127,6 +127,3 @@ export function preprocessMarkdown(md: string): string {
 
   return out.join("\n")
 }
-
-/** @deprecated 改用 preprocessMarkdown（現已同時處理容器與高亮語法） */
-export const expandHackmdContainers = preprocessMarkdown

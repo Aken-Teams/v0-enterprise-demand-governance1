@@ -19,7 +19,7 @@ import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn, copyText } from "@/lib/utils"
-import { expandHackmdContainers } from "@/lib/markdown"
+import { preprocessMarkdown } from "@/lib/markdown"
 import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -197,7 +197,7 @@ mermaid.initialize({
 function formatGherkinInMarkdown(input: string): string {
   // HackMD 容器語法（:::spoiler / :::info…）標準 Markdown 不認得，
   // 須在下方的提前返回之前先展開，否則含程式碼區塊的文件會整段跳過處理。
-  const md = expandHackmdContainers(input)
+  const md = preprocessMarkdown(input)
   // If the content already has proper ```gherkin fenced code blocks,
   // return as-is and let ReactMarkdown render them natively.
   if (/```gherkin/.test(md)) return md

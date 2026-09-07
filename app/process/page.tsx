@@ -21,9 +21,9 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { diffLines, diffStats, toHunks, changedSections } from "@/lib/diff"
-import { expandHackmdContainers } from "@/lib/markdown"
+import { preprocessMarkdown } from "@/lib/markdown"
 import {
-  FileText, GitCompare, Loader2, Upload, History, ShieldAlert, Trash2, Info,
+  FileText, GitCompare, Loader2, Upload, History, ShieldAlert, Trash2, Info, X, FileUp, ClipboardType, CheckCircle2,
 } from "lucide-react"
 
 interface VersionRow {
@@ -68,6 +68,11 @@ export default function ProcessPage() {
   const [pasted, setPasted] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  /** 內容來源：兩種方式擇一，避免同時填造成「以哪個為準」的疑慮 */
+  const [sourceMode, setSourceMode] = useState<"file" | "paste">("file")
+
+  const hasContent = sourceMode === "file" ? !!file : !!pasted.trim()
+  const canSubmit = !!versionLabel.trim() && hasContent
 
   // 浮水印：與需求文件預覽同一套（姓名 + 機密文件）
   const watermarkBg = useMemo(() => {
@@ -112,14 +117,14 @@ export default function ProcessPage() {
   const handleUpload = async () => {
     if (!token) return
     if (!versionLabel.trim()) { toast.error("請填寫版本號"); return }
-    if (!pasted.trim() && !file) { toast.error("請上傳 .md 檔或貼上文件內容"); return }
+    if (!hasContent) { toast.error(sourceMode === "file" ? "請選擇 .md 檔" : "請貼上 Markdown 內容"); return }
     setUploading(true)
     try {
       const fd = new FormData()
       fd.append("versionLabel", versionLabel.trim())
       fd.append("title", title.trim())
       fd.append("changeNote", changeNote.trim())
-      if (pasted.trim()) fd.append("content", pasted.trim())
+      if (sourceMode === "paste") fd.append("content", pasted.trim())
       else if (file) fd.append("file", file)
 
       const res = await fetch("/api/process-docs", {
@@ -130,7 +135,7 @@ export default function ProcessPage() {
       if (res.ok) {
         toast.success("已建立新版本")
         setUploadOpen(false)
-        setVersionLabel(""); setTitle(""); setChangeNote(""); setPasted(""); setFile(null)
+        setVersionLabel(""); setTitle(""); setChangeNote(""); setPasted(""); setFile(null); setSourceMode("file")
         await load()
       } else {
         const e = await res.json().catch(() => ({}))
@@ -286,7 +291,7 @@ export default function ProcessPage() {
                       remarkRehypeOptions={{ allowDangerousHtml: true }}
                       components={mermaidMarkdownComponents}
                     >
-                      {expandHackmdContainers(doc.content)}
+                      {preprocessMarkdown(doc.content)}
                     </ReactMarkdown>
                   </div>
                 </CardContent>
@@ -337,39 +342,79 @@ export default function ProcessPage() {
                 placeholder="例如：MVP 架構確認次數改為三次、新增結案 SP 需董事會簽核" className="text-sm" />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">上傳 .md 檔</Label>
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-3.5 w-3.5 mr-1" />選擇檔案
-                </Button>
-                <span className="text-xs text-muted-foreground truncate">{file?.name || "尚未選擇"}</span>
-                {file && (
-                  <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = "" }}>
-                    清除
-                  </Button>
-                )}
+            <div className="space-y-2">
+              <Label className="text-xs">文件內容 <span className="text-red-500">*</span>（擇一）</Label>
+              {/* 兩種來源擇一，只顯示選中的那個輸入區，避免誤以為兩個都要填 */}
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                {([
+                  { k: "file" as const, label: "上傳 .md 檔", Icon: FileUp },
+                  { k: "paste" as const, label: "貼上 Markdown", Icon: ClipboardType },
+                ]).map(({ k, label, Icon }) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setSourceMode(k)}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                      sourceMode === k ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                ))}
               </div>
+
+              {sourceMode === "file" ? (
+                file ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span className="text-sm font-medium truncate flex-1">{file.name}</span>
+                    <span className="text-[11px] text-muted-foreground shrink-0">{(file.size / 1024).toFixed(1)} KB</span>
+                    <Button
+                      type="button" variant="ghost" size="sm"
+                      className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-red-600"
+                      title="移除檔案"
+                      onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = "" }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="w-full rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/40 transition-colors py-6 flex flex-col items-center gap-1.5"
+                  >
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-sm font-medium">點擊選擇 .md 檔</span>
+                    <span className="text-[11px] text-muted-foreground">支援 .md / .markdown / .txt，上限 500KB</span>
+                  </button>
+                )
+              ) : (
+                <Textarea
+                  value={pasted}
+                  onChange={(e) => setPasted(e.target.value)}
+                  rows={10} placeholder="貼上 Markdown 內容…" className="text-xs font-mono"
+                />
+              )}
               <input
                 ref={fileRef} type="file" accept=".md,.markdown,.txt" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPasted("") } }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }}
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">或直接貼上 Markdown</Label>
-              <Textarea
-                value={pasted}
-                onChange={(e) => { setPasted(e.target.value); if (e.target.value.trim()) setFile(null) }}
-                rows={8} placeholder="貼上 Markdown 內容…（與上傳檔案擇一）" className="text-xs font-mono"
-              />
-              <p className="text-[11px] text-muted-foreground">兩者擇一即可；若同時提供，以貼上的內容為準。</p>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-2">
+            {!canSubmit && (
+              <span className="text-[11px] text-muted-foreground mr-auto self-center">
+                {!versionLabel.trim()
+                  ? "請填寫版本號"
+                  : sourceMode === "file" ? "請選擇 .md 檔" : "請貼上 Markdown 內容"}
+              </span>
+            )}
             <Button variant="outline" disabled={uploading} onClick={() => setUploadOpen(false)}>取消</Button>
-            <Button disabled={uploading} onClick={handleUpload}>
+            <Button disabled={uploading || !canSubmit} onClick={handleUpload}>
               {uploading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
               建立版本
             </Button>

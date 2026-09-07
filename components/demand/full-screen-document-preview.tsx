@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { X, FileText, Loader2, Download, ExternalLink, FileAudio, ZoomIn } from "lucide-react"
 import { DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
-import { expandHackmdContainers } from "@/lib/markdown"
+import { preprocessMarkdown } from "@/lib/markdown"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
@@ -19,7 +19,7 @@ import { ExcelPreview } from "@/components/excel-preview"
 function formatGherkinInMarkdown(input: string): string {
   // HackMD 容器語法（:::spoiler / :::info…）標準 Markdown 不認得，
   // 須在下方的提前返回之前先展開，否則含程式碼區塊的文件會整段跳過處理。
-  const md = expandHackmdContainers(input)
+  const md = preprocessMarkdown(input)
   if (/```gherkin/.test(md)) return md
   if (/```/.test(md)) return md
 
