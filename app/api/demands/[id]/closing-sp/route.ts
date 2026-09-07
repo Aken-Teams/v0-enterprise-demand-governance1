@@ -166,6 +166,37 @@ export async function POST(
       )
     }
 
+    // 以設計變更紀錄驗算結案 SP：只認每個已通過設計變更「最終通過版本」的增減，
+    // 中途被駁回的版本不計入。結案不應該再自行算一次或填出與紀錄不符的數字。
+    const approvedWithRev = await prisma.designChange.findMany({
+      where: { demandId: id, status: "APPROVED" },
+      select: {
+        id: true, seq: true,
+        revisions: {
+          where: { status: "APPROVED" },
+          orderBy: { version: "desc" },
+          take: 1,
+          select: { affectsSp: true, spDelta: true },
+        },
+      },
+    })
+    const dcTotalDelta = approvedWithRev.reduce((sum, d) => {
+      const r = d.revisions[0]
+      return sum + (r?.affectsSp ? (r.spDelta ?? 0) : 0)
+    }, 0)
+    const expectedSp = oldSp + dcTotalDelta
+    const isOverride = body.override === true
+
+    if (!isOverride && dcTotalDelta !== 0 && Math.abs(newSp - expectedSp) > 1e-9) {
+      return NextResponse.json(
+        { error: `結案 SP 與設計變更紀錄不符：依已通過的設計變更應為 ${expectedSp}（原始 ${oldSp}，變更累計 ${dcTotalDelta > 0 ? "+" : ""}${dcTotalDelta}），送出值為 ${newSp}` },
+        { status: 400 }
+      )
+    }
+    if (isOverride && !reason) {
+      return NextResponse.json({ error: "手動覆寫結案 SP 時必須填寫原因" }, { status: 400 })
+    }
+
     // 階段分配（沿用結案精靈的欄位，僅保留正式流程中的階段）
     let phaseAllocations: Record<string, number> | null = null
     if (body.phaseAllocations && typeof body.phaseAllocations === "object") {
@@ -228,7 +259,7 @@ export async function POST(
       entity: "SIGNOFF",
       entityId: id,
       demandId: id,
-      details: { kind: "CLOSING_SP", oldSp, newSp, designChangeIds, reason },
+      details: { kind: "CLOSING_SP", oldSp, newSp, expectedSp, dcTotalDelta, override: isOverride, designChangeIds, reason },
       request,
     })
 

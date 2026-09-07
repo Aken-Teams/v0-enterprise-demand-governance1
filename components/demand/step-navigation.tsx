@@ -26,7 +26,13 @@ const CLOSING_STEP_BASE = ["簽核確認", "文件確認", "SP 調整"] as const
 const CLOSING_STEP_DC = "關聯設計變更"
 const CLOSING_STEP_LAST = "確認結案"
 
-interface ApprovedDesignChange { id: string; seq: number; title: string }
+interface ApprovedDesignChange {
+  id: string
+  seq: number
+  title: string
+  /** 該設計變更最終通過版本的 SP 增減（未影響 SP 則為 0） */
+  delta: number
+}
 
 interface SignoffInfo {
   id: string
@@ -92,6 +98,10 @@ export function StepNavigation({
   const [approvedDcs, setApprovedDcs] = useState<ApprovedDesignChange[]>([])
   const [selectedDcIds, setSelectedDcIds] = useState<string[]>([])
   const [dcLoading, setDcLoading] = useState(false)
+  /** 手動覆寫自動推算的 SP（例外情況才用，需寫明原因） */
+  const [spOverride, setSpOverride] = useState(false)
+  /** 推算明細預設收合——設計變更多時整片數字很雜 */
+  const [spDetailOpen, setSpDetailOpen] = useState(false)
 
   // 動態步驟：有 SP 調整才需要「關聯設計變更」
   const closingSteps = hasSpAdjustment
@@ -110,8 +120,33 @@ export function StepNavigation({
       })
       if (res.ok) {
         const data = await res.json()
-        const list = (data.designChanges ?? []) as { id: string; seq: number; title: string; status: string }[]
-        setApprovedDcs(list.filter((d) => d.status === "APPROVED").map(({ id, seq, title }) => ({ id, seq, title })))
+        type Rev = { version: number; status: string; affectsSp: boolean; spDelta: number | null }
+        const list = (data.designChanges ?? []) as { id: string; seq: number; title: string; status: string; revisions: Rev[] }[]
+
+        // 只認「最終通過版本」的 SP 增減：中途被駁回的版本不計入，
+        // 例如提 +2 被退、改 +1 通過 → 只算 +1。
+        const dcs: ApprovedDesignChange[] = list
+          .filter((d) => d.status === "APPROVED")
+          .map((d) => {
+            const finalRev = [...(d.revisions ?? [])].reverse().find((r) => r.status === "APPROVED")
+            const delta = finalRev?.affectsSp ? (finalRev.spDelta ?? 0) : 0
+            return { id: d.id, seq: d.seq, title: d.title, delta }
+          })
+        setApprovedDcs(dcs)
+
+        // 依設計變更紀錄自動帶入 SP，避免結案時重算或填出不一致的數字
+        const totalDelta = dcs.reduce((sum, d) => sum + d.delta, 0)
+        if (totalDelta !== 0) {
+          setHasSpAdjustment(true)
+          setAdjustedSp(String(currentEffectiveSp + totalDelta))
+          setSelectedDcIds(dcs.filter((d) => d.delta !== 0).map((d) => d.id))
+          const allocs: Record<string, string> = {}
+          for (const phase of PIPELINE_STEPS) {
+            const plan = propPhasePlans?.find((p) => p.phase === phase)
+            if (plan?.plannedSp) allocs[phase] = String(plan.plannedSp)
+          }
+          setPhaseAllocations(allocs)
+        }
       }
     } catch { /* 清單載入失敗不阻擋結案流程 */ } finally {
       setDcLoading(false)
@@ -119,6 +154,11 @@ export function StepNavigation({
   }
 
   const currentEffectiveSp = confirmedSp ?? estimatedSp ?? 0
+  // 已通過設計變更的 SP 累計影響 → 結案應有的 SP
+  const dcTotalDelta = approvedDcs.reduce((sum, d) => sum + d.delta, 0)
+  const suggestedSp = currentEffectiveSp + dcTotalDelta
+  /** 有設計變更可依循且未勾選覆寫時，SP 由系統決定 */
+  const spLocked = dcTotalDelta !== 0 && !spOverride
 
   // All-phase document status for closing wizard
   const allPhaseDocs = PIPELINE_STEPS.filter(p => p !== "CLOSED").map(phase => {
@@ -234,6 +274,7 @@ export function StepNavigation({
             phaseAllocations: spAdj.phaseAllocations,
             completedDate: inputCompletedDate || null,
             designChangeIds: selectedDcIds,
+            override: spOverride,
           }),
         })
         if (res.ok) {
@@ -497,17 +538,17 @@ export function StepNavigation({
               將狀態從「{STATUS_MAP[currentStatus]?.label}」變更為「{STATUS_MAP["CLOSED"]?.label}」
             </p>
             {/* Step indicator */}
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5 overflow-x-auto pb-1 -mb-1">
               {closingSteps.map((title, i) => {
                 const isActive = i === closingStep
                 const isDone = i < closingStep
                 return (
-                  <div key={i} className="flex items-center gap-0.5 flex-1 min-w-0">
+                  <div key={i} className="flex items-center gap-0.5 shrink-0">
                     <button
                       type="button"
                       onClick={() => i <= closingStep && setClosingStep(i)}
                       disabled={i > closingStep}
-                      className={`flex items-center justify-center gap-1 sm:gap-1.5 rounded-md px-1.5 sm:px-2 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium transition-colors w-full
+                      className={`flex items-center justify-center gap-1 sm:gap-1.5 rounded-md px-1.5 sm:px-2 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium transition-colors whitespace-nowrap
                         ${isActive ? "bg-primary text-primary-foreground" : isDone ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer" : "bg-muted text-muted-foreground/50"}
                       `}
                     >
@@ -631,6 +672,7 @@ export function StepNavigation({
                     <Checkbox
                       id="spAdjustment"
                       checked={hasSpAdjustment}
+                      disabled={spLocked}
                       onCheckedChange={(checked) => {
                         setHasSpAdjustment(!!checked)
                         if (checked && !adjustedSp) {
@@ -647,21 +689,69 @@ export function StepNavigation({
                     <Label htmlFor="spAdjustment" className="text-sm font-medium cursor-pointer">是否有 SP 調整？</Label>
                     <span className="text-xs text-muted-foreground ml-auto">目前 {currentEffectiveSp} SP</span>
                   </div>
+
+                  {/* 依已通過的設計變更自動推算，數字與設計變更紀錄保持一致 */}
+                  {dcTotalDelta !== 0 && (() => {
+                    const contributing = approvedDcs.filter((d) => d.delta !== 0)
+                    return (
+                      <div className="rounded-md border border-indigo-200 bg-indigo-50/60 p-2.5 space-y-1.5">
+                        {/* 一行結論就夠——明細收在下方，設計變更再多也不會洗版 */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-indigo-900">
+                            {currentEffectiveSp} → {suggestedSp} SP
+                          </span>
+                          <span className={`text-[11px] font-medium rounded px-1.5 py-px ${dcTotalDelta > 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                            {dcTotalDelta > 0 ? `+${dcTotalDelta}` : String(dcTotalDelta)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSpDetailOpen((v) => !v)}
+                            className="ml-auto text-sm text-indigo-600 hover:underline shrink-0"
+                          >
+                            {spDetailOpen ? "收合" : `${contributing.length} 筆設計變更明細`}
+                          </button>
+                        </div>
+
+                        {spDetailOpen && (
+                          <div className="space-y-0.5 border-t border-indigo-200 pt-1.5">
+                            <div className="flex items-center justify-between text-xs text-indigo-700">
+                              <span>專案原始 SP</span><span className="font-medium">{currentEffectiveSp}</span>
+                            </div>
+                            {contributing.map((d) => (
+                              <div key={d.id} className="flex items-center justify-between text-xs text-indigo-700">
+                                <span className="truncate">DC-{String(d.seq).padStart(2, "0")} {d.title}</span>
+                                <span className="font-medium shrink-0 ml-2">{d.delta > 0 ? `+${d.delta}` : String(d.delta)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox checked={spOverride} onCheckedChange={(c) => setSpOverride(!!c)} />
+                          <span className="text-sm text-indigo-700">手動覆寫（需說明原因）</span>
+                        </label>
+                      </div>
+                    )
+                  })()}
                   {hasSpAdjustment && (
                     <div className="space-y-3 pt-1">
+                      {!spLocked && (
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">調整後 SP</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={adjustedSp}
+                            onChange={(e) => setAdjustedSp(e.target.value)}
+                            placeholder="輸入新的 SP"
+                            className="h-8"
+                          />
+                        </div>
+                      )}
                       <div className="space-y-1.5">
-                        <Label className="text-xs">調整後 SP</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={adjustedSp}
-                          onChange={(e) => setAdjustedSp(e.target.value)}
-                          placeholder="輸入新的 SP"
-                          className="h-8"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">調整原因</Label>
+                        <Label className="text-xs">
+                          調整原因{spOverride ? "（必填）" : dcTotalDelta !== 0 ? "（選填）" : ""}
+                        </Label>
                         <Textarea
                           value={adjustmentReason}
                           onChange={(e) => setAdjustmentReason(e.target.value)}
@@ -723,8 +813,9 @@ export function StepNavigation({
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <p className="text-xs text-amber-800 font-medium">此次結案調整了 SP，需經董事會簽核</p>
                   <p className="text-[11px] text-amber-700 mt-1">
-                    請勾選造成本次 SP 調整的設計變更，讓董事會了解調整來由（這些變更董事會皆已簽核過）。
-                    送出後需求不會立即結案，待董事會同意後才完成結案。
+                    {dcTotalDelta !== 0
+                      ? "影響 SP 的設計變更已自動勾選，數字即依這些變更推算而來。送出後需求不會立即結案，待董事會同意後才完成結案。"
+                      : "請勾選造成本次 SP 調整的設計變更，讓董事會了解調整來由（這些變更董事會皆已簽核過）。送出後需求不會立即結案，待董事會同意後才完成結案。"}
                   </p>
                 </div>
 
@@ -759,12 +850,17 @@ export function StepNavigation({
                           }
                           className="mt-0.5"
                         />
-                        <span className="min-w-0">
+                        <span className="min-w-0 flex-1">
                           <span className="font-mono text-xs text-muted-foreground mr-1.5">
                             DC-{String(dc.seq).padStart(2, "0")}
                           </span>
                           <span className="text-sm">{dc.title}</span>
                         </span>
+                        {dc.delta !== 0 && (
+                          <span className={`text-xs font-medium shrink-0 ${dc.delta > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {dc.delta > 0 ? `+${dc.delta}` : String(dc.delta)} SP
+                          </span>
+                        )}
                       </label>
                     ))}
                   </div>
