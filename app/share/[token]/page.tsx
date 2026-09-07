@@ -44,6 +44,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { expandHackmdContainers } from "@/lib/markdown"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PrototypePanel, PrototypeInlinePreview, PrototypePreviewModal, type Prototype } from "@/components/demand/prototype-panel"
@@ -68,7 +69,10 @@ mermaid.initialize({
   themeVariables: { background: "transparent", primaryColor: "#dbeafe", primaryTextColor: "#1e3a5f", lineColor: "#94a3b8" },
 })
 
-function formatGherkinInMarkdown(md: string): string {
+function formatGherkinInMarkdown(input: string): string {
+  // HackMD 容器語法（:::spoiler / :::info…）標準 Markdown 不認得，
+  // 須在下方的提前返回之前先展開，否則含程式碼區塊的文件會整段跳過處理。
+  const md = expandHackmdContainers(input)
   if (/```gherkin/.test(md)) return md
   if (/```/.test(md)) return md
 

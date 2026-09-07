@@ -41,6 +41,7 @@ import {
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { cn, copyText } from "@/lib/utils"
+import { expandHackmdContainers } from "@/lib/markdown"
 import { toast } from "sonner"
 import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, demandStatusKey } from "@/lib/constants/demand"
 import { PhaseDocuments } from "@/components/demand/phase-documents"
@@ -70,7 +71,10 @@ mermaid.initialize({
 
 /** Pre-process raw Gherkin / BDD text into well-structured Markdown.
  *  Feature / Scenario lines → headings; Given/When/Then blocks → fenced code blocks. */
-function formatGherkinInMarkdown(md: string): string {
+function formatGherkinInMarkdown(input: string): string {
+  // HackMD 容器語法（:::spoiler / :::info…）標準 Markdown 不認得，
+  // 須在下方的提前返回之前先展開，否則含程式碼區塊的文件會整段跳過處理。
+  const md = expandHackmdContainers(input)
   // If the content already has proper ```gherkin fenced code blocks,
   // return as-is and let ReactMarkdown render them natively.
   if (/```gherkin/.test(md)) return md

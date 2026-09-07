@@ -3,6 +3,19 @@
 
 @plugin "@tailwindcss/typography";
 
+/* Tailwind Typography 預設會在行內 code 前後插入反引號（code::before/after），
+   但我們的 Markdown 已用底色標示行內程式碼，兩者疊加會變成「`v1.3`」這種重複呈現。 */
+.prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *))::before,
+.prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *))::after {
+  content: none;
+}
+
+/* 文件插圖在滿版版面下若靠左會顯得孤立，統一置中呈現 */
+.prose :where(img):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* Enterprise bright theme with blue-based corporate colors */

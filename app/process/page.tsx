@@ -21,6 +21,7 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { diffLines, diffStats, toHunks, changedSections } from "@/lib/diff"
+import { expandHackmdContainers } from "@/lib/markdown"
 import {
   FileText, GitCompare, Loader2, Upload, History, ShieldAlert, Trash2, Info,
 } from "lucide-react"
@@ -285,7 +286,7 @@ export default function ProcessPage() {
                       remarkRehypeOptions={{ allowDangerousHtml: true }}
                       components={mermaidMarkdownComponents}
                     >
-                      {doc.content}
+                      {expandHackmdContainers(doc.content)}
                     </ReactMarkdown>
                   </div>
                 </CardContent>
