@@ -913,7 +913,7 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
                 const phaseLabel = isClosingSp
                   ? "結案 SP 調整"
                   : isDevLink
-                  ? "開發中連結確認"
+                  ? "首次 APP 交付確認"
                   : STATUS_MAP[group.phase]?.label || group.phase
                 // 從 payload 取出前後 SP，讓紀錄本身就看得到當時送審的數字
                 const closingSp = (() => {

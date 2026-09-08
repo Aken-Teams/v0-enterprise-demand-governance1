@@ -601,8 +601,8 @@ export async function PATCH(
             const recipients = [...new Set([...sIds, ...oIds])].filter((uid) => uid !== auth.userId)
             notifyUsers(recipients, {
               type: "DEMAND_STATUS",
-              title: "APP 交付連結已確認",
-              message: `需求 ${dem.demandNumber}「${dem.title}」的 APP 交付連結已由需求方確認，SP 認列調整為 75%。`,
+              title: "首次 APP 交付已確認",
+              message: `需求 ${dem.demandNumber}「${dem.title}」的首次 APP 交付已由需求方確認收到，SP 認列調整為 75%。後續更新連結不需再確認。`,
               linkUrl: `/demands/${id}`,
             })
           })

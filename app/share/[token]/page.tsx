@@ -1494,10 +1494,10 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                       <p className="text-sm font-medium text-sky-900">APP 交付連結尚未開放</p>
                       <p className="text-xs mt-1.5 text-muted-foreground max-w-md leading-relaxed">
                         {!isLoggedIn
-                          ? "開發端已完成交付。請先登入，由需求窗口／需求主管確認收到後即可檢視連結。"
+                          ? "開發端已首次交付 APP。請先登入，由需求窗口／需求主管確認收到後即可檢視連結。"
                           : pendingSignoff?.kind === "DEV_LINK"
-                          ? "開發端已完成交付，請於上方確認收到後即可檢視連結。"
-                          : "開發端已完成交付，待需求窗口／需求主管確認收到後即會開放檢視。"}
+                          ? "開發端已首次交付 APP。請於上方確認收到，即可檢視連結——本需求只需確認這一次。"
+                          : "開發端已首次交付 APP，待需求窗口／需求主管確認收到後即會開放檢視。"}
                       </p>
                       {!isLoggedIn && (
                         <Button size="sm" className="mt-4" onClick={() => setLoginOpen(true)}>登入以確認</Button>

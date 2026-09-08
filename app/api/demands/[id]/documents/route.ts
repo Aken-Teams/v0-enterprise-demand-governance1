@@ -137,8 +137,8 @@ async function requestDevLinkConfirmation(
 
   notifyUsers(confirmers.map((c) => c.userId).filter((uid) => uid !== requestedById), {
     type: "SIGNOFF",
-    title: "APP 交付連結待確認",
-    message: `需求 ${demand.demandNumber}「${demand.title}」的開發端已提供 APP 交付連結，請確認後檢視。`,
+    title: "首次 APP 交付待確認",
+    message: `需求 ${demand.demandNumber}「${demand.title}」的開發端已首次交付 APP，請確認收到後即可檢視連結（只需確認這一次）。`,
     linkUrl: `/demands/${demand.id}`,
   })
 }

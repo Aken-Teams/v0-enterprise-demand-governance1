@@ -64,14 +64,16 @@ export function PhaseSignoffBanner({
   const isDesignChange = kind === "DESIGN_CHANGE"
   const isDevLink = kind === "DEV_LINK"
   // 確認後直接帶使用者去看連結，而不是讓他自己回文件分頁翻找
-  const devLinkNote = isDevLink ? "確認後即為簽收本次交付，連結會立即開啟供您檢視。" : null
+  const devLinkNote = isDevLink
+    ? "本需求只需確認這一次。確認後連結立即開啟；日後開發端更新或重新上傳連結都會直接顯示，不會再請您確認。"
+    : null
   const isBoardOverride = signoff.targetRole === "BOARD_OVERRIDE"
   const isSettlement = isBoardOverride && !!signoff.overrideTargetStatus
 
   const titleText = isBoardOverride
     ? "專案 Master 代簽"
     : isDevLink
-    ? "開發端已交付 APP 連結，等待您的確認"
+    ? "開發端已首次交付 APP，請確認收到"
     : isDesignChange
     ? "「設計變更」等待您的確認"
     : `「${phaseLabel}」階段等待您的確認`
