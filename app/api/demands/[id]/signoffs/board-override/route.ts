@@ -6,13 +6,9 @@ import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 import { DESIGN_CHANGE_ALLOWED_PHASES, PIPELINE_STEPS, STATUS_MAP } from "@/lib/constants/demand"
 
-const PHASE_OVERRIDE_ALLOWED: string[] = ["PRD_REVIEW", "DEVELOPING", "ACCEPTANCE"]
-
-/** 暫緩／駁回時，以暫緩前的階段為「有效階段」（代簽終止結算依此判定） */
-function effectivePhaseOf(status: string, heldFromStatus?: string | null): string {
-  if (status === "ON_HOLD" || status === "REJECTED") return heldFromStatus || status
-  return status
-}
+// 終止開發結案除「需求確認」（尚未投入）與「已結案」（已結算完畢）外皆可提出。
+// 結算落點另由 PIPELINE_STEPS 索引把關，不得低於目前階段，故最低仍為開發中 50%。
+const PHASE_OVERRIDE_ALLOWED: string[] = ["PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE"]
 
 /** 代簽結算可選的目標狀態（有消耗比例、可直接落點的狀態） */
 const SETTLEMENT_STATUSES: string[] = ["DEVELOPING", "ACCEPTANCE", "CLOSED"]
@@ -62,8 +58,21 @@ export async function POST(
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
 
-    // 暫緩／駁回時以暫緩前的階段作為代簽落點（讓開發中／暫緩也能發起終止結算）
-    const effectivePhase = effectivePhaseOf(demand.status, demand.heldFromStatus)
+    // 暫緩／已駁回不得代簽：暫緩是「SP 押在原地、將來可能重啟」，
+    // 與「結算在某個落點、案子結束」的終止意義相反；要終止須先解除暫緩。
+    if (demand.status === "ON_HOLD" || demand.status === "REJECTED") {
+      return NextResponse.json(
+        {
+          error: demand.status === "ON_HOLD"
+            ? "需求目前為暫緩，無法發起代簽。如需終止開發結案，請先解除暫緩，讓需求回到實際階段後再發起。"
+            : "需求目前為已駁回，無法發起代簽。",
+        },
+        { status: 400 }
+      )
+    }
+
+    // 代簽一律以需求「目前」的階段為準（暫緩／已駁回已於上方擋下）
+    const effectivePhase = demand.status
 
     // Validate phase
     if (kind === "PHASE" && !PHASE_OVERRIDE_ALLOWED.includes(effectivePhase)) {

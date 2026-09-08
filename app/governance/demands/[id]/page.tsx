@@ -860,10 +860,14 @@ export default function DemandDetailPage() {
     return merged
   }
 
-  // 可用「專案 Master 代簽 + 直接結案」把已進入開發/驗收的專案結算掉（暫緩／駁回時以暫緩前階段為準；更早的階段請用「取消」）
-  const TERMINABLE_PHASES = ["DEVELOPING", "ACCEPTANCE"]
-  const effectivePhase = (isOnHold || isRejected) ? (demand.heldFromStatus || demand.status) : demand.status
-  const canTerminate = canManage && !isClosed && !isCancelled && !isRejected && TERMINABLE_PHASES.includes(effectivePhase)
+  // 可用「專案 Master 代簽 + 直接結案」把專案結算掉。
+  // 僅限這四個階段；「需求確認」尚未投入（請用「取消」）、「已結案」已結算完畢。
+  const TERMINABLE_PHASES = ["PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE"]
+  const effectivePhase = demand.status
+  // 暫緩／已駁回一律不得代簽——暫緩是「押住 SP、將來可能重啟」，
+  // 與終止的「結算在某個落點、案子結束」意義相反；要終止須先解除暫緩。
+  const canBoardOverride = canManage && !isClosed && !isCancelled && !isOnHold && !isRejected
+  const canTerminate = canBoardOverride && TERMINABLE_PHASES.includes(effectivePhase)
 
   // Latest round of signoffs for current phase (ignore historical rounds)
   // Exclude orphan signoffs (no assigned user) regardless of status
@@ -1353,7 +1357,7 @@ export default function DemandDetailPage() {
                       </div>
                     </div>
                     </div>
-                    {((canManage && curHasPending) || (canManage && (curHasPending || dcHasPending || canTerminate) && !curHasPendingOverride)) && (
+                    {((canManage && curHasPending) || (canBoardOverride && (curHasPending || dcHasPending || canTerminate) && !curHasPendingOverride)) && (
                       <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 ml-6 sm:ml-0 sm:shrink-0">
                         <TooltipProvider>
                         {canManage && curHasPending && (
@@ -1377,7 +1381,7 @@ export default function DemandDetailPage() {
                             <TooltipContent className="sm:hidden">通知簽核人</TooltipContent>
                           </Tooltip>
                         )}
-                        {canManage && (curHasPending || dcHasPending || canTerminate) && !curHasPendingOverride && (
+                        {canBoardOverride && (curHasPending || dcHasPending || canTerminate) && !curHasPendingOverride && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
