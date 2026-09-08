@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
           vendor: true,
           estimatedSp: true,
           confirmedSp: true,
-          heldFromStatus: true,
+          heldFromStatus: true, devLinkConfirmedAt: true,
           createdAt: true,
           updatedAt: true,
           phaseSignoffs: {
@@ -58,9 +58,13 @@ export async function GET(request: NextRequest) {
 
     // Build per-vendor breakdown
     const walletMap = new Map(wallets.map((w) => [w.vendor, w.totalQuota]))
+    type WalletDemand = {
+      id: string; demandNumber: string; title: string; status: string; vendor: string
+      sp: number; estimatedSp: number; spUsed: number; settlementType: string | null; updatedAt: Date
+    }
     const vendorMap = new Map<string, {
       totalQuota: number; usedSp: number
-      demands: { id: string; demandNumber: string; title: string; status: string; vendor: string; sp: number; estimatedSp: number; spUsed: number; settlementType: string | null; updatedAt: Date }[]
+      demands: WalletDemand[]
     }>()
 
     // Initialize with wallets
@@ -70,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     for (const d of demands) {
       const sp = d.confirmedSp ?? d.estimatedSp
-      const spUsed = calcUsedSp(d.status, sp, d.heldFromStatus)
+      const spUsed = calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
       if (!vendorMap.has(d.vendor)) {
         vendorMap.set(d.vendor, { totalQuota: walletMap.get(d.vendor) ?? 0, usedSp: 0, demands: [] })
       }
@@ -89,7 +93,7 @@ export async function GET(request: NextRequest) {
     // Build response with both combined totals and per-vendor breakdown
     let totalQuota = 0
     let totalUsedSp = 0
-    const byVendor: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demands: typeof demands }[] = []
+    const byVendor: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demands: WalletDemand[] }[] = []
 
     for (const [vendor, data] of vendorMap) {
       totalQuota += data.totalQuota
@@ -99,7 +103,7 @@ export async function GET(request: NextRequest) {
         totalQuota: data.totalQuota,
         usedSp: data.usedSp,
         availableSp: data.totalQuota - data.usedSp,
-        demands: data.demands as typeof demands,
+        demands: data.demands,
       })
     }
 

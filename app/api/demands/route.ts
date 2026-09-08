@@ -386,16 +386,16 @@ export async function GET(request: NextRequest) {
         }),
         prisma.demand.findMany({
           where: { organizationId, status: { notIn: ["REJECTED"] } },
-          select: { vendor: true, status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true },
+          select: { vendor: true, status: true, estimatedSp: true, confirmedSp: true, heldFromStatus: true, devLinkConfirmedAt: true },
         }),
       ])
       const totalQuota = wallets.reduce((s, w) => s + w.totalQuota, 0)
-      const usedSp = orgDemands.reduce((sum, d) => sum + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus), 0)
+      const usedSp = orgDemands.reduce((sum, d) => sum + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus, !!d.devLinkConfirmedAt), 0)
       // Per-vendor breakdown
       const vendorSet = new Set([...wallets.map(w => w.vendor), ...orgDemands.map(d => d.vendor)])
       const byVendor = Array.from(vendorSet).sort().map((vendor) => {
         const vQuota = wallets.find(w => w.vendor === vendor)?.totalQuota ?? 0
-        const vUsed = orgDemands.filter(d => d.vendor === vendor).reduce((s, d) => s + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus), 0)
+        const vUsed = orgDemands.filter(d => d.vendor === vendor).reduce((s, d) => s + calcUsedSp(d.status, d.confirmedSp ?? d.estimatedSp, d.heldFromStatus, !!d.devLinkConfirmedAt), 0)
         return { vendor, totalQuota: vQuota, usedSp: vUsed, availableSp: vQuota - vUsed }
       })
       spSummary = { totalQuota, usedSp, byVendor: byVendor.length > 1 ? byVendor : undefined }

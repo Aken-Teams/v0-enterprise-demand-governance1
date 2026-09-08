@@ -212,16 +212,35 @@ export const SP_PROGRESS_RATE: Record<string, number> = {
   CANCELLED: 0,
 }
 
+/**
+ * 需求實際適用的 SP 認列比例。
+ *
+ * 開發中若「APP 交付連結」已經需求方確認，即提前認列至驗收中的比例（75%）——
+ * 開發端已投入並交付成果，不必等整個開發階段走完才計費。
+ *
+ * 這也是避免重複計費的關鍵：之後推進到驗收中時比例同為 75%，
+ * 差額為 0，不會再扣一次。未確認者則維持原有「進入驗收才認列」的行為，
+ * 兩條路徑天然相容，先觸發哪個就算哪個。
+ */
+export function spRateOf(status: string, devLinkConfirmed?: boolean | null): number {
+  if (status === "DEVELOPING" && devLinkConfirmed) return SP_PROGRESS_RATE.ACCEPTANCE
+  return SP_PROGRESS_RATE[status] ?? 0
+}
+
 /** 依據狀態計算漸進已使用 SP（精確數值，不四捨五入） */
-export function calcUsedSp(status: string, effectiveSp: number, heldFromStatus?: string | null): number {
+export function calcUsedSp(
+  status: string,
+  effectiveSp: number,
+  heldFromStatus?: string | null,
+  devLinkConfirmed?: boolean | null
+): number {
   // 已取消：完全釋放 SP，不論取消前進行到哪個階段
   if (status === "CANCELLED") return 0
   let effectiveStatus = status
   if (status === "ON_HOLD" || status === "REJECTED") {
     effectiveStatus = heldFromStatus || status
   }
-  const rate = SP_PROGRESS_RATE[effectiveStatus] ?? 0
-  return effectiveSp * rate
+  return effectiveSp * spRateOf(effectiveStatus, devLinkConfirmed)
 }
 
 export const DEFAULT_SUBTASK_TEMPLATES = [

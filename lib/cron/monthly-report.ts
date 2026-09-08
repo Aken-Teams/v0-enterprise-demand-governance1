@@ -102,7 +102,7 @@ async function generateMonthlyReport(organizationId: string, year: number): Prom
       status: true,
       estimatedSp: true,
       confirmedSp: true,
-      heldFromStatus: true,
+      heldFromStatus: true, devLinkConfirmedAt: true,
       completedDate: true,
       createdAt: true,
     },
@@ -155,7 +155,7 @@ async function generateMonthlyReport(organizationId: string, year: number): Prom
   let totalUsedSp = 0
   for (const d of demands) {
     const sp = d.confirmedSp ?? d.estimatedSp
-    const usedSp = calcUsedSp(d.status, sp, d.heldFromStatus)
+    const usedSp = calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
     totalUsedSp += usedSp
 
     sheet.addRow({

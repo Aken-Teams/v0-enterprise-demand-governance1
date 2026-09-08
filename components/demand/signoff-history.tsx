@@ -907,9 +907,13 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
                 const groupIconColor = STATUS_ICON_COLORS[group.groupStatus] || "text-gray-400"
                 const groupStatusInfo = SIGNOFF_STATUS_MAP[group.groupStatus]
                 const isClosingSp = group.kind === "CLOSING_SP"
-                // 結案 SP 調整的 phase 是 CLOSED，若沿用階段名會顯示成「已結案」而看不出用途
+                const isDevLink = group.kind === "DEV_LINK"
+                // 結案 SP 調整的 phase 是 CLOSED、交付連結確認的 phase 是 DEVELOPING，
+                // 沿用階段名會顯示成「已結案」「開發中」而看不出用途
                 const phaseLabel = isClosingSp
                   ? "結案 SP 調整"
+                  : isDevLink
+                  ? "開發中連結確認"
                   : STATUS_MAP[group.phase]?.label || group.phase
                 // 從 payload 取出前後 SP，讓紀錄本身就看得到當時送審的數字
                 const closingSp = (() => {

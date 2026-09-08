@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
           priority: true,
           estimatedSp: true,
           confirmedSp: true,
-          heldFromStatus: true,
+          heldFromStatus: true, devLinkConfirmedAt: true,
           vendor: true,
           createdAt: true,
           desiredDate: true,
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       for (const d of demands) {
         if (d.vendor !== vendor) continue
         const sp = d.confirmedSp ?? d.estimatedSp
-        vUsed += calcUsedSp(d.status, sp, d.heldFromStatus)
+        vUsed += calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
       }
       return { vendor, totalQuota: vQuota, usedSp: vUsed, availableSp: vQuota - vUsed }
     })

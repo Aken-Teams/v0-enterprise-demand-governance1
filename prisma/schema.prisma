@@ -205,6 +205,7 @@ model User {
   designDocsUploaded     DesignChangeDocument[]     @relation("DCDocUploader")
   createdShares      DemandShare[]
   quoteReviews       Demand[]        @relation("QuoteReviewer")
+  devLinkConfirmed   Demand[]        @relation("DevLinkConfirmer")
   auditLogs          AuditLog[]
   sentMailLogs       MailLog[]
   apiKeys            ApiKey[]
@@ -266,6 +267,12 @@ model Demand {
   expectedDate    DateTime? /// 預計完成時間
   completedDate   DateTime? /// 實際完成時間
   isTerminated    Boolean        @default(false) /// 經專案 Master 代簽直接結案 → 客戶認知為「已終止」（狀態仍為 CLOSED）
+  /// 開發中「APP 交付連結」經需求方確認的時間。
+  /// 一旦確認，SP 即提前認列至驗收中的比例（75%）；之後推進到驗收中時比例相同、
+  /// 差額為 0，故不會重複計費。未確認者維持原有「進入驗收才認列」的行為。
+  devLinkConfirmedAt   DateTime? @map("dev_link_confirmed_at")
+  devLinkConfirmedById String?   @map("dev_link_confirmed_by_id")
+  devLinkConfirmedBy   User?     @relation("DevLinkConfirmer", fields: [devLinkConfirmedById], references: [id])
   // ── 智合抽成（內部：僅管理者/董事會可見）──
   zhiheSpTaken      Float? /// 智合自本專案抽取的 SP（選填，通常結案才記錄）
   zhiheSpNote       String?   @db.Text /// 抽成說明
@@ -550,7 +557,7 @@ model PhaseSignoff {
   demandId      String
   demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   phase         DemandStatus
-  kind          String        @default("PHASE") /// "PHASE" (階段簽核) | "DESIGN_CHANGE" (設計變更) | "CLOSING_SP" (結案 SP 調整)
+  kind          String        @default("PHASE") /// "PHASE" (階段簽核) | "DESIGN_CHANGE" (設計變更) | "CLOSING_SP" (結案 SP 調整) | "DEV_LINK" (開發中 APP 交付連結確認)
   /// kind = CLOSING_SP 專用：暫存待董事會核准的結案內容
   /// { oldSp, newSp, reason, phaseAllocations, completedDate, designChangeIds[] }
   payload       String?       @db.Text

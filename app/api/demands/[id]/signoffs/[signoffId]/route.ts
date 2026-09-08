@@ -7,7 +7,8 @@ import { canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers, getAdminUserIds, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
-import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS } from "@/lib/constants/demand"
+import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS, spRateOf } from "@/lib/constants/demand"
+import { DEV_LINK_KIND } from "@/lib/dev-link"
 import { parseClosingSpPayload } from "@/lib/closing-sp"
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -243,7 +244,7 @@ export async function PATCH(
       const settlementTier = signoff.overrideTargetStatus as DemandStatus
       const dem = await prisma.demand.findUnique({
         where: { id },
-        select: { status: true, heldFromStatus: true, confirmedSp: true, estimatedSp: true, organizationId: true, vendor: true, demandNumber: true, title: true },
+        select: { status: true, heldFromStatus: true, confirmedSp: true, estimatedSp: true, organizationId: true, vendor: true, demandNumber: true, title: true, devLinkConfirmedAt: true },
       })
       if (dem && dem.status !== "CLOSED") {
         const now = new Date()
@@ -254,7 +255,7 @@ export async function PATCH(
         const effectiveSp = dem.confirmedSp ?? dem.estimatedSp
         const settlementRate = SP_PROGRESS_RATE[settlementTier] ?? 0
         const settledSp = Math.round(effectiveSp * settlementRate)
-        const oldRate = SP_PROGRESS_RATE[fromStatus] ?? 0
+        const oldRate = spRateOf(fromStatus, !!dem.devLinkConfirmedAt)
         const oldUsed = Math.round(effectiveSp * oldRate)
         const delta = settledSp - oldUsed
         const year = now.getFullYear()
@@ -391,7 +392,7 @@ export async function PATCH(
             where: { id },
             select: {
               status: true, confirmedSp: true, estimatedSp: true, organizationId: true,
-              vendor: true, demandNumber: true, title: true,
+              vendor: true, demandNumber: true, title: true, devLinkConfirmedAt: true,
             },
           })
 
@@ -403,7 +404,7 @@ export async function PATCH(
             const year = now.getFullYear()
 
             // 結案為 100% 消耗；差額 = 新結算值 - 目前階段已認列值
-            const oldUsed = Math.round(oldSp * (SP_PROGRESS_RATE[fromStatus] ?? 0))
+            const oldUsed = Math.round(oldSp * spRateOf(fromStatus, !!dem.devLinkConfirmedAt))
             const newUsed = Math.round(newSp * (SP_PROGRESS_RATE.CLOSED ?? 1))
             const delta = newUsed - oldUsed
 
@@ -535,6 +536,97 @@ export async function PATCH(
           })
         }
       }
+    }
+
+    // ── 開發中 APP 交付連結確認 (kind = DEV_LINK) ──
+    // 需求方全數確認後，連結對其開放，同時提前認列 25%（開發中 50% → 75%）。
+    // 之後推進到驗收中時比例同為 75%、增量為 0，故不會重複計費。
+    if (signoff.kind === DEV_LINK_KIND && action === "approve") {
+      const roundTime = signoff.requestedAt.getTime()
+      const round = await prisma.phaseSignoff.findMany({
+        where: {
+          demandId: id,
+          kind: DEV_LINK_KIND,
+          requestedAt: { gte: new Date(roundTime - 5000), lte: new Date(roundTime + 5000) },
+        },
+        select: { status: true },
+      })
+
+      if (round.every((sg) => sg.status === "APPROVED")) {
+        const dem = await prisma.demand.findUnique({
+          where: { id },
+          select: {
+            status: true, confirmedSp: true, estimatedSp: true, organizationId: true,
+            vendor: true, demandNumber: true, title: true, devLinkConfirmedAt: true,
+          },
+        })
+
+        // 已確認過就不再計費；已離開開發中者比例本就 ≥ 75%，補記時間即可
+        if (dem && !dem.devLinkConfirmedAt) {
+          const now = new Date()
+          const effectiveSp = dem.confirmedSp ?? dem.estimatedSp
+          const oldUsed = Math.round(effectiveSp * spRateOf(dem.status, false))
+          const newUsed = Math.round(effectiveSp * spRateOf(dem.status, true))
+          const delta = newUsed - oldUsed
+          const year = now.getFullYear()
+
+          await prisma.$transaction(async (tx) => {
+            await tx.demand.update({
+              where: { id },
+              data: { devLinkConfirmedAt: now, devLinkConfirmedById: auth.userId },
+            })
+            if (delta !== 0) {
+              await tx.spWallet.upsert({
+                where: { organizationId_year_vendor: { organizationId: dem.organizationId, year, vendor: dem.vendor } },
+                create: {
+                  organizationId: dem.organizationId, year, vendor: dem.vendor,
+                  totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0,
+                },
+                update: { usedSp: { increment: delta } },
+              })
+            }
+          })
+
+          Promise.all([getDemandStakeholderIds(id), getOrgSubsidiaryUserIds(dem.organizationId)]).then(([sIds, oIds]) => {
+            const recipients = [...new Set([...sIds, ...oIds])].filter((uid) => uid !== auth.userId)
+            notifyUsers(recipients, {
+              type: "DEMAND_STATUS",
+              title: "APP 交付連結已確認",
+              message: `需求 ${dem.demandNumber}「${dem.title}」的 APP 交付連結已由需求方確認，SP 認列調整為 75%。`,
+              linkUrl: `/demands/${id}`,
+            })
+          })
+          logAudit({
+            userId: auth.userId,
+            action: "UPDATE",
+            entity: "DEMAND",
+            entityId: id,
+            demandId: id,
+            details: { devLinkConfirmed: true, effectiveSp, deltaSp: delta, via: "DEV_LINK_CONFIRMATION" },
+            request,
+          })
+        } else if (dem) {
+          await prisma.demand.update({
+            where: { id },
+            data: { devLinkConfirmedAt: dem.devLinkConfirmedAt ?? new Date(), devLinkConfirmedById: auth.userId },
+          })
+        }
+      }
+    }
+
+    if (signoff.kind === DEV_LINK_KIND && action === "reject") {
+      // 退回不計費、連結維持遮蔽；待開發端交付新版本時會自動再發起一輪確認
+      notifyUsers(
+        [signoff.requestedById, signoff.demand.developerId].filter(
+          (uid): uid is string => !!uid && uid !== auth.userId
+        ),
+        {
+          type: "SIGNOFF",
+          title: "APP 交付連結未通過確認",
+          message: `需求 ${signoff.demand.demandNumber}「${signoff.demand.title}」的 APP 交付連結遭需求方退回${comment ? `：${comment.trim()}` : ""}。修正後重新交付即會再次送出確認。`,
+          linkUrl: `/demands/${id}`,
+        }
+      )
     }
 
     // Save attached files (if any)

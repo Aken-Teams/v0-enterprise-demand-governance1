@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyRole } from "@/lib/auth"
-import { calcUsedSp, SP_RATE, STATUS_MAP } from "@/lib/constants/demand"
+import { calcUsedSp, SP_RATE, STATUS_MAP, spRateOf } from "@/lib/constants/demand"
 import ExcelJS from "exceljs"
 
 export async function GET(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
           status: true,
           estimatedSp: true,
           confirmedSp: true,
-          heldFromStatus: true,
+          heldFromStatus: true, devLinkConfirmedAt: true,
           vendor: true,
           organization: { select: { name: true } },
           contactPerson_: { select: { name: true } },
@@ -144,12 +144,6 @@ export async function GET(request: NextRequest) {
       size: 11,
     }
 
-    const SP_PROGRESS_RATE: Record<string, number> = {
-      SUBMITTED: 0, PRD_REVIEW: 0, SP_REVIEW: 0,
-      DEVELOPING: 0.5, ACCEPTANCE: 0.75, CLOSED: 1.0,
-      ON_HOLD: 0, REJECTED: 0,
-    }
-
     const fmtRate = (rate: number) => {
       if (rate === 0) return "0%"
       if (rate === 0.5) return "50%"
@@ -166,14 +160,14 @@ export async function GET(request: NextRequest) {
 
     for (const d of demands) {
       const effectiveSp = d.confirmedSp ?? d.estimatedSp
-      const usedSp = calcUsedSp(d.status, effectiveSp, d.heldFromStatus)
+      const usedSp = calcUsedSp(d.status, effectiveSp, d.heldFromStatus, !!d.devLinkConfirmedAt)
       const isNonBudget = NON_BUDGET_STATUSES.has(d.status)
 
       let effectiveStatus: string = d.status
       if (d.status === "ON_HOLD" || d.status === "REJECTED") {
         effectiveStatus = d.heldFromStatus || d.status
       }
-      const rate = isNonBudget ? 0 : (SP_PROGRESS_RATE[effectiveStatus] ?? 0)
+      const rate = isNonBudget ? 0 : spRateOf(effectiveStatus, !!d.devLinkConfirmedAt)
 
       if (isNonBudget) {
         excludedCount++

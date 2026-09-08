@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
           priority: true,
           estimatedSp: true,
           confirmedSp: true,
-          heldFromStatus: true,
+          heldFromStatus: true, devLinkConfirmedAt: true,
           desiredDate: true,
           expectedDate: true,
           completedDate: true,
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
         let usedSp = 0
         for (const d of vDemands) {
           const sp = d.confirmedSp ?? d.estimatedSp
-          usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
+          usedSp += calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
         }
         const totalQuota = w?.totalQuota ?? 0
         return { vendor, totalQuota, usedSp, availableSp: totalQuota - usedSp, demandCount: vDemands.length }
@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
       for (const d of demands) {
         if (d.vendor !== vendor) continue
         const sp = d.confirmedSp ?? d.estimatedSp
-        vUsed += calcUsedSp(d.status, sp, d.heldFromStatus)
+        vUsed += calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
       }
       return { vendor, totalQuota: vQuota, usedSp: vUsed, availableSp: vQuota - vUsed }
     })
@@ -362,7 +362,7 @@ export async function GET(request: NextRequest) {
       devWorkload[key].count++
       const sp = d.confirmedSp ?? d.estimatedSp ?? 0
       devWorkload[key].totalSp += sp
-      devWorkload[key].usedSp += calcUsedSp(d.status, sp, d.heldFromStatus)
+      devWorkload[key].usedSp += calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
     }
 
     // --- Financial data (permission-gated) ---
@@ -402,7 +402,7 @@ export async function GET(request: NextRequest) {
           for (const dem of vDemands) {
             const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
             totalSp += sp
-            usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus)
+            usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus, !!dem.devLinkConfirmedAt)
           }
           const quotaSp = w?.totalQuota ?? 0
           return { vendor, quotaSp, quotaAmount: quotaSp * SP_RATE, totalSp, usedSp, amount: totalSp * SP_RATE, usedAmount: usedSp * SP_RATE, demandCount: vDemands.length }
@@ -413,7 +413,7 @@ export async function GET(request: NextRequest) {
         for (const dem of orgDemands) {
           const sp = dem.confirmedSp ?? dem.estimatedSp ?? 0
           totalSp += sp
-          usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus)
+          usedSp += calcUsedSp(dem.status, sp, dem.heldFromStatus, !!dem.devLinkConfirmedAt)
         }
         return {
           name: org.name,
@@ -455,7 +455,7 @@ export async function GET(request: NextRequest) {
         .filter((d) => d.status !== "REJECTED" && d.status !== "CANCELLED")
         .map((d) => {
           const sp = d.confirmedSp ?? d.estimatedSp ?? 0
-          const used = calcUsedSp(d.status, sp, d.heldFromStatus)
+          const used = calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
           return {
             organization: d.organization.name,
             demandNumber: d.demandNumber,
@@ -489,6 +489,7 @@ export async function GET(request: NextRequest) {
       const demandMap = new Map(demands.map((d) => [d.id, {
         demandNumber: d.demandNumber, title: d.title, orgName: d.organization.name,
         vendor: d.vendor, estimatedSp: d.estimatedSp, confirmedSp: d.confirmedSp,
+        devLinkConfirmedAt: d.devLinkConfirmedAt,
       }]))
 
       // Collect all transition deltas
@@ -505,10 +506,25 @@ export async function GET(request: NextRequest) {
       for (const [demandId, histories] of histByDemand) {
         const dem = demandMap.get(demandId)!
         // Sort chronologically (oldest first) to track running SP
-        histories.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        const timeline: (typeof histories[number] & { devLinkConfirm?: boolean })[] = [...histories]
+        if (dem.devLinkConfirmedAt) {
+          // 以「開發中 → 開發中」的合成事件承載這次認列：
+          // 兩側狀態相同，增量完全來自比例由 50% 升至 75%
+          timeline.push({
+            ...histories[0],
+            fromStatus: "DEVELOPING",
+            toStatus: "DEVELOPING",
+            comment: null,
+            createdAt: dem.devLinkConfirmedAt,
+            devLinkConfirm: true,
+          })
+        }
+        timeline.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         let runningSp = dem.estimatedSp ?? 0
+        // 走到合成事件之前為未確認、之後為已確認
+        let linkConfirmed = false
 
-        for (const h of histories) {
+        for (const h of timeline) {
           let spAdj: { type: string; oldSp: number; newSp: number; reason: string } | null = null
           if (h.comment) {
             try {
@@ -523,13 +539,18 @@ export async function GET(request: NextRequest) {
           const inferHeld = (s: string | null, other: string | null) =>
             (s === "ON_HOLD" || s === "REJECTED") ? other : null
 
+          // 合成事件即為確認的當下：事件前未確認、事件後已確認
+          const fromConfirmed: boolean = linkConfirmed
+          const toConfirmed: boolean = h.devLinkConfirm ? true : linkConfirmed
+          linkConfirmed = toConfirmed
+
           if (spAdj) {
-            oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, spAdj.oldSp, inferHeld(h.fromStatus, h.toStatus)) : 0
-            newUsed = calcUsedSp(h.toStatus, spAdj.newSp, inferHeld(h.toStatus, h.fromStatus))
+            oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, spAdj.oldSp, inferHeld(h.fromStatus, h.toStatus), fromConfirmed) : 0
+            newUsed = calcUsedSp(h.toStatus, spAdj.newSp, inferHeld(h.toStatus, h.fromStatus), toConfirmed)
             runningSp = spAdj.newSp
           } else {
-            oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, runningSp, inferHeld(h.fromStatus, h.toStatus)) : 0
-            newUsed = calcUsedSp(h.toStatus, runningSp, inferHeld(h.toStatus, h.fromStatus))
+            oldUsed = h.fromStatus ? calcUsedSp(h.fromStatus, runningSp, inferHeld(h.fromStatus, h.toStatus), fromConfirmed) : 0
+            newUsed = calcUsedSp(h.toStatus, runningSp, inferHeld(h.toStatus, h.fromStatus), toConfirmed)
           }
 
           const deltaSp = newUsed - oldUsed

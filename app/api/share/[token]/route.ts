@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { isDevDeliveryLink, shouldMaskDevLinks } from "@/lib/dev-link"
 
 // GET: Public demand view via share token (no JWT required)
 export async function GET(
@@ -71,6 +72,8 @@ export async function GET(
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
     }
 
+    const maskDevLinks = shouldMaskDevLinks(demand)
+
     // Sanitize: remove confidential fields and restructure contactPerson_
     const { contactPerson_: contactPersonUser, ...demandFields } = demand as typeof demand & { contactPerson_: { id: string; name: string } | null }
     const sanitized = {
@@ -86,7 +89,12 @@ export async function GET(
       // Filter out internal comments
       comments: demand.comments.filter((c) => !c.isInternal),
       // Filter out GITHUB_REPO + 報價單 documents
-      documents: demand.documents.filter((d) => d.type !== "GITHUB_REPO" && d.type !== "ZHIHE_QUOTE"),
+      // 開發中的 APP 交付連結須由需求方登入確認後才開放（確認即認列 25%），
+      // 匿名檢視一律看不到；登入後改走 /api/demands/[id]，由該處依身分判斷。
+      documents: demand.documents.filter(
+        (d) => d.type !== "GITHUB_REPO" && d.type !== "ZHIHE_QUOTE" && !(maskDevLinks && isDevDeliveryLink(d))
+      ),
+      devLinkMasked: maskDevLinks,
     }
 
     return NextResponse.json({

@@ -42,6 +42,7 @@ import {
   Maximize2,
   FileEdit,
   XCircle,
+  Lock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { preprocessMarkdown } from "@/lib/markdown"
@@ -766,11 +767,16 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
     (s) => s.status === "PENDING" && s.targetUserId === authUser?.id && s.phase === demand.status
   )) || []
   const pendingSignoff =
+    myPendingSignoffs.find((s) => s.kind === "DEV_LINK") ||
     myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "DESIGN_CHANGE") ||
     myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "PHASE") ||
     null
-  const pendingSignoffKind: "PHASE" | "DESIGN_CHANGE" =
-    (pendingSignoff?.kind ?? "PHASE") === "DESIGN_CHANGE" ? "DESIGN_CHANGE" : "PHASE"
+  const pendingSignoffKind: "PHASE" | "DESIGN_CHANGE" | "DEV_LINK" =
+    pendingSignoff?.kind === "DEV_LINK"
+      ? "DEV_LINK"
+      : (pendingSignoff?.kind ?? "PHASE") === "DESIGN_CHANGE"
+      ? "DESIGN_CHANGE"
+      : "PHASE"
   // Whether there is ANY pending design change at current phase (for label)
   const anyDcPending = (demand.phaseSignoffs || []).some(
     (s) => s.status === "PENDING" && s.phase === demand.status && (s.kind ?? "PHASE") === "DESIGN_CHANGE"
@@ -918,7 +924,8 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
             kind={pendingSignoffKind}
             demandId={demand.id}
             token={authToken}
-            blocked={pendingSignoffKind !== "DESIGN_CHANGE" && ((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
+            effectiveSp={demand.confirmedSp ?? demand.estimatedSp}
+            blocked={pendingSignoffKind === "PHASE" && ((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
             blockedMessage={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? "有待確認的設計變更，需通過後才能進行此階段確認。" : "設計變更已駁回，等待開發端修訂後重新送出，目前無法進行此階段確認。"}
             onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
             onComplete={fetchDemand}
@@ -1473,6 +1480,28 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
               const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
               const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
               const deliverables = devLinks.length > 0 ? devLinks : prdLinks
+              const devLinkMasked = !!(demand as unknown as { devLinkMasked?: boolean }).devLinkMasked
+
+              if (deliverables.length === 0 && devLinkMasked) {
+                return (
+                  <Card className="border-sky-200">
+                    <CardContent className="flex flex-col items-center justify-center min-h-[200px] text-center px-6">
+                      <Lock className="h-12 w-12 mb-3 text-sky-300" />
+                      <p className="text-sm font-medium text-sky-900">APP 交付連結尚未開放</p>
+                      <p className="text-xs mt-1.5 text-muted-foreground max-w-md leading-relaxed">
+                        {!isLoggedIn
+                          ? "開發端已完成交付。請先登入，由需求窗口／需求主管確認收到後即可檢視連結。"
+                          : pendingSignoff?.kind === "DEV_LINK"
+                          ? "開發端已完成交付，請於上方確認收到後即可檢視連結。"
+                          : "開發端已完成交付，待需求窗口／需求主管確認收到後即會開放檢視。"}
+                      </p>
+                      {!isLoggedIn && (
+                        <Button size="sm" className="mt-4" onClick={() => setLoginOpen(true)}>登入以確認</Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              }
 
               if (deliverables.length === 0) {
                 return (

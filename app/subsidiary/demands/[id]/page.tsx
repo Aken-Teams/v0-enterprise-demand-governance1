@@ -37,6 +37,7 @@ import {
   Copy,
   XCircle,
   FileEdit,
+  Lock,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
@@ -646,12 +647,21 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   // after — the PHASE banner will reappear naturally on next page load.
   const pendingDcSignoff = myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "DESIGN_CHANGE")
   const pendingPhaseSignoff = myPendingSignoffs.find((s) => (s.kind ?? "PHASE") === "PHASE")
+  // 未確認前連結是看不到的，故排在其他簽核之前提示
+  const pendingDevLinkSignoff = myPendingSignoffs.find((s) => s.kind === "DEV_LINK")
   const pendingSignoff =
+    pendingDevLinkSignoff ||
     pendingDcSignoff ||
     (justApprovedDc ? null : pendingPhaseSignoff) ||
     null
-  const pendingSignoffKind: "PHASE" | "DESIGN_CHANGE" =
-    (pendingSignoff?.kind ?? "PHASE") === "DESIGN_CHANGE" ? "DESIGN_CHANGE" : "PHASE"
+  const pendingSignoffKind: "PHASE" | "DESIGN_CHANGE" | "DEV_LINK" =
+    pendingSignoff?.kind === "DEV_LINK"
+      ? "DEV_LINK"
+      : (pendingSignoff?.kind ?? "PHASE") === "DESIGN_CHANGE"
+      ? "DESIGN_CHANGE"
+      : "PHASE"
+  // 連結遭遮蔽（可能由他人負責確認），交付成果分頁需說明原因而非顯示空白
+  const devLinkMasked = !!(demand as unknown as { devLinkMasked?: boolean }).devLinkMasked
   // Any pending DC for the current phase (used for "- 設計變更" labeling)
   const dcHasPending = (demand.phaseSignoffs || []).some(
     (s) => s.status === "PENDING" && s.phase === demand.status && (s.kind ?? "PHASE") === "DESIGN_CHANGE",
@@ -840,7 +850,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             kind={pendingSignoffKind}
             demandId={demand.id}
             token={token}
-            blocked={pendingSignoffKind !== "DESIGN_CHANGE" && ((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
+            effectiveSp={demand.confirmedSp ?? demand.estimatedSp}
+            blocked={pendingSignoffKind === "PHASE" && ((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
             blockedMessage={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? "有待確認的設計變更，需通過後才能進行此階段確認。" : "設計變更已駁回，等待開發端修訂後重新送出，目前無法進行此階段確認。"}
             onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
             onComplete={() => {
@@ -1473,6 +1484,22 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
               const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
               const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
               const deliverables = devLinks.length > 0 ? devLinks : prdLinks
+
+              if (deliverables.length === 0 && devLinkMasked) {
+                return (
+                  <Card className="border-sky-200">
+                    <CardContent className="flex flex-col items-center justify-center min-h-[200px] text-center px-6">
+                      <Lock className="h-12 w-12 mb-3 text-sky-300" />
+                      <p className="text-sm font-medium text-sky-900">APP 交付連結尚未開放</p>
+                      <p className="text-xs mt-1.5 text-muted-foreground max-w-md leading-relaxed">
+                        {pendingDevLinkSignoff
+                          ? "開發端已完成交付，請於上方確認收到後即可檢視連結。"
+                          : "開發端已完成交付，待需求窗口／需求主管確認收到後即會開放檢視。"}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )
+              }
 
               if (deliverables.length === 0) {
                 return (

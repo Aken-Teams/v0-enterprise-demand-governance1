@@ -8,6 +8,7 @@ import { canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus, DocumentType } from "@/lib/generated/prisma/client"
 import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
+import { DEV_LINK_KIND, resolveDevLinkConfirmers, isDevDeliveryLink } from "@/lib/dev-link"
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -92,6 +93,56 @@ export async function GET(
   }
 }
 
+/**
+ * 開發端交出第一個 APP 交付連結時，發起需求方確認。
+ *
+ * 只在「需求仍在開發中」且「尚未確認過」時建立——已確認者連結早已開放，
+ * 上傳新版本不需要再確認一次；已進入驗收中者比例本就是 75%，確認已無意義。
+ * 既有的待確認簽核也不重複建立，避免同一輪出現多筆。
+ */
+async function requestDevLinkConfirmation(
+  demand: {
+    id: string; demandNumber: string; title: string; status: string
+    contactPersonId: string | null; demandManagerId: string | null
+    devLinkConfirmedAt: Date | null
+  },
+  doc: { type: string; phase: string | null },
+  requestedById: string
+) {
+  if (!isDevDeliveryLink(doc)) return
+  if (demand.status !== "DEVELOPING" || demand.devLinkConfirmedAt) return
+
+  const existing = await prisma.phaseSignoff.findFirst({
+    where: { demandId: demand.id, kind: DEV_LINK_KIND, status: "PENDING" },
+    select: { id: true },
+  })
+  if (existing) return
+
+  const confirmers = resolveDevLinkConfirmers(demand)
+  if (confirmers.length === 0) return
+
+  const requestedAt = new Date()
+  await prisma.phaseSignoff.createMany({
+    data: confirmers.map((c) => ({
+      demandId: demand.id,
+      phase: "DEVELOPING" as DemandStatus,
+      kind: DEV_LINK_KIND,
+      status: "PENDING" as const,
+      targetUserId: c.userId,
+      targetRole: c.role,
+      requestedById,
+      requestedAt,
+    })),
+  })
+
+  notifyUsers(confirmers.map((c) => c.userId).filter((uid) => uid !== requestedById), {
+    type: "SIGNOFF",
+    title: "APP 交付連結待確認",
+    message: `需求 ${demand.demandNumber}「${demand.title}」的開發端已提供 APP 交付連結，請確認後檢視。`,
+    linkUrl: `/demands/${demand.id}`,
+  })
+}
+
 // POST: Upload document(s) to a specific phase
 export async function POST(
   request: NextRequest,
@@ -103,7 +154,10 @@ export async function POST(
 
     const demand = await prisma.demand.findUnique({
       where: { id },
-      select: { id: true, demandNumber: true, title: true, organizationId: true },
+      select: {
+        id: true, demandNumber: true, title: true, organizationId: true,
+        status: true, contactPersonId: true, demandManagerId: true, devLinkConfirmedAt: true,
+      },
     })
     if (!demand) {
       return NextResponse.json({ error: "需求不存在" }, { status: 404 })
@@ -197,6 +251,10 @@ export async function POST(
           designChangeId: dcCheck.id,
         },
       })
+
+      // 開發中的 APP 交付連結：發起需求方確認。
+      // 確認之前需求方看不到連結，確認之後即認列 25%（見 lib/constants/demand.ts spRateOf）。
+      await requestDevLinkConfirmation(demand, { type: finalType, phase: finalPhase }, auth.userId)
 
       // Fire-and-forget: notification + audit for URL doc
       const stakeholderIds1 = getDemandStakeholderIds(id)
@@ -352,6 +410,10 @@ export async function POST(
         },
       })
       savedDocuments.push(doc)
+    }
+
+    for (const doc of savedDocuments) {
+      await requestDevLinkConfirmation(demand, { type: doc.type, phase: doc.phase }, auth.userId)
     }
 
     // 報價單為機密：新上傳需重新審核，且不通知子公司

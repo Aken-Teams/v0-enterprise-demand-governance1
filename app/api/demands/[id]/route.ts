@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { verifyAuth, verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 import { canAccessDemand, canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
-import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
+import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP, SP_PROGRESS_RATE, spRateOf } from "@/lib/constants/demand"
+import { DEV_LINK_KIND, isDevDeliveryLink, shouldMaskDevLinks } from "@/lib/dev-link"
 import { updateDemandSchema } from "@/lib/validations/demand"
 import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { resolveBoardReviewers } from "@/lib/board"
@@ -260,7 +261,31 @@ export async function GET(
     const hasPendingClosingSp = (demand.phaseSignoffs ?? []).some(
       (s) => s.kind === "CLOSING_SP" && s.status === "PENDING"
     )
-    const demandOut: Record<string, unknown> = { ...demandRest, contactPerson: contactPersonUser, myDesignChangeReview, hasPendingClosingSp }
+    // 開發中的 APP 交付連結需經需求方確認後才開放——確認即認列 25%，
+    // 故必須在伺服器端就濾掉，不能只靠前端隱藏（否則連結仍在回應內容中）。
+    // 強合方（admin / delivery）為交付端，不受此限。
+    const maskDevLinks = auth.role === "subsidiary" && shouldMaskDevLinks(demand)
+    const myDevLinkSignoff = (demand.phaseSignoffs ?? []).find(
+      (s) => s.kind === DEV_LINK_KIND && s.status === "PENDING" && s.targetUserId === auth.userId
+    )
+    const devLinkPendingCount = (demand.phaseSignoffs ?? []).filter(
+      (s) => s.kind === DEV_LINK_KIND && s.status === "PENDING"
+    ).length
+
+    const demandOut: Record<string, unknown> = {
+      ...demandRest,
+      contactPerson: contactPersonUser,
+      myDesignChangeReview,
+      hasPendingClosingSp,
+      // 讓前端知道「有東西待確認」，即使看不到連結本身
+      devLinkMasked: maskDevLinks,
+      devLinkPendingCount,
+      myDevLinkSignoffId: myDevLinkSignoff?.id ?? null,
+    }
+    if (maskDevLinks && Array.isArray(demandOut.documents)) {
+      demandOut.documents = (demandOut.documents as { type: string; phase: string | null }[])
+        .filter((d) => !isDevDeliveryLink(d))
+    }
     if (!canSeeQuote) {
       demandOut.zhiheSpTaken = null
       demandOut.zhiheSpNote = null
@@ -945,8 +970,11 @@ export async function PATCH(
       const year = now.getFullYear()
 
       // Calculate delta between old and new progressive consumption
-      const oldRate = SP_PROGRESS_RATE[demand.status] ?? 0
-      const newRate = SP_PROGRESS_RATE[status as string] ?? 0
+      // 開發中已確認 APP 交付連結者比例已是 75%，推進到驗收中的增量為 0——
+      // 這正是「連結確認收 25%」與「進驗收收 25%」不會重複計費的所在
+      const linkConfirmed = !!demand.devLinkConfirmedAt
+      const oldRate = spRateOf(demand.status, linkConfirmed)
+      const newRate = spRateOf(status as string, linkConfirmed)
       const oldUsed = Math.round(oldSp * oldRate)
       const newUsed = Math.round(newSp * newRate)
       const delta = newUsed - oldUsed

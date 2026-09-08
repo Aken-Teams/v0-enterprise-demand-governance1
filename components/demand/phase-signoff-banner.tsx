@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, Download, ShieldCheck } from "lucide-react"
+import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, Download, ShieldCheck, Smartphone } from "lucide-react"
 import { STATUS_MAP, SIGNOFF_STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
@@ -27,8 +27,8 @@ interface PhaseSignoffBannerProps {
   effectiveSp?: number | null
   /** Render only the action buttons without the outer wrapper/header */
   inline?: boolean
-  /** "PHASE" (default) or "DESIGN_CHANGE" */
-  kind?: "PHASE" | "DESIGN_CHANGE"
+  /** "PHASE" (default) / "DESIGN_CHANGE" / "DEV_LINK"（開發中 APP 交付連結確認） */
+  kind?: "PHASE" | "DESIGN_CHANGE" | "DEV_LINK"
   /** 有未通過的設計變更時，鎖住階段簽核 */
   blocked?: boolean
   blockedMessage?: string
@@ -62,26 +62,31 @@ export function PhaseSignoffBanner({
 
   const phaseLabel = STATUS_MAP[signoff.phase]?.label || signoff.phase
   const isDesignChange = kind === "DESIGN_CHANGE"
+  const isDevLink = kind === "DEV_LINK"
   const isBoardOverride = signoff.targetRole === "BOARD_OVERRIDE"
   const isSettlement = isBoardOverride && !!signoff.overrideTargetStatus
 
   const titleText = isBoardOverride
     ? "專案 Master 代簽"
+    : isDevLink
+    ? "開發端已交付 APP 連結，等待您的確認"
     : isDesignChange
     ? "「設計變更」等待您的確認"
     : `「${phaseLabel}」階段等待您的確認`
-  const Icon = isBoardOverride ? ShieldCheck : isDesignChange ? FileEdit : ClipboardCheck
-  const borderClass = isBoardOverride ? "border-orange-300" : isDesignChange ? "border-indigo-300" : "border-amber-300"
-  const bgClass = isBoardOverride ? "bg-orange-50/80" : isDesignChange ? "bg-indigo-50/80" : "bg-amber-50/80"
-  const iconClass = isBoardOverride ? "text-orange-600" : isDesignChange ? "text-indigo-600" : "text-amber-600"
-  const titleClass = isBoardOverride ? "text-orange-900" : isDesignChange ? "text-indigo-900" : "text-amber-900"
-  const subTextClass = isBoardOverride ? "text-orange-700/70" : isDesignChange ? "text-indigo-700/70" : "text-amber-700/70"
+  const Icon = isBoardOverride ? ShieldCheck : isDevLink ? Smartphone : isDesignChange ? FileEdit : ClipboardCheck
+  const borderClass = isBoardOverride ? "border-orange-300" : isDevLink ? "border-sky-300" : isDesignChange ? "border-indigo-300" : "border-amber-300"
+  const bgClass = isBoardOverride ? "bg-orange-50/80" : isDevLink ? "bg-sky-50/80" : isDesignChange ? "bg-indigo-50/80" : "bg-amber-50/80"
+  const iconClass = isBoardOverride ? "text-orange-600" : isDevLink ? "text-sky-600" : isDesignChange ? "text-indigo-600" : "text-amber-600"
+  const titleClass = isBoardOverride ? "text-orange-900" : isDevLink ? "text-sky-900" : isDesignChange ? "text-indigo-900" : "text-amber-900"
+  const subTextClass = isBoardOverride ? "text-orange-700/70" : isDevLink ? "text-sky-700/70" : isDesignChange ? "text-indigo-700/70" : "text-amber-700/70"
   const textareaClass = isBoardOverride
     ? "bg-white border-orange-200 focus-visible:ring-orange-300"
+    : isDevLink
+    ? "bg-white border-sky-200 focus-visible:ring-sky-300"
     : isDesignChange
     ? "bg-white border-indigo-200 focus-visible:ring-indigo-300"
     : "bg-white border-amber-200 focus-visible:ring-amber-300"
-  const fileBorderClass = isBoardOverride ? "border-orange-200" : isDesignChange ? "border-indigo-200" : "border-amber-200"
+  const fileBorderClass = isBoardOverride ? "border-orange-200" : isDevLink ? "border-sky-200" : isDesignChange ? "border-indigo-200" : "border-amber-200"
 
   // DC / board-override content to display inline (only when banner is not in inline/compact mode)
   const dcDocs = (signoff.documents || []).filter((d) => d.fileUrl)
@@ -154,9 +159,18 @@ export function PhaseSignoffBanner({
           </div>
           <p className={cn("text-xs mt-1 leading-relaxed", subTextClass)}>
             由 {signoff.requestedBy.name} 於 {new Date(signoff.requestedAt).toLocaleDateString("zh-TW")}
-            {isDesignChange ? ` 在「${phaseLabel}」階段發起設計變更` : ""}
+            {isDesignChange ? ` 在「${phaseLabel}」階段發起設計變更` : isDevLink ? " 交付" : ""}
           </p>
         </>
+      )}
+
+      {/* 交付連結確認：確認即認列，按下之前先講清楚 */}
+      {isDevLink && !inline && (
+        <div className="mt-3 rounded-md bg-white/80 border border-sky-200 p-2.5 sm:p-3">
+          <p className="text-[13px] sm:text-sm text-sky-900/80 leading-relaxed">
+            為保護交付成果，<span className="font-medium">確認後才會顯示 APP 連結</span>。
+          </p>
+        </div>
       )}
 
       {/* DC inline content: request comment + attachments */}
@@ -235,7 +249,7 @@ export function PhaseSignoffBanner({
                 disabled={loading}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                {isSettlement ? "確認結算" : "確認通過"}
+                {isSettlement ? "確認結算" : isDevLink ? "確認收到並檢視連結" : "確認通過"}
               </Button>
               <Button
                 size="sm"
@@ -248,7 +262,7 @@ export function PhaseSignoffBanner({
                 disabled={loading}
               >
                 <X className="h-4 w-4 mr-1" />
-                {isSettlement ? "需求繼續" : "退回修改"}
+                {isSettlement ? "需求繼續" : isDevLink ? "退回交付" : "退回修改"}
               </Button>
             </div>
           ) : (
