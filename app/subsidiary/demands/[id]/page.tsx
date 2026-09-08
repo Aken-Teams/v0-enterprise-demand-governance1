@@ -50,6 +50,7 @@ import { PrototypePanel, PrototypeInlinePreview, PrototypePreviewModal, type Pro
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
 import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { SignoffHistory } from "@/components/demand/signoff-history"
+import { DevLinkRevealDialog } from "@/components/demand/dev-link-reveal-dialog"
 import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -412,6 +413,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   // suppress the PHASE banner so they don't see a second "approve" prompt
   // immediately after. Resets naturally on any new page load.
   const [justApprovedDc, setJustApprovedDc] = useState(false)
+  // 剛完成首次交付確認：連結重新載入後以彈窗呈現，提示複製到瀏覽器
+  const [devLinkRevealOpen, setDevLinkRevealOpen] = useState(false)
 
   const fetchDemand = useCallback(async () => {
     if (!token) return
@@ -856,10 +859,11 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
             onComplete={() => {
               if (pendingSignoffKind === "DESIGN_CHANGE") setJustApprovedDc(true)
-              // 剛簽收交付：直接帶到交付成果，省去自行回文件分頁翻找
+              // 剛簽收交付：帶到交付成果，並把網址直接給他
+              // （不少人會以為 APP 就是在這個預覽框裡操作，需明講要複製到瀏覽器）
               if (pendingSignoffKind === "DEV_LINK") {
                 setActiveTab("deliverables")
-                toast.success("已確認收到交付，APP 連結已開啟")
+                setDevLinkRevealOpen(true)
               }
               fetchDemand()
             }}
@@ -1937,6 +1941,13 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           />
         </div>
       )}
+
+      {/* 首次交付確認完成：把網址直接給使用者，明講要複製到瀏覽器 */}
+      <DevLinkRevealDialog
+        open={devLinkRevealOpen}
+        onOpenChange={setDevLinkRevealOpen}
+        links={demand.documents.filter((d) => d.type === "APP_RESULT" && d.phase === "DEVELOPING")}
+      />
     </AppLayout>
   )
 }

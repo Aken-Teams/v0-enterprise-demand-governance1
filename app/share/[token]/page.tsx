@@ -50,6 +50,7 @@ import { STATUS_MAP, PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, demandStatusKey } 
 import { PhaseDocuments } from "@/components/demand/phase-documents"
 import { PrototypePanel, PrototypeInlinePreview, PrototypePreviewModal, type Prototype } from "@/components/demand/prototype-panel"
 import { PhaseSignoffBanner } from "@/components/demand/phase-signoff-banner"
+import { DevLinkRevealDialog } from "@/components/demand/dev-link-reveal-dialog"
 import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
@@ -571,6 +572,8 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
     return null
   })
   const [loginOpen, setLoginOpen] = useState(false)
+  // 剛完成首次交付確認：連結重新載入後以彈窗呈現，提示複製到瀏覽器
+  const [devLinkRevealOpen, setDevLinkRevealOpen] = useState(false)
 
   // Demand state
   const [demand, setDemand] = useState<DemandDetail | null>(null)
@@ -929,8 +932,11 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
             blockedMessage={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? "有待確認的設計變更，需通過後才能進行此階段確認。" : "設計變更已駁回，等待開發端修訂後重新送出，目前無法進行此階段確認。"}
             onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
             onComplete={() => {
-              // 剛簽收交付：直接帶到交付成果，省去自行回文件分頁翻找
-              if (pendingSignoffKind === "DEV_LINK") setActiveTab("deliverables")
+              // 剛簽收交付：帶到交付成果，並把網址直接給他
+              if (pendingSignoffKind === "DEV_LINK") {
+                setActiveTab("deliverables")
+                setDevLinkRevealOpen(true)
+              }
               fetchDemand()
             }}
           />
@@ -1796,6 +1802,13 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
           <img src={zoomedImg} alt="放大預覽" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
+
+      {/* 首次交付確認完成：把網址直接給使用者，明講要複製到瀏覽器 */}
+      <DevLinkRevealDialog
+        open={devLinkRevealOpen}
+        onOpenChange={setDevLinkRevealOpen}
+        links={demand.documents.filter((d) => d.type === "APP_RESULT" && d.phase === "DEVELOPING")}
+      />
 
       {/* Login modal */}
       <LoginModal
