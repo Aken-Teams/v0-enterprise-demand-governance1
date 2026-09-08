@@ -73,6 +73,13 @@ export async function GET(
     }
 
     const maskDevLinks = shouldMaskDevLinks(demand)
+    const baseDocuments = demand.documents.filter(
+      (d) => d.type !== "GITHUB_REPO" && d.type !== "ZHIHE_QUOTE"
+    )
+    const visibleDocuments = maskDevLinks
+      ? baseDocuments.filter((d) => !isDevDeliveryLink(d))
+      : baseDocuments
+    const withheldDevLinks = baseDocuments.length - visibleDocuments.length
 
     // Sanitize: remove confidential fields and restructure contactPerson_
     const { contactPerson_: contactPersonUser, ...demandFields } = demand as typeof demand & { contactPerson_: { id: string; name: string } | null }
@@ -91,10 +98,9 @@ export async function GET(
       // Filter out GITHUB_REPO + 報價單 documents
       // 開發中的 APP 交付連結須由需求方登入確認後才開放（確認即認列 25%），
       // 匿名檢視一律看不到；登入後改走 /api/demands/[id]，由該處依身分判斷。
-      documents: demand.documents.filter(
-        (d) => d.type !== "GITHUB_REPO" && d.type !== "ZHIHE_QUOTE" && !(maskDevLinks && isDevDeliveryLink(d))
-      ),
-      devLinkMasked: maskDevLinks,
+      documents: visibleDocuments,
+      // 僅在確實有交付被扣住時為 true——開發中但尚未交付者不應誤報
+      devLinkMasked: withheldDevLinks > 0,
     }
 
     return NextResponse.json({

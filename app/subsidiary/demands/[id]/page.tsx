@@ -931,6 +931,9 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
               <Package className="h-3.5 w-3.5 hidden sm:block" />
               交付成果
               {(() => {
+                if ((demand as unknown as { devLinkMasked?: boolean }).devLinkMasked) {
+                  return <Lock className="h-3 w-3 ml-0.5 text-sky-500" />
+                }
                 const devLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "DEVELOPING")
                 const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
                 const count = devLinks.length > 0 ? devLinks.length : prdLinks.length
@@ -1494,7 +1497,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
               const prdLinks = demand.documents.filter(d => d.type === "APP_RESULT" && d.phase === "PRD_REVIEW")
               const deliverables = devLinks.length > 0 ? devLinks : prdLinks
 
-              if (deliverables.length === 0 && devLinkMasked) {
+              if (devLinkMasked) {
                 return (
                   <Card className="border-sky-200">
                     <CardContent className="flex flex-col items-center justify-center min-h-[200px] text-center px-6">
@@ -1505,6 +1508,11 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                           ? "開發端已首次交付 APP。請於上方確認收到，即可檢視連結——本需求只需確認這一次。"
                           : "開發端已首次交付 APP，待需求窗口／需求主管確認收到後即會開放檢視。"}
                       </p>
+                      {prdLinks.length > 0 && (
+                        <p className="text-[11px] mt-2 text-muted-foreground/80">
+                          （MVP 架構確認階段的連結仍可於「文件」分頁取得，但該連結不代表本次開發交付。）
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 )

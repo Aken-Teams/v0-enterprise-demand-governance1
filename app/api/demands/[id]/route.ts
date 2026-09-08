@@ -277,15 +277,20 @@ export async function GET(
       contactPerson: contactPersonUser,
       myDesignChangeReview,
       hasPendingClosingSp,
-      // 讓前端知道「有東西待確認」，即使看不到連結本身
-      devLinkMasked: maskDevLinks,
       devLinkPendingCount,
       myDevLinkSignoffId: myDevLinkSignoff?.id ?? null,
     }
+    // 扣住的連結數：交付分頁會在有交付被扣住時改顯示說明，
+    // 而不是退回顯示 MVP 階段的舊連結（否則使用者會誤以為交付已經在那）
+    let withheldDevLinks = 0
     if (maskDevLinks && Array.isArray(demandOut.documents)) {
-      demandOut.documents = (demandOut.documents as { type: string; phase: string | null }[])
-        .filter((d) => !isDevDeliveryLink(d))
+      const docs = demandOut.documents as { type: string; phase: string | null }[]
+      const kept = docs.filter((d) => !isDevDeliveryLink(d))
+      withheldDevLinks = docs.length - kept.length
+      demandOut.documents = kept
     }
+    // 讓前端知道「有東西待確認」，即使看不到連結本身
+    demandOut.devLinkMasked = withheldDevLinks > 0
     if (!canSeeQuote) {
       demandOut.zhiheSpTaken = null
       demandOut.zhiheSpNote = null
