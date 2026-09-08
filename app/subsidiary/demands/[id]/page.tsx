@@ -856,6 +856,11 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
             onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
             onComplete={() => {
               if (pendingSignoffKind === "DESIGN_CHANGE") setJustApprovedDc(true)
+              // 剛簽收交付：直接帶到交付成果，省去自行回文件分頁翻找
+              if (pendingSignoffKind === "DEV_LINK") {
+                setActiveTab("deliverables")
+                toast.success("已確認收到交付，APP 連結已開啟")
+              }
               fetchDemand()
             }}
           />

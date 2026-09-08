@@ -63,6 +63,8 @@ export function PhaseSignoffBanner({
   const phaseLabel = STATUS_MAP[signoff.phase]?.label || signoff.phase
   const isDesignChange = kind === "DESIGN_CHANGE"
   const isDevLink = kind === "DEV_LINK"
+  // 確認後直接帶使用者去看連結，而不是讓他自己回文件分頁翻找
+  const devLinkNote = isDevLink ? "確認後即為簽收本次交付，連結會立即開啟供您檢視。" : null
   const isBoardOverride = signoff.targetRole === "BOARD_OVERRIDE"
   const isSettlement = isBoardOverride && !!signoff.overrideTargetStatus
 
@@ -168,7 +170,7 @@ export function PhaseSignoffBanner({
       {isDevLink && !inline && (
         <div className="mt-3 rounded-md bg-white/80 border border-sky-200 p-2.5 sm:p-3">
           <p className="text-[13px] sm:text-sm text-sky-900/80 leading-relaxed">
-            為保護交付成果，<span className="font-medium">確認後才會顯示 APP 連結</span>。
+            {devLinkNote}
           </p>
         </div>
       )}
@@ -249,21 +251,23 @@ export function PhaseSignoffBanner({
                 disabled={loading}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                {isSettlement ? "確認結算" : isDevLink ? "確認收到並檢視連結" : "確認通過"}
+                {isSettlement ? "確認結算" : isDevLink ? "確認收到，開啟連結" : "確認通過"}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className={cn(
-                  "bg-white flex-1 sm:flex-none h-10 sm:h-9",
-                  isSettlement ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-red-300 text-red-600 hover:bg-red-50"
-                )}
-                onClick={() => setShowForm(true)}
-                disabled={loading}
-              >
-                <X className="h-4 w-4 mr-1" />
-                {isSettlement ? "需求繼續" : isDevLink ? "退回交付" : "退回修改"}
-              </Button>
+              {!isDevLink && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={cn(
+                    "bg-white flex-1 sm:flex-none h-10 sm:h-9",
+                    isSettlement ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-red-300 text-red-600 hover:bg-red-50"
+                  )}
+                  onClick={() => setShowForm(true)}
+                  disabled={loading}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  {isSettlement ? "需求繼續" : "退回修改"}
+                </Button>
+              )}
             </div>
           ) : (
             <div className={cn("space-y-2", !inline && "mt-3")}>

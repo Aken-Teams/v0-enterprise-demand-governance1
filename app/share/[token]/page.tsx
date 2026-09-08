@@ -928,7 +928,11 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
             blocked={pendingSignoffKind === "PHASE" && ((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING" || dc.status === "REJECTED")}
             blockedMessage={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? "有待確認的設計變更，需通過後才能進行此階段確認。" : "設計變更已駁回，等待開發端修訂後重新送出，目前無法進行此階段確認。"}
             onGoToDesignChange={((demand as unknown as { designChanges?: { status: string }[] }).designChanges ?? []).some((dc) => dc.status === "PENDING") ? () => setActiveTab("design-changes") : undefined}
-            onComplete={fetchDemand}
+            onComplete={() => {
+              // 剛簽收交付：直接帶到交付成果，省去自行回文件分頁翻找
+              if (pendingSignoffKind === "DEV_LINK") setActiveTab("deliverables")
+              fetchDemand()
+            }}
           />
         )}
 

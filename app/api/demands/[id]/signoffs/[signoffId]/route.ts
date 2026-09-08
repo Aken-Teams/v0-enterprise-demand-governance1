@@ -101,6 +101,16 @@ export async function PATCH(
       return NextResponse.json({ error: "此簽核已處理" }, { status: 400 })
     }
 
+    // 交付連結確認純粹是「簽收」：確認前看不到連結，無從判斷內容好壞，
+    // 因此不提供退回——否則開發端與需求方都不知道退回後該做什麼。
+    // 對交付內容有意見，請於確認並檢視後循設計變更或驗收程序反映。
+    if (signoff.kind === DEV_LINK_KIND && action === "reject") {
+      return NextResponse.json(
+        { error: "APP 交付連結確認為簽收作業，不提供退回。如對交付內容有意見，請確認後循設計變更或驗收程序反映。" },
+        { status: 400 }
+      )
+    }
+
     // 階段簽核前置條件：若有尚未通過的設計變更，須先完成設計變更審核
     if ((signoff.kind ?? "PHASE") === "PHASE") {
       const blockingDC = await prisma.designChange.findFirst({
@@ -612,21 +622,6 @@ export async function PATCH(
           })
         }
       }
-    }
-
-    if (signoff.kind === DEV_LINK_KIND && action === "reject") {
-      // 退回不計費、連結維持遮蔽；待開發端交付新版本時會自動再發起一輪確認
-      notifyUsers(
-        [signoff.requestedById, signoff.demand.developerId].filter(
-          (uid): uid is string => !!uid && uid !== auth.userId
-        ),
-        {
-          type: "SIGNOFF",
-          title: "APP 交付連結未通過確認",
-          message: `需求 ${signoff.demand.demandNumber}「${signoff.demand.title}」的 APP 交付連結遭需求方退回${comment ? `：${comment.trim()}` : ""}。修正後重新交付即會再次送出確認。`,
-          linkUrl: `/demands/${id}`,
-        }
-      )
     }
 
     // Save attached files (if any)
