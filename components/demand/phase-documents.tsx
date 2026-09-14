@@ -44,7 +44,13 @@ interface Document {
   /** 此檔案是簽核往返的附件：request = 我方提出時附的、response = 需求方回應時附的 */
   signoffSource?: "request" | "response" | null
   /** 所屬的簽核往返（同一次送簽與其回覆），供依審核日期分組 */
-  signoffRound?: { key: string; date: string; status: string } | null
+  signoffRound?: {
+    key: string
+    date: string
+    requestedAt: string
+    respondedAt: string | null
+    status: string
+  } | null
 }
 
 /** 文件清單的一個區塊：一般文件，或某一次簽核往返 */
@@ -60,8 +66,8 @@ interface DocSection {
 
 /** 簽核附件的來源標籤——避免雙方的檔案混在同一份清單裡看不出是誰給的 */
 const SIGNOFF_SOURCE_BADGE: Record<string, { label: string; className: string }> = {
-  request: { label: "簽核送出附件", className: "border-blue-200 bg-blue-50 text-blue-600" },
-  response: { label: "需求方回饋", className: "border-amber-200 bg-amber-50 text-amber-700" },
+  request: { label: "送簽時附上", className: "border-blue-200 bg-blue-50 text-blue-600" },
+  response: { label: "審核時回饋", className: "border-amber-200 bg-amber-50 text-amber-700" },
 }
 
 interface DesignChangeOption {
@@ -128,6 +134,15 @@ function fmtDate(iso: string) {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
 }
 
+/** 同年份時省略年份，讓「送簽 → 審核」的標題不會過長 */
+function fmtDateShort(iso: string, sameYearAs: string) {
+  const d = new Date(iso)
+  const ref = new Date(sameYearAs)
+  if (isNaN(d.getTime())) return ""
+  const md = `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
+  return d.getFullYear() === ref.getFullYear() ? md : `${d.getFullYear()}/${md}`
+}
+
 /** 依 docGroup 分組（舊資料無 docGroup → 各自獨立），同組內由新到舊排序 */
 function groupDocs(docs: Document[]): DocGroup[] {
   const map = new Map<string, Document[]>()
@@ -153,29 +168,45 @@ function groupDocs(docs: Document[]): DocGroup[] {
  */
 function sectionizeDocs(groups: DocGroup[]): DocSection[] {
   const plain: DocGroup[] = []
-  const rounds = new Map<string, { date: string; status: string; groups: DocGroup[] }>()
+  const rounds = new Map<string, {
+    date: string
+    requestedAt: string
+    respondedAt: string | null
+    status: string
+    groups: DocGroup[]
+  }>()
 
   for (const g of groups) {
     const r = g.latest.signoffRound
     if (!r) { plain.push(g); continue }
     const cur = rounds.get(r.key)
     if (cur) cur.groups.push(g)
-    else rounds.set(r.key, { date: r.date, status: r.status, groups: [g] })
+    else rounds.set(r.key, { date: r.date, requestedAt: r.requestedAt, respondedAt: r.respondedAt, status: r.status, groups: [g] })
   }
 
   const sections: DocSection[] = []
   if (plain.length > 0) sections.push({ key: "plain", title: null, groups: plain })
+
+  // 往返依送簽時間由舊到新，才能照著事情發生的順序往下讀
   const sorted = [...rounds.entries()].sort(
-    (a, b) => new Date(b[1].date).getTime() - new Date(a[1].date).getTime()
+    (a, b) => new Date(a[1].requestedAt).getTime() - new Date(b[1].requestedAt).getTime()
   )
   sorted.forEach(([key, r], i) => {
+    // 區塊內同樣依時間正序：先是送簽時附上的，再是對方回覆時附上的
+    const groupsAsc = [...r.groups].sort(
+      (a, b) => new Date(a.latest.createdAt).getTime() - new Date(b.latest.createdAt).getTime()
+    )
     sections.push({
       key,
-      title: `${fmtDate(r.date)} 簽核往返`,
+      // 只寫一個日期會分不清是送簽日還是審核日（附件本身的日期常落在送簽那天），
+      // 故兩個日期都標明；同年份的審核日省略年份，避免標題過長。
+      title: r.respondedAt
+        ? `第 ${i + 1} 次送簽 · ${fmtDate(r.requestedAt)} → ${fmtDateShort(r.respondedAt, r.requestedAt)} 審核`
+        : `第 ${i + 1} 次送簽 · ${fmtDate(r.requestedAt)} · 待審核`,
       status: r.status,
-      // 最近一次預設展開，較早的收起來，避免往返多了以後整頁都是附件
-      defaultOpen: i === 0,
-      groups: r.groups,
+      // 最後一次（最新）預設展開，較早的收起來，避免往返多了以後整頁都是附件
+      defaultOpen: i === sorted.length - 1,
+      groups: groupsAsc,
     })
   })
   return sections

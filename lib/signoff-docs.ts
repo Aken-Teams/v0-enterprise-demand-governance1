@@ -23,8 +23,12 @@ interface SignoffLike {
 export interface SignoffRound {
   /** 分組用的鍵，同一次往返的附件共用 */
   key: string
-  /** 審核日期：該輪最後的回應時間；尚未回應則用發起時間 */
+  /** 排序用：有回應取回應時間，否則取發起時間 */
   date: string
+  /** 送簽日期 */
+  requestedAt: string
+  /** 審核（回應）日期；尚未回應為 null */
+  respondedAt: string | null
   /** 該輪結果：任一人退回即為 REJECTED，全數同意為 APPROVED，否則 PENDING */
   status: "APPROVED" | "REJECTED" | "PENDING"
 }
@@ -78,15 +82,16 @@ function buildRounds(signoffs: SignoffLike[]): Map<string, SignoffRound> {
     const responded = members
       .map((m) => (m.respondedAt ? new Date(m.respondedAt).getTime() : null))
       .filter((t): t is number => t != null)
-    const date = responded.length > 0
-      ? new Date(Math.max(...responded)).toISOString()
-      : new Date(members[0].requestedAt).toISOString()
+    const requestedAt = new Date(members[0].requestedAt).toISOString()
+    // 同一輪的多位簽核人取最後回應者，代表這輪何時真正結束
+    const respondedAt = responded.length > 0 ? new Date(Math.max(...responded)).toISOString() : null
+    const date = respondedAt ?? requestedAt
     const status: SignoffRound["status"] = members.some((m) => m.status === "REJECTED")
       ? "REJECTED"
       : members.every((m) => m.status === "APPROVED" || m.status === "SKIPPED")
         ? "APPROVED"
         : "PENDING"
-    const round: SignoffRound = { key, date, status }
+    const round: SignoffRound = { key, date, requestedAt, respondedAt, status }
     for (const m of members) bySignoff.set(m.id, round)
   }
   return bySignoff
