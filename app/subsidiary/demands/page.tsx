@@ -78,7 +78,7 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
   return (
     <Link
       href={`/subsidiary/demands/${demand.id}`}
-      className="group block rounded-xl border bg-card p-3 sm:p-4 transition-all hover:shadow-md hover:border-primary/30"
+      className="group flex h-full flex-col rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:border-primary/30 sm:p-4"
     >
       {/* Row 1: status + signoff + demand number */}
       <div className="flex items-center justify-between mb-1.5 sm:mb-2">
@@ -98,11 +98,13 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
       </div>
 
       {/* Title */}
-      <h3 className="font-semibold text-foreground text-xs sm:text-sm leading-snug mb-1.5 sm:mb-2 group-hover:text-primary transition-colors line-clamp-2">
+      {/* 標題固定兩行高，一行的標題也不會讓卡片縮短 */}
+      <h3 className="min-h-[2.25rem] font-semibold text-foreground text-xs sm:text-sm leading-snug mb-1.5 sm:mb-2 group-hover:text-primary transition-colors line-clamp-2 sm:min-h-[2.5rem]">
         {demand.title}
       </h3>
 
-      {/* 暫緩 / 取消 / 終止 原因 */}
+      {/* 暫緩 / 取消 / 終止 原因 —— 保留固定高度，沒有原因時留白而非塌陷 */}
+      <div className="min-h-[1.25rem]">
       {demand.status === "ON_HOLD" && demand.holdReason && (
         <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2 text-[11px] text-yellow-700 bg-yellow-50 rounded px-2 py-1" title={demand.holdReason}>
           <PauseCircle className="h-3.5 w-3.5 shrink-0" />
@@ -122,8 +124,10 @@ function DemandCard({ demand, hasPendingSignoff }: { demand: Demand; hasPendingS
         </div>
       )}
 
+      </div>
+
       {/* Bottom: owner + date + SP */}
-      <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-border/60 text-[10px] sm:text-[11px] text-muted-foreground">
+      <div className="mt-auto flex items-center justify-between pt-1.5 sm:pt-2 border-t border-border/60 text-[10px] sm:text-[11px] text-muted-foreground">
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           {ownerInfo && <span className="truncate">{ownerInfo}</span>}
           {ownerInfo && <span>·</span>}
