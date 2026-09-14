@@ -14,7 +14,7 @@ const prisma = new PrismaClient()
 
 const STATUS_LABEL = {
   SUBMITTED:   "需求確認",
-  PRD_REVIEW:  "MVP 架構確認",
+  PRD_REVIEW:  "PRD 文件確認",
   SP_REVIEW:   "開案確認",
   DEVELOPING:  "開發中",
   ACCEPTANCE:  "驗收中",
@@ -77,8 +77,8 @@ async function main() {
   ws.columns = [
     { header: "需求編號",       key: "demandNumber",  width: 16 },
     { header: "專案名稱",       key: "title",         width: 38 },
-    { header: "需求者組織",     key: "org",           width: 20 },
-    { header: "需求者窗口",     key: "contact",       width: 14 },
+    { header: "需求方組織",     key: "org",           width: 20 },
+    { header: "需求窗口",       key: "contact",       width: 14 },
     { header: "PM",             key: "manager",       width: 14 },
     { header: "開發者",         key: "developer",     width: 14 },
     { header: "目前狀態",       key: "status",        width: 14 },

@@ -14,13 +14,21 @@ import { cn } from "@/lib/utils"
 /** Vendor color palette */
 const VENDOR_COLORS = ["#3b82f6", "#f59e0b", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4"]
 
-const STATUS_LABEL: Record<string, { label: string; color: string; rate: string }> = {
-  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700", rate: "不扣除" },
-  PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-100 text-amber-700", rate: "不扣除" },
-  SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700", rate: "不扣除" },
-  DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700", rate: "50%" },
-  ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700", rate: "75%" },
-  CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700", rate: "100%" },
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700" },
+  PRD_REVIEW: { label: "PRD 文件確認", color: "bg-amber-100 text-amber-700" },
+  SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700" },
+  DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700" },
+  ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700" },
+  CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700" },
+}
+
+/**
+ * 實際認列比例由「已認列 SP ÷ 需求 SP」反推，不看階段硬表。
+ * 開發中若已完成首次 APP 交付確認即認列 75%，用階段對照表會誤標成 50%。
+ */
+function usedPctOf(spUsed: number, sp: number): number {
+  return sp > 0 ? Math.round((spUsed / sp) * 100) : 0
 }
 
 interface WalletData {
@@ -204,7 +212,7 @@ export default function WalletPage() {
                               ? <>提前結算 {Math.round((d.sp / d.estimatedSp!) * 100)}%</>
                               : d.settlementType === "adjustment"
                               ? <>SP 調整</>
-                              : <>消耗 {d.spUsed} ({si?.rate})</>}
+                              : d.spUsed === 0 ? <>尚未認列</> : <>認列 {d.spUsed} ({usedPctOf(d.spUsed, d.sp)}%)</>}
                           </div>
                         </div>
                       </Link>
@@ -261,7 +269,9 @@ export default function WalletPage() {
                             </TableCell>
                             <TableCell className="text-center">
                               <span className="text-sm font-medium tabular-nums">{d.spUsed}</span>
-                              <span className="text-xs text-muted-foreground ml-1">({si?.rate})</span>
+                              <span className="text-xs text-muted-foreground ml-1">
+                                {d.spUsed === 0 ? "（尚未認列）" : `(${usedPctOf(d.spUsed, d.sp)}%)`}
+                              </span>
                             </TableCell>
                           </TableRow>
                         )

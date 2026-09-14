@@ -75,7 +75,7 @@ enum DocumentType {
   SECURITY_REPORT     // 資安報告
   SECURITY_FIX_REPORT // 資安修正報告
   OPERATION_MANUAL    // 操作手冊
-  ZHIHE_QUOTE         // 智合報價單（僅管理者/董事會可見，審核通過後才可下載）
+  ZHIHE_QUOTE         // 智合報價單（僅管理者/Scrum Master 可見，審核通過後才可下載）
 }
 
 enum SubTaskStatus {
@@ -119,7 +119,7 @@ enum SignoffStatus {
 enum DemandSignoffRole {
   REQUESTER   // 需求者
   MANAGER     // 主管
-  BOARD       // 董事會（開案審核）
+  BOARD       // Scrum Master（開案審核）
   OBSERVER    // 觀察者（只能看）
 }
 
@@ -165,7 +165,7 @@ model User {
   role           UserRole
   avatarUrl      String?       @db.Text
   isActive       Boolean       @default(true)
-  isBoardMember          Boolean       @default(false) @map("is_board_member")           /// 董事會成員（全域 SP_REVIEW 審核權）
+  isBoardMember          Boolean       @default(false) @map("is_board_member")           /// Scrum Master（全域 SP_REVIEW 審核權）
   restrictBoardToOrg     Boolean       @default(false) @map("restrict_board_to_org")     /// true = 僅能審核自己組織的專案
   restrictBoardViewToOrg Boolean       @default(false) @map("restrict_board_view_to_org") /// true = 僅能查看自己組織的專案
   boardExemptFromSignoff Boolean       @default(false) @map("board_exempt_from_signoff") /// true = 不需要參與開案審核
@@ -266,14 +266,14 @@ model Demand {
   desiredDate     DateTime? /// 希望完成時間
   expectedDate    DateTime? /// 預計完成時間
   completedDate   DateTime? /// 實際完成時間
-  isTerminated    Boolean        @default(false) /// 經專案 Master 代簽直接結案 → 客戶認知為「已終止」（狀態仍為 CLOSED）
+  isTerminated    Boolean        @default(false) /// 經 Scrum Master 代簽直接結案 → 客戶認知為「已終止」（狀態仍為 CLOSED）
   /// 開發中「APP 交付連結」經需求方確認的時間。
   /// 一旦確認，SP 即提前認列至驗收中的比例（75%）；之後推進到驗收中時比例相同、
   /// 差額為 0，故不會重複計費。未確認者維持原有「進入驗收才認列」的行為。
   devLinkConfirmedAt   DateTime? @map("dev_link_confirmed_at")
   devLinkConfirmedById String?   @map("dev_link_confirmed_by_id")
   devLinkConfirmedBy   User?     @relation("DevLinkConfirmer", fields: [devLinkConfirmedById], references: [id])
-  // ── 智合抽成（內部：僅管理者/董事會可見）──
+  // ── 智合抽成（內部：僅管理者/Scrum Master 可見）──
   zhiheSpTaken      Float? /// 智合自本專案抽取的 SP（選填，通常結案才記錄）
   zhiheSpNote       String?   @db.Text /// 抽成說明
   quoteReviewedById String? /// 報價單審核通過者（強合管理者）
@@ -323,7 +323,7 @@ model Demand {
   @@map("demands")
 }
 
-/// MVP 原型（可上傳一組 HTML 畫面供客戶互動預覽，分版本）
+/// 原型（可上傳一組 HTML 畫面供客戶互動預覽，分版本）
 model Prototype {
   id         String            @id @default(cuid())
   demandId   String
@@ -482,9 +482,9 @@ model DemandPhasePlan {
   plannedEnd   DateTime? /// 計畫結束
   actualStart  DateTime? /// 實際開始
   actualEnd    DateTime? /// 實際結束
-  engineerId   String? /// 工程師 (MVP 階段後)
+  engineerId   String? /// 工程師 (PRD 文件確認階段後)
   engineer     User?         @relation("PhasePlanEngineer", fields: [engineerId], references: [id])
-  pmId         String? /// PM (MVP 階段後)
+  pmId         String? /// PM (PRD 文件確認階段後)
   pm           User?         @relation("PhasePlanPM", fields: [pmId], references: [id])
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -558,7 +558,7 @@ model PhaseSignoff {
   demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
   phase         DemandStatus
   kind          String        @default("PHASE") /// "PHASE" (階段簽核) | "DESIGN_CHANGE" (設計變更) | "CLOSING_SP" (結案 SP 調整) | "DEV_LINK" (開發中 APP 交付連結確認)
-  /// kind = CLOSING_SP 專用：暫存待董事會核准的結案內容
+  /// kind = CLOSING_SP 專用：暫存待 Scrum Master 核准的結案內容
   /// { oldSp, newSp, reason, phaseAllocations, completedDate, designChangeIds[] }
   payload       String?       @db.Text
   status        SignoffStatus @default(PENDING)
@@ -613,12 +613,12 @@ model DesignChangeRevision {
   version        Int
   summary        String             @db.Text /// 變更摘要說明 (Markdown)
   checklistMd    String?            @db.Text /// checklist 原始 Markdown
-  affectsSp      Boolean            @default(false) /// 是否影響 SP → 需董事會加入審核
-  spCurrent      Float?             /// 提出當下的 SP（快照，供董事會評估）
+  affectsSp      Boolean            @default(false) /// 是否影響 SP → 需 Scrum Master 加入審核
+  spCurrent      Float?             /// 提出當下的 SP（快照，供 Scrum Master 評估）
   spDelta        Float?             /// 預計增減 SP（正=上調，負=下降）
   spNote         String?            @db.Text /// SP 影響補充說明
   status         DesignChangeStatus @default(PENDING)
-  /// 開案閘門結果（董事會 + 需求窗口皆須同意）；APPROVED 後才開放逐條確認
+  /// 開案閘門結果（Scrum Master + 需求窗口皆須同意）；APPROVED 後才開放逐條確認
   gateStatus     DesignChangeStatus @default(PENDING)
   submittedById  String
   submittedBy    User               @relation("DCRevSubmitter", fields: [submittedById], references: [id])
@@ -672,7 +672,7 @@ model DesignChangeReview {
   reviewerId String
   reviewer   User               @relation("DCReviewer", fields: [reviewerId], references: [id])
   role       String             /// REQUESTER / MANAGER / BOARD
-  /// 審核階段："GATE"(開案閘門：董事會+需求窗口) | "CONTENT"(逐條確認)
+  /// 審核階段："GATE"(開案閘門：Scrum Master+需求窗口) | "CONTENT"(逐條確認)
   /// 同一人可能在兩個階段各簽一次，故唯一鍵須含 stage
   stage      String             @default("CONTENT")
   decision   DesignChangeStatus @default(PENDING)

@@ -33,7 +33,7 @@ interface Demand {
 
 const STATUS_MAP: Record<string, { label: string; color: string; badge: string }> = {
   SUBMITTED: { label: "需求確認", color: "bg-blue-500 text-white", badge: "bg-blue-50 text-blue-700 ring-blue-200" },
-  PRD_REVIEW: { label: "MVP 確認", color: "bg-amber-500 text-white", badge: "bg-amber-50 text-amber-700 ring-amber-200" },
+  PRD_REVIEW: { label: "PRD 文件確認", color: "bg-amber-500 text-white", badge: "bg-amber-50 text-amber-700 ring-amber-200" },
   SP_REVIEW: { label: "開案確認", color: "bg-orange-500 text-white", badge: "bg-orange-50 text-orange-700 ring-orange-200" },
   DEVELOPING: { label: "開發中", color: "bg-violet-500 text-white", badge: "bg-violet-50 text-violet-700 ring-violet-200" },
   ACCEPTANCE: { label: "驗收中", color: "bg-purple-500 text-white", badge: "bg-purple-50 text-purple-700 ring-purple-200" },
@@ -43,7 +43,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; badge: string }
   CANCELLED: { label: "已取消", color: "bg-slate-500 text-white", badge: "bg-slate-100 text-slate-600 ring-slate-200" },
   TERMINATED: { label: "已終止", color: "bg-zinc-500 text-white", badge: "bg-zinc-100 text-zinc-700 ring-zinc-200" },
   TERMINATING: { label: "終止簽核中", color: "bg-orange-500 text-white", badge: "bg-orange-50 text-orange-700 ring-orange-200" },
-  // 顯示用：結案 SP 調整待董事會核准
+  // 顯示用：結案 SP 調整待 Scrum Master 核准
   CLOSING_SP_REVIEW: { label: "結案簽核中", color: "bg-orange-500 text-white", badge: "bg-orange-50 text-orange-700 ring-orange-200" },
 }
 

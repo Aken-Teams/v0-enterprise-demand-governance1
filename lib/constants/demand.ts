@@ -1,6 +1,6 @@
 export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700" },
-  PRD_REVIEW: { label: "MVP 架構確認", color: "bg-amber-100 text-amber-700" },
+  PRD_REVIEW: { label: "PRD 文件確認", color: "bg-amber-100 text-amber-700" },
   SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700" },
   DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700" },
   ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700" },
@@ -8,18 +8,18 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "已駁回", color: "bg-red-100 text-red-700" },
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
   CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
-  // 顯示用（非資料庫狀態）：經專案 Master 代簽直接結案 → 客戶認知為「已終止」
+  // 顯示用（非資料庫狀態）：經 Scrum Master 代簽直接結案 → 客戶認知為「已終止」
   TERMINATED: { label: "已終止", color: "bg-zinc-200 text-zinc-700" },
-  // 顯示用（非資料庫狀態）：有待客戶 Master 確認的「代簽終止結算」→ 終止簽核中
+  // 顯示用（非資料庫狀態）：有待 Scrum Master 確認的「代簽終止結算」→ 終止簽核中
   TERMINATING: { label: "終止簽核中", color: "bg-orange-100 text-orange-700" },
-  // 顯示用（非資料庫狀態）：結案 SP 調整已送出、等董事會核准 → 結案簽核中
+  // 顯示用（非資料庫狀態）：結案 SP 調整已送出、等 Scrum Master 核准 → 結案簽核中
   CLOSING_SP_REVIEW: { label: "結案簽核中", color: "bg-orange-100 text-orange-700" },
 }
 
 /**
  * 需求「顯示用」狀態鍵。實際資料庫狀態不受影響（SP 結算、分析等照舊）：
  *  - CLOSED 且經代簽終止 → TERMINATED（已終止）
- *  - 尚未結案但已送出結案 SP 調整、等董事會核准 → CLOSING_SP_REVIEW（結案簽核中）
+ *  - 尚未結案但已送出結案 SP 調整、等 Scrum Master 核准 → CLOSING_SP_REVIEW（結案簽核中）
  *    否則需求會一直顯示「驗收中」，看不出正在等結案簽核。
  */
 export function demandStatusKey(
@@ -99,18 +99,18 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 
 /** 各階段簡要說明，讓管理者了解該階段的工作重點 */
 export const PHASE_DESCRIPTIONS: Record<string, string> = {
-  SUBMITTED: "與需求者面談了解需求，記錄會議內容",
-  PRD_REVIEW: "PM 撰寫 PRD，指派工程師進行 MVP 架構設計",
+  SUBMITTED: "與需求窗口面談了解需求，記錄會議內容",
+  PRD_REVIEW: "PM 撰寫 PRD 需求規格文件，供需求方逐項確認",
   SP_REVIEW: "填寫 SP 規劃文件，分配各階段 SP 點數與時程",
   DEVELOPING: "依甘特圖進行開發，產出 SDD、APP 成果與 GitHub 連結",
-  ACCEPTANCE: "工程師提供 BDD/TDD 文件，使用者進行驗收測試",
+  ACCEPTANCE: "工程師提供 BDD/TDD 文件，需求方進行驗收測試",
   CLOSED: "需求已完成結案",
 }
 
 /** 各階段需要完成的關鍵動作 */
 export const PHASE_ACTIONS: Record<string, string[]> = {
   SUBMITTED: ["上傳會議記錄"],
-  PRD_REVIEW: ["指派 PM 與工程師", "上傳 PRD", "上傳模組架構文件"],
+  PRD_REVIEW: ["指派 PM 與工程師", "上傳 PRD"],
   SP_REVIEW: ["填寫各階段 SP 點數", "填寫各階段甘特圖時程", "上傳 SP 規劃文件"],
   DEVELOPING: ["管理開發子任務", "上傳 SDD 文件", "上傳 APP 交付成果", "提供 GitHub 連結"],
   ACCEPTANCE: ["上傳 BDD 文件", "上傳 TDD 文件", "上傳測試報告"],
@@ -133,10 +133,10 @@ export const PHASE_SIGNOFF_ROLES: Record<string, string[]> = {
 
 /** 審核角色標籤 */
 export const SIGNOFF_ROLE_LABELS: Record<string, string> = {
-  REQUESTER: "需求者",
-  MANAGER: "主管",
-  BOARD: "董事會",
-  BOARD_OVERRIDE: "專案 Master 代簽",
+  REQUESTER: "需求窗口",
+  MANAGER: "需求主管",
+  BOARD: "Scrum Master",
+  BOARD_OVERRIDE: "Scrum Master 代簽",
   OBSERVER: "觀察者",
 }
 
@@ -150,14 +150,14 @@ export const SIGNOFF_STATUS_MAP: Record<string, { label: string; color: string }
 }
 
 /**
- * 可發起設計變更的階段：開案確認／開發中／驗收中。
+ * 可發起設計變更的階段：開發中／驗收中（即「開案之後」）。
  *
- * 需求確認與 MVP 架構確認階段：需求還在成形，直接改需求即可。
- * 已結案：SP 已於結案時依設計變更紀錄結算完畢並經董事會核准，
+ * 需求確認、PRD 文件確認、開案確認階段：範圍還在成形，直接改需求即可，
+ *         此時的 SP 仍是「預估 SP」，不需要用設計變更留紀錄。
+ * 已結案：SP 已於結案時依設計變更紀錄結算完畢（有調整者並經 Scrum Master 核准），
  *         此時再開變更會讓結算基準與紀錄對不上，故不開放。
  */
 export const DESIGN_CHANGE_ALLOWED_PHASES = [
-  "SP_REVIEW",
   "DEVELOPING",
   "ACCEPTANCE",
 ] as const
@@ -193,8 +193,35 @@ export const DESIGN_CHANGE_STAGE_LABELS: Record<string, string> = {
 
 /** 設計變更審核階段說明（顯示於審核介面，讓簽核人知道自己在裁決什麼） */
 export const DESIGN_CHANGE_STAGE_DESCRIPTIONS: Record<string, string> = {
-  GATE: "由董事會與需求窗口決定「這個設計變更准不准開」。兩方皆同意後，才會開放需求方逐條確認內容。",
+  GATE: "由 Scrum Master 與需求窗口決定「這個設計變更准不准開」。兩方皆同意後，才會開放需求方逐條確認內容。",
   CONTENT: "需求方逐項確認變更內容，全部確認後此設計變更才算通過。",
+}
+
+/**
+ * 「終止開發結案」的結算落點。
+ *
+ * 這裡選的是**結算依據**，不是把需求改成該狀態——通過後一律結案並顯示為「已終止」。
+ * 名稱與說明對齊《JV 開案流程》文件「結算比例」一節，避免管理者把
+ * 「已結案 100%」誤讀成「把狀態改成已結案」。
+ */
+export const SETTLEMENT_TIERS: Record<string, { label: string; desc: string }> = {
+  DEVELOPING: {
+    label: "已開案、尚未交付",
+    desc: "已開案並進入開發，尚未完成首次 APP 交付確認，也尚未進入驗收。",
+  },
+  ACCEPTANCE: {
+    label: "已首次交付／驗收中",
+    desc: "已完成首次 APP 交付確認，或已進入驗收階段。",
+  },
+  CLOSED: {
+    label: "實質完成",
+    desc: "功能實質完成並已達可結案狀態，僅因程序或雙方決議以終止方式收尾。",
+  },
+}
+
+/** 結算落點的顯示名稱（查無對應時退回階段名稱） */
+export function settlementTierLabel(status: string): string {
+  return SETTLEMENT_TIERS[status]?.label ?? STATUS_MAP[status]?.label ?? status
 }
 
 /** SP 單價 (NT$) */

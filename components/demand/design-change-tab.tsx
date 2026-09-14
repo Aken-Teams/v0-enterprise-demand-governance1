@@ -51,8 +51,8 @@ interface DesignChange {
 }
 
 export interface PreviewableDoc { id: string; type: string; fileName: string; fileUrl: string | null; fileSize: number | null }
-const ROLE_LABELS: Record<string, string> = { REQUESTER: "需求窗口", MANAGER: "需求主管", BOARD: "董事會" }
-/** 目前所處階段：設計變更確認（董事會+需求窗口）通過後，才進入逐條確認 */
+const ROLE_LABELS: Record<string, string> = { REQUESTER: "需求窗口", MANAGER: "需求主管", BOARD: "Scrum Master" }
+/** 目前所處階段：設計變更確認（Scrum Master+需求窗口）通過後，才進入逐條確認 */
 const activeStageOf = (rev: { gateStatus: string }) => (rev.gateStatus === "APPROVED" ? "CONTENT" : "GATE")
 
 /**
@@ -360,7 +360,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
           const devDocs = versionDocs.filter((d) => !reviewerIds.has(d.uploadedBy.id))
           const reviewerDocs = versionDocs.filter((d) => reviewerIds.has(d.uploadedBy.id))
           const decidedReviews = rev.reviews.filter((r) => r.decision !== "PENDING")
-          // 簽核流程：設計變更確認（需求窗口 + 董事會）→ 逐條確認（需求窗口 + 需求主管）
+          // 簽核流程：設計變更確認（需求窗口 + Scrum Master）→ 逐條確認（需求窗口 + 需求主管）
           const gateReviews = rev.reviews.filter((r) => r.stage === "GATE")
           const contentReviews = rev.reviews.filter((r) => r.stage === "CONTENT")
           const gateRejected = gateReviews.some((r) => r.decision === "REJECTED")
@@ -834,7 +834,7 @@ export function DesignChangeTab({ demandId, demandNumber, phaseLabel, token, cur
                                 </TooltipTrigger>
                                 <TooltipContent side="right" className="max-w-[280px] text-xs leading-relaxed">
                                   {activeStage === "GATE" ? (
-                                    <p>設計變更確認：請裁決是否同意開立此設計變更。董事會與需求窗口皆同意後，才會開放逐條確認。</p>
+                                    <p>設計變更確認：請裁決是否同意開立此設計變更。Scrum Master 與需求窗口皆同意後，才會開放逐條確認。</p>
                                   ) : (
                                     <p>逐條確認（第二關）：此變更已通過第一關的「設計變更確認」，現在請逐項確認變更內容的細節。</p>
                                   )}

@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { FileSearch } from "lucide-react"
+import { CheckCircle2, FileSearch } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import {
   STATUS_MAP,
@@ -48,7 +49,7 @@ const DOC_STANDARD_FORMAT: Record<string, { sections: { title: string; content: 
     sections: [
       { title: "會議基本資訊", content: "日期、時間、地點、與會人員" },
       { title: "需求背景", content: "需求提出的原因、目前遇到的問題" },
-      { title: "核心需求", content: "需求者期望的功能與目標，依優先級排列" },
+      { title: "核心需求", content: "需求方期望的功能與目標，依優先級排列" },
       { title: "預期效益", content: "預計帶來的效益或改善" },
       { title: "待確認事項", content: "需進一步釐清的問題" },
       { title: "下一步行動", content: "雙方的後續行動與時程" },
@@ -117,24 +118,24 @@ const DOC_STANDARD_FORMAT: Record<string, { sections: { title: string; content: 
   },
 }
 
-/** 需求者簽核階段的審核指引 */
+/** 需求方簽核階段的審核指引 */
 const SIGNOFF_REVIEW_GUIDE: Record<string, { summary: string; points: string[] }> = {
   PRD_REVIEW: {
-    summary: "確認 PRD 內容與 MVP 架構方向是否符合您的需求",
+    summary: "確認 PRD 需求規格文件內容是否符合您的需求",
     points: [
       "功能範圍是否與您的需求一致",
       "驗收標準是否明確且可衡量",
       "使用者流程是否符合實際操作情境",
       "是否有遺漏的功能需求",
-      "MVP 架構方向是否符合期望",
+      "需求範圍與功能優先順序是否符合期望",
     ],
   },
   SP_REVIEW: {
-    summary: "確認 SP 點數與開發時程是否可接受",
+    summary: "本階段由 Scrum Master 審核並簽核，您不需簽核",
     points: [
-      "確認 SP 點數是否在預算範圍內",
-      "各階段時程安排是否合理",
-      "甘特圖的里程碑是否可接受",
+      "可查看核定的確認 SP 與各階段時程",
+      "開案通過後 SP 即認列 50%，後續增減一律走設計變更",
+      "如對範圍或時程有疑慮，請於開案前向需求窗口反映",
     ],
   },
   ACCEPTANCE: {
@@ -148,11 +149,11 @@ const SIGNOFF_REVIEW_GUIDE: Record<string, { summary: string; points: string[] }
     ],
   },
   CLOSED: {
-    summary: "最終確認交付成果完整，同意結案",
+    summary: "結案為通知性質，不需您簽核；請檢視結案結果",
     points: [
-      "確認所有需求功能皆已完成",
-      "確認 APP 運行正常無重大問題",
-      "確認 SP 點數結算正確",
+      "檢視所有需求功能皆已完成、APP 運行正常",
+      "檢視 SP 結算紀錄與關聯的設計變更",
+      "結案 SP 若有調整，須經 Scrum Master 簽核後才完成結案",
     ],
   },
 }
@@ -160,36 +161,180 @@ const SIGNOFF_REVIEW_GUIDE: Record<string, { summary: string; points: string[] }
 const SUBSIDIARY_PHASE_DETAIL: Record<string, { desc: string; actions: string[]; note?: string }> = {
   SUBMITTED: {
     desc: "管理者與您面談確認需求內容",
-    actions: ["與管理者進行需求訪談", "確認需求範圍與期望目標"],
-    note: "此階段不列入 SP 扣除範圍，待進入開發階段後才開始計算消耗。",
+    actions: ["與管理者進行需求訪談", "確認需求範圍與期望目標", "指派需求窗口（必要）與需求主管（選填）"],
+    note: "此階段不列入 SP 扣除範圍，待開案確認通過後才起算認列。未指派需求窗口無法推進到下一階段。",
   },
   PRD_REVIEW: {
-    desc: "PM 撰寫需求規格書，工程師進行架構設計",
-    actions: ["收到 PRD 後審閱需求規格是否正確", "確認 MVP 架構方向", "簽核確認 PRD 內容"],
-    note: "此階段仍不列入 SP 扣除，待進入開發中後才起算消耗（開發 50% → 驗收 75% → 結案 100%）。",
+    desc: "PM 撰寫 PRD 需求規格文件，供您逐項確認",
+    actions: ["收到 PRD 後審閱需求規格是否正確", "確認需求範圍與功能優先順序", "簽核確認 PRD 內容"],
+    note: "此階段仍不列入 SP 扣除；PRD 確認以三次為限（含第一次）。待開案確認通過後才起算認列（開案 50% → 首次 APP 交付確認／驗收 75% → 結案 100%）。",
   },
   SP_REVIEW: {
-    desc: "管理者確認 SP 點數與開發時程",
-    actions: ["查看管理者核定的確認 SP 與時程", "簽核確認開案"],
+    desc: "由 Scrum Master 審核是否開案",
+    actions: ["查看核定的確認 SP 與各階段時程"],
+    note: "本階段的簽核人為 Scrum Master，您不需簽核。開案通過後 SP 認列 50%，後續增減一律循設計變更辦理。",
   },
   DEVELOPING: {
     desc: "工程師進行開發，產出系統設計與成果",
-    actions: ["可隨時查看甘特圖追蹤進度", "查看交付成果頁面預覽 APP"],
-    note: "開發期間如有問題可聯繫需求者窗口。",
+    actions: ["完成首次 APP 交付確認後即可開啟試用連結", "可隨時查看甘特圖追蹤進度", "提供測試回饋與調整建議"],
+    note: "首次 APP 交付確認每案僅一次，確認前看不到連結，確認後立即開放並認列 25%（累計 75%）。此項屬簽收、不提供退回；對內容有意見請循設計變更或驗收程序反映。交付或修正後請於 10 個工作天內回覆，逾期專案將順延。",
   },
   ACCEPTANCE: {
     desc: "您驗收開發成果，確認是否符合需求",
     actions: ["查看測試報告與 BDD/TDD 文件", "實際操作 APP 確認功能", "簽核通過或退回修正"],
-    note: "驗收不通過會退回開發階段重新修正。",
+    note: "退回不會讓需求回到開發階段：修正與重新送簽都在驗收中完成，SP 維持 75%。若屬需求範圍變動（而非缺失修正），應改走設計變更。",
   },
   CLOSED: {
     desc: "需求完成結案，SP 點數結算",
     actions: [],
-    note: "結案後 SP 完整消耗 100%，若有 SP 調整以調整後為準。",
+    note: "結案為通知性質、不需您簽核。結案後認列 100%，SP 依已通過的設計變更自動結算；若有調整須經 Scrum Master 簽核後才完成結案。",
   },
 }
 
-/* ─── 需求者（subsidiary）看到的內容 ─── */
+/**
+ * SP 計費與認列的圖解（放在說明表上方，先看圖再看細則）。
+ * 圖檔放在 public/sp-billing.png；檔案不在時自動隱藏，不留破圖。
+ */
+function SpBillingDiagram() {
+  const [failed, setFailed] = useState(false)
+  if (failed) return null
+  return (
+    <figure className="mx-auto w-full max-w-3xl">
+      <a
+        href="/sp-billing.png"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block overflow-hidden rounded-lg border bg-white transition-shadow hover:shadow-md"
+        title="點擊看大圖"
+      >
+        <img
+          src="/sp-billing.png"
+          alt="SP 計費與認列機制：各階段認列比例、特殊規則與各階段 SP 處理"
+          className="w-full"
+          onError={() => setFailed(true)}
+        />
+      </a>
+      <figcaption className="mt-1.5 text-center text-[10px] text-muted-foreground sm:text-xs">
+        SP 計費與認列機制總覽（點圖看大圖）
+      </figcaption>
+    </figure>
+  )
+}
+
+/** SP 認列節點——需求方版與管理版共用，避免兩邊說法走鐘 */
+const SP_RECOGNITION_STEPS: {
+  title: string
+  color?: string
+  gate?: boolean
+  total: number | null
+  delta: number | null
+  /** 覆寫「本次增量」的顯示文字（例如二擇一的情況） */
+  deltaText?: string
+  /** 標記為同一筆認列的二擇一群組，只會發生一次 */
+  once?: boolean
+  note: string
+}[] = [
+  { title: "需求確認", color: "bg-blue-100 text-blue-700", total: null, delta: null, note: "僅需求訪談，不列入扣除範圍" },
+  { title: "PRD 文件確認", color: "bg-amber-100 text-amber-700", total: null, delta: null, note: "確認 PRD 內容，尚未起算認列" },
+  { title: "開案確認", color: "bg-orange-100 text-orange-700", total: null, delta: null, note: "送審期間尚未起算；通過後才認列 50%" },
+  { title: "開發中", color: "bg-violet-100 text-violet-700", total: 50, delta: 50, note: "開案確認通過後起算 50%" },
+  { title: "首次 APP 交付確認", gate: true, total: 75, delta: 25, once: true, note: "需求方確認交付連結後即認列，每案僅一次" },
+  { title: "驗收中", color: "bg-purple-100 text-purple-700", total: 75, delta: 25, deltaText: "+25% 或 0%", once: true, note: "若先前已完成首次 APP 交付確認，此處增量為 0；未確認過的才在此認列 25%" },
+  { title: "已結案", color: "bg-emerald-100 text-emerald-700", total: 100, delta: 25, note: "結案完成，完整認列" },
+]
+
+/** 各階段的認列比例表；傳入 sampleSp 會多一欄實際點數換算 */
+function SpRecognitionSteps({ sampleSp }: { sampleSp?: number }) {
+  const pct = (n: number | null) => (n == null ? "—" : `${n}%`)
+  return (
+    <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <table className="w-full text-xs sm:text-sm">
+        <thead>
+          <tr className="border-b text-left">
+            <th className="pb-2 font-medium text-foreground">階段 / 認列節點</th>
+            <th className="pb-2 font-medium text-foreground text-center">累計認列</th>
+            <th className="pb-2 font-medium text-foreground text-center hidden sm:table-cell">本次增量</th>
+            {sampleSp != null && (
+              <th className="pb-2 font-medium text-foreground text-center">{sampleSp} SP 的話</th>
+            )}
+            <th className="pb-2 font-medium text-foreground hidden sm:table-cell">說明</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {SP_RECOGNITION_STEPS.map((step) => (
+            <tr key={step.title} className={step.once ? "bg-amber-50/40" : undefined}>
+              <td className="py-2 sm:py-2.5">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {step.gate ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                      <span className="font-medium text-foreground">{step.title}</span>
+                    </>
+                  ) : (
+                    <Badge className={`${step.color} text-[10px] sm:text-xs`}>{step.title}</Badge>
+                  )}
+                  {step.once && (
+                    <span className="rounded border border-amber-300 px-1 py-px text-[9px] font-medium text-amber-700 sm:text-[10px]">
+                      二擇一
+                    </span>
+                  )}
+                </span>
+              </td>
+              <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">
+                {step.total == null ? <span className="font-normal text-muted-foreground">—</span> : pct(step.total)}
+              </td>
+              <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">
+                {step.delta == null
+                  ? <span className="text-muted-foreground">—</span>
+                  : step.deltaText ?? `+${step.delta}%`}
+              </td>
+              {sampleSp != null && (
+                <td className="py-2 sm:py-2.5 text-center tabular-nums text-foreground">
+                  {step.total == null ? <span className="text-muted-foreground">0 SP</span> : `${Math.round((sampleSp * step.total) / 100)} SP`}
+                </td>
+              )}
+              <td className="py-2 sm:py-2.5 hidden sm:table-cell">{step.note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-relaxed text-amber-700 sm:text-xs">
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          標示<span className="font-medium">「二擇一」</span>的兩列是<span className="font-medium">同一筆 25%</span>，先發生哪個就算哪個、
+          <span className="font-medium">只會認列一次</span>：已完成首次 APP 交付確認的需求，之後推進到驗收中不會再扣一次；
+          沒做過交付確認的，才在進入驗收中時認列。全案累計最多 100%。
+        </span>
+      </p>
+    </div>
+  )
+}
+
+/** 三段之外的情形（送審中／暫緩／取消／不重複認列）——同上共用 */
+function SpRecognitionNotes() {
+  const rows = [
+    { k: "送審期間", v: "需求確認、PRD 文件確認、開案確認 — 認列 0%，不列入扣除" },
+    { k: "暫緩 / 駁回", v: "依進入該狀態前已通過的關卡認列，SP 押在原地" },
+    { k: "取消", v: "全額釋放已認列的 SP、不計費" },
+    { k: "不重複認列", v: "首次 APP 交付確認與進入驗收中是同一筆 25%，先發生哪個就算哪個，不會收兩次" },
+    { k: "錢包餘額", v: "年度配額 − 已認列 SP" },
+  ]
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3 sm:p-4">
+      <p className="mb-2 text-xs font-medium text-foreground sm:text-sm">其他情形</p>
+      <dl className="space-y-1.5">
+        {rows.map((r) => (
+          <div key={r.k} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+            <dt className="shrink-0 text-[10px] font-medium text-foreground sm:w-24 sm:text-xs">{r.k}</dt>
+            <dd className="text-[10px] text-muted-foreground sm:text-xs">{r.v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+/* ─── 需求方（subsidiary）看到的內容 ─── */
 function SubsidiaryGuide() {
   return (
     <>
@@ -218,7 +363,8 @@ function SubsidiaryGuide() {
                     <AccordionContent>
                       {(() => {
                         const docs = PHASE_DOCUMENT_MAP[step]
-                        const allDocs = docs ? [...docs.required, ...docs.optional] : []
+                        // GitHub 連結屬內部管控文件，不對需求方開放檢視，故此處不列出
+                        const allDocs = (docs ? [...docs.required, ...docs.optional] : []).filter((d) => d !== "GITHUB_REPO")
                         const reviewGuide = SIGNOFF_REVIEW_GUIDE[step]
                         return (
                           <div className="space-y-3 pl-1 sm:pl-2">
@@ -266,7 +412,7 @@ function SubsidiaryGuide() {
                                   <DialogTrigger asChild>
                                     <button className="flex items-center gap-2 text-xs sm:text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors">
                                       <FileSearch className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                      需求者審核指引
+                                      需求方審核指引
                                     </button>
                                   </DialogTrigger>
                                   <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md p-4 sm:p-6">
@@ -336,7 +482,7 @@ function SubsidiaryGuide() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（開發中 50% → 驗收中 75% → 結案 100%；需求確認、MVP、開案階段不列入扣除）</span>
+                  <span><span className="font-medium text-foreground">已使用</span> — 依關卡分段認列的 SP（開案確認通過 50% → 首次 APP 交付確認／驗收中 75% → 結案 100%；需求確認、PRD 文件確認、開案確認送審期間不列入扣除）</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
@@ -354,99 +500,24 @@ function SubsidiaryGuide() {
         </Card>
       </div>
 
-      {/* SP 漸進消耗機制 */}
+      {/* SP 分階段認列機制 */}
       <Card>
         <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
-          <CardTitle className="text-sm sm:text-base">SP 漸進消耗機制</CardTitle>
+          <CardTitle className="text-sm sm:text-base">SP 分階段認列機制</CardTitle>
         </CardHeader>
         <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
-          <p>
-            系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">需求所在階段</span>為計算基準。
-            需求確認、MVP 確認與開案確認階段<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待進入<span className="font-medium text-foreground">開發中</span>後才開始計算消耗 50%，驗收中累計 75%，<span className="font-medium text-foreground">結案</span>時達到 100%。
+          <SpBillingDiagram />
+
+          <p className="leading-relaxed">
+            SP 不是開案就全額扣除，而是分三段認列，<span className="font-medium text-foreground">每一段都要該關卡通過後才起算</span>。
           </p>
 
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-            <table className="w-full text-xs sm:text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-2 font-medium text-foreground">階段</th>
-                  <th className="pb-2 font-medium text-foreground text-center">累計消耗</th>
-                  <th className="pb-2 font-medium text-foreground text-center hidden sm:table-cell">階段增量</th>
-                  <th className="pb-2 font-medium text-foreground hidden sm:table-cell">說明</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-blue-100 text-blue-700 text-[10px] sm:text-xs">需求確認</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground hidden sm:table-cell">—</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">僅需求訪談，不列入 SP 扣除範圍</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-amber-100 text-amber-700 text-[10px] sm:text-xs">MVP 確認</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground hidden sm:table-cell">—</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">架構確認階段尚未起算消耗</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2 sm:py-2.5 text-center text-muted-foreground hidden sm:table-cell">—</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">確認 SP 與時程，尚未起算消耗</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">50%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+50%</td>
-                  <td className="py-2.5">進入開發中後起算 50%</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">75%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
-                  <td className="py-2.5">進入驗收中再消耗 25%</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">100%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案後完整消耗全部 SP</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <SpRecognitionSteps sampleSp={20} />
 
-          <div className="rounded-lg border bg-muted/30 p-2.5 sm:p-3 space-y-1.5 sm:space-y-2">
-            <p className="font-medium text-foreground text-[10px] sm:text-xs">計算範例</p>
-            <p className="text-[10px] sm:text-xs">
-              假設一筆需求預估 <span className="font-semibold text-foreground">20 SP</span>：
-            </p>
-            <ul className="text-[10px] sm:text-xs space-y-1">
-              <li className="flex items-center gap-2">
-                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                提出需求（需求確認） → 消耗 <span className="font-semibold text-foreground">0 SP</span>（僅訪談，不扣除）
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                MVP 確認 / 開案確認 → 消耗 <span className="font-semibold text-foreground">0 SP</span>（尚未起算）
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                進入開發中 → 消耗 <span className="font-semibold text-foreground">10 SP</span>（20 × 50%）
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                進入驗收中 → 消耗 <span className="font-semibold text-foreground">15 SP</span>（20 × 75%）
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                結案 → 完整消耗 <span className="font-semibold text-foreground">20 SP</span>（20 × 100%）
-              </li>
-            </ul>
-          </div>
+          <SpRecognitionNotes />
 
-          <p className="text-[10px] sm:text-xs text-muted-foreground/70">
-            ※ 需求被駁回（取消／暫緩）時，已消耗的 SP 會全數退還。結案時若有 SP 調整（增減），以調整後的 SP 為準計算。
+          <p className="text-[10px] text-muted-foreground/70 sm:text-xs">
+            ※ 結案時若有 SP 調整（增減），以調整後的 SP 為準計算。
           </p>
         </CardContent>
       </Card>
@@ -469,7 +540,7 @@ function SubsidiaryGuide() {
             <ul className="space-y-1.5">
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
-                <span>需求確認後，客戶／使用者又<span className="font-medium text-foreground">提出新需求，或改動原本說好的內容</span>。</span>
+                <span>開案後，需求方又<span className="font-medium text-foreground">提出新需求，或改動原本說好的內容</span>。</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
@@ -480,15 +551,34 @@ function SubsidiaryGuide() {
                 <span>討論或測試後有新共識，<span className="font-medium text-foreground">需要留下正式紀錄</span>。</span>
               </li>
             </ul>
+            <p className="font-medium text-foreground mt-3 mb-2">哪些情況不需要發起？</p>
+            <ul className="space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" />
+                <span>純 <span className="font-medium text-foreground">bug 修正</span>、不改變原需求範圍的實作細節調整。</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" />
+                <span>小幅畫面、文字或操作細節調整，<span className="font-medium text-foreground">不改變原需求範圍與功能邏輯者，不另計 SP</span>。</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" />
+                <span>仍在需求確認、PRD 文件確認階段，需求還在討論成形時 — 直接修改需求即可。</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" />
+                <span>PRD 中列為 <span className="font-medium text-foreground">P2／P3</span> 等後續階段、未納入本次開案範圍者 — 應<span className="font-medium text-foreground">另行開案</span>，不以原案設計變更處理。</span>
+              </li>
+            </ul>
           </div>
 
           <div className="border-t pt-3">
             <p className="font-medium text-foreground mb-1.5 sm:mb-2">可發起階段</p>
             <p className="leading-relaxed">
               可於以下階段發起設計變更：
-              <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
               <Badge className="ml-1 bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
               <Badge className="ml-1 bg-cyan-100 text-cyan-700 text-[10px] sm:text-xs">驗收中</Badge>
+              <span className="block mt-1 text-xs text-muted-foreground">（即開案之後；開案前範圍仍在成形，直接修改需求即可）</span>
             </p>
           </div>
 
@@ -501,7 +591,7 @@ function SubsidiaryGuide() {
               <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 sm:p-3">
                 <p className="font-medium text-amber-900 mb-1">第一關 · 設計變更確認</p>
                 <p className="leading-relaxed text-amber-800">
-                  由<span className="font-medium">董事會</span>與<span className="font-medium">需求窗口</span>裁決是否同意開立此變更。
+                  由<span className="font-medium">Scrum Master</span>與<span className="font-medium">需求窗口</span>裁決是否同意開立此變更。
                   兩方<span className="font-medium">同時進行、誰先簽都可以</span>，不分先後；此關<span className="font-medium">不需</span>逐條勾選檢查清單。
                   只要有一方駁回，此設計變更即中止，不會進入第二關。
                 </p>
@@ -564,7 +654,7 @@ function SubsidiaryGuide() {
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
                 <span>
-                  <span className="font-medium text-foreground">董事會一律參與第一關</span>，不論此變更是否影響 SP —— 所有設計變更都需要董事會背書。
+                  <span className="font-medium text-foreground">Scrum Master 一律參與第一關</span>，不論此變更是否影響 SP —— 所有設計變更都需要 Scrum Master 背書。
                   第二關則由<span className="font-medium text-foreground">需求窗口</span>（必要）與<span className="font-medium text-foreground">需求主管</span>（若有指派）逐條確認。
                 </span>
               </li>
@@ -572,7 +662,7 @@ function SubsidiaryGuide() {
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
                 <span>
                   通過後<span className="font-medium text-foreground">不會</span>立即調整需求狀態或 SP 點數。
-                  相關 SP 增減會在<span className="font-medium text-foreground">結案時</span>依已通過的設計變更自動加總，並送<span className="font-medium text-foreground">董事會簽核</span>，同意後才完成結案。
+                  相關 SP 增減會在<span className="font-medium text-foreground">結案時</span>依已通過的設計變更自動加總，並送<span className="font-medium text-foreground">Scrum Master 簽核</span>，同意後才完成結案。
                 </span>
               </li>
               <li className="flex items-start gap-2">
@@ -762,7 +852,7 @@ function AdminDeliveryGuide() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                  <span><span className="font-medium text-foreground">已使用</span> — 依需求階段漸進消耗的 SP（開發中 50% → 驗收中 75% → 結案 100%；需求確認、MVP、開案階段不列入扣除）</span>
+                  <span><span className="font-medium text-foreground">已使用</span> — 依關卡分段認列的 SP（開案確認通過 50% → 首次 APP 交付確認／驗收中 75% → 結案 100%；需求確認、PRD 文件確認、開案確認送審期間不列入扣除）</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-1.5" />
@@ -780,75 +870,27 @@ function AdminDeliveryGuide() {
         </Card>
       </div>
 
-      {/* SP 漸進消耗機制 */}
+      {/* SP 分階段認列機制 */}
       <Card>
         <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
-          <CardTitle className="text-sm sm:text-base">SP 漸進消耗機制</CardTitle>
+          <CardTitle className="text-sm sm:text-base">SP 分階段認列機制</CardTitle>
         </CardHeader>
         <CardContent className="text-xs sm:text-sm text-muted-foreground space-y-3 sm:space-y-4 px-4 sm:px-6">
-          <p>
-            系統採用<span className="font-medium text-foreground">漸進式消耗</span>機制，以<span className="font-medium text-foreground">需求所在階段</span>為計算基準。
-            需求確認、MVP 確認與開案確認階段<span className="font-medium text-foreground">不列入 SP 扣除範圍</span>，待進入<span className="font-medium text-foreground">開發中</span>後才開始計算消耗 50%，驗收中累計 75%，<span className="font-medium text-foreground">結案</span>時達到 100%。
+          <SpBillingDiagram />
+
+          <p className="leading-relaxed">
+            SP 不是開案就全額扣除，而是分三段認列，<span className="font-medium text-foreground">每一段都要該關卡通過後才起算</span>。
           </p>
 
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-            <table className="w-full text-xs sm:text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-2 font-medium text-foreground">階段</th>
-                  <th className="pb-2 font-medium text-foreground text-center">累計消耗</th>
-                  <th className="pb-2 font-medium text-foreground text-center hidden sm:table-cell">階段增量</th>
-                  <th className="pb-2 font-medium text-foreground hidden sm:table-cell">說明</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                <tr>
-                  <td className="py-2.5"><Badge className="bg-blue-100 text-blue-700">需求確認</Badge></td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5">僅需求訪談不列入扣除範圍</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5"><Badge className="bg-amber-100 text-amber-700">MVP 確認</Badge></td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5">架構確認階段尚未起算消耗</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5"><Badge className="bg-orange-100 text-orange-700">開案確認</Badge></td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5 text-center text-muted-foreground">—</td>
-                  <td className="py-2.5">確認 SP 與時程，尚未起算消耗</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">50%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+50%</td>
-                  <td className="py-2.5">進入開發中後起算 50%</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs">驗收中</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">75%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
-                  <td className="py-2.5">進入驗收中再消耗 25%</td>
-                </tr>
-                <tr>
-                  <td className="py-2 sm:py-2.5"><Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">已結案</Badge></td>
-                  <td className="py-2 sm:py-2.5 text-center font-semibold text-foreground">100%</td>
-                  <td className="py-2 sm:py-2.5 text-center text-foreground hidden sm:table-cell">+25%</td>
-                  <td className="py-2 sm:py-2.5 hidden sm:table-cell">結案後完整消耗，可進行 SP 調整</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <SpRecognitionSteps />
 
-          <div className="rounded-lg border bg-muted/30 p-2.5 sm:p-3 space-y-1.5 text-[10px] sm:text-xs">
-            <p className="font-medium text-foreground">Wallet 計算邏輯</p>
-            <p>已使用 SP = Σ（各需求確認 SP × 該階段消耗比例）</p>
-            <p>可用 SP = 年度配額 − 已使用 SP</p>
-            <p>狀態變更時自動計算差額（delta）並更新錢包，支援前進與倒退。駁回時全額退還。</p>
-            <p className="text-muted-foreground/70">※ 需求確認、MVP 確認與開案確認階段的需求 SP 不計入已使用</p>
-            <p className="text-muted-foreground/70">※ SP 依階段累進消耗：開發中 50% → 驗收中 75% → 結案 100%</p>
+          <SpRecognitionNotes />
+
+          <div className="rounded-lg border bg-muted/30 p-3 text-[10px] sm:p-4 sm:text-xs">
+            <p className="mb-2 text-xs font-medium text-foreground sm:text-sm">錢包計算邏輯</p>
+            <p>已認列 SP ＝ Σ（各需求確認 SP × 該需求目前的認列比例）</p>
+            <p>可用 SP ＝ 年度配額 − 已認列 SP</p>
+            <p className="mt-1.5 text-muted-foreground/80">關卡通過或狀態變更時自動計算差額（delta）並更新錢包，支援前進與倒退；取消時全額釋放。</p>
           </div>
         </CardContent>
       </Card>
@@ -869,18 +911,20 @@ function AdminDeliveryGuide() {
           <div>
             <p className="font-medium text-foreground mb-1.5 sm:mb-2">什麼是設計變更？何時該發起？</p>
             <p className="leading-relaxed">
-              設計變更是指：需求<span className="font-medium text-foreground">通過「需求確認」、進入開發流程之後</span>，需求內容出現<span className="font-medium text-foreground">新增、修改或刪減</span>，與當初確認的範圍不同時，用來正式記錄這個變動的機制。核心目的是把使用者每一次提出的反饋與修正都留成<span className="font-medium text-foreground">證據</span>，作為結案時 SP 增減與釐清範圍的依據。
+              設計變更是指：需求<span className="font-medium text-foreground">開案通過、進入開發流程之後</span>，需求內容出現<span className="font-medium text-foreground">新增、修改或刪減</span>，與已確認的範圍不同時，用來正式記錄這個變動的機制。核心目的是把需求方每一次提出的反饋與修正都留成<span className="font-medium text-foreground">證據</span>，作為結案 SP 增減與釐清範圍的依據。
             </p>
             <p className="font-medium text-foreground mt-3 mb-1">典型情境（需要發起）</p>
             <ul className="space-y-1">
-              <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" /><span>客戶／使用者在開發或驗收過程中，提出新需求，或推翻／調整原本已確認的內容。</span></li>
+              <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" /><span>需求窗口在開發或驗收過程中，提出新需求，或推翻／調整原本已確認的內容。</span></li>
               <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" /><span>原確認的功能範圍、規格或流程被更動，尤其是<span className="font-medium text-foreground">會影響 SP（工時點數）</span>的變動。</span></li>
               <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" /><span>討論或測試後達成的共識，需要留下正式紀錄以利日後對齊。</span></li>
             </ul>
             <p className="font-medium text-foreground mt-3 mb-1">不需要發起</p>
             <ul className="space-y-1">
               <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" /><span>純 bug 修正、不改變原需求範圍的實作細節調整。</span></li>
-              <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" /><span>仍在「需求確認」階段、需求本身還在討論成形時——直接修改需求即可，不需設計變更。</span></li>
+              <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" /><span>小幅畫面、文字或操作細節調整，且不改變原需求範圍與功能邏輯者，<span className="font-medium text-foreground">不另計 SP</span>。</span></li>
+              <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" /><span>仍在「需求確認」「PRD 文件確認」階段、需求本身還在討論成形時——直接修改需求即可，不需設計變更。</span></li>
+              <li className="flex items-start gap-2"><span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-1.5" /><span>PRD 中列為 P2／P3 等後續階段、未納入本次開案範圍的需求——應<span className="font-medium text-foreground">另行開案</span>，不以原案設計變更處理。</span></li>
             </ul>
           </div>
 
@@ -888,9 +932,9 @@ function AdminDeliveryGuide() {
             <p className="font-medium text-foreground mb-1.5 sm:mb-2">可發起階段</p>
             <p className="leading-relaxed">
               可於以下階段發起：
-              <Badge className="ml-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs">開案確認</Badge>
               <Badge className="ml-1 bg-violet-100 text-violet-700 text-[10px] sm:text-xs">開發中</Badge>
               <Badge className="ml-1 bg-cyan-100 text-cyan-700 text-[10px] sm:text-xs">驗收中</Badge>
+              <span className="block mt-1 text-xs text-muted-foreground">（即開案之後；開案前範圍仍在成形，直接修改需求即可）</span>
             </p>
           </div>
 
@@ -901,7 +945,7 @@ function AdminDeliveryGuide() {
               <li>填寫<span className="font-medium text-foreground">變更標題</span>與<span className="font-medium text-foreground">變更摘要</span>（皆必填）；可貼上 Markdown 檢查清單，系統會拆成逐條供需求方確認</li>
               <li><span className="font-medium text-foreground">需求窗口</span>預設沿用專案設定，可手動改選；若此變更<span className="font-medium text-foreground">影響 SP</span>，請勾選並填寫上調／下降的數量</li>
               <li>（選填）上傳相關附件（會議紀錄、修訂的設計稿等）</li>
-              <li>送出後系統會自動通知<span className="font-medium text-foreground">第一關</span>審核人（董事會與需求窗口）；送出後若發現填錯，可用「編輯」修正</li>
+              <li>送出後系統會自動通知<span className="font-medium text-foreground">第一關</span>審核人（Scrum Master 與需求窗口）；送出後若發現填錯，可用「編輯」修正</li>
             </ol>
           </div>
 
@@ -911,7 +955,7 @@ function AdminDeliveryGuide() {
               <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 sm:p-3">
                 <p className="font-medium text-amber-900 mb-1">第一關 · 設計變更確認（併行）</p>
                 <ul className="space-y-1 text-amber-800">
-                  <li>· <span className="font-medium">董事會</span> — 一律參與，<span className="font-medium">不論是否影響 SP</span>；依「一間公司一位」的優先序自動指派</li>
+                  <li>· <span className="font-medium">Scrum Master</span> — 一律參與，<span className="font-medium">不論是否影響 SP</span>；由平台依案件所屬廠區或公司別自動指派</li>
                   <li>· <span className="font-medium">需求窗口</span> — 預設為專案需求窗口，發起時可手動改選</li>
                 </ul>
                 <p className="mt-1.5 text-[11px] text-amber-700/80">
@@ -939,7 +983,7 @@ function AdminDeliveryGuide() {
           <div className="border-t pt-3">
             <p className="font-medium text-foreground mb-2">結案時的 SP 結算</p>
             <p className="leading-relaxed mb-2">
-              結案若 SP 有變動，<span className="font-medium text-foreground">必須經董事會簽核</span>才能完成結案。金額由系統依設計變更紀錄推算，管理者不需自行計算。
+              結案若 SP 有變動，<span className="font-medium text-foreground">必須經 Scrum Master 簽核</span>才能完成結案。金額由系統依設計變更紀錄推算，管理者不需自行計算。
             </p>
             <ul className="space-y-1.5">
               <li className="flex items-start gap-2">
@@ -951,7 +995,7 @@ function AdminDeliveryGuide() {
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
                 <span>
-                  結案 SP ＝ 專案原始 SP ＋ 所有已通過設計變更的增減總和。系統會自動帶入並<span className="font-medium text-foreground">鎖定欄位</span>，同時預先勾選造成調整的設計變更供董事會對照。
+                  結案 SP ＝ 專案原始 SP ＋ 所有已通過設計變更的增減總和。系統會自動帶入並<span className="font-medium text-foreground">鎖定欄位</span>，同時預先勾選造成調整的設計變更供 Scrum Master 對照。
                 </span>
               </li>
               <li className="flex items-start gap-2">
@@ -963,7 +1007,7 @@ function AdminDeliveryGuide() {
               <li className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0 mt-1.5" />
                 <span>
-                  董事會<span className="font-medium text-foreground">同意</span>後才實際套用 SP 並結案；<span className="font-medium text-foreground">退回</span>則維持原階段，可修正後重送。若需修改內容，請先於簽核紀錄<span className="font-medium text-foreground">撤回</span>該結案簽核。
+ Scrum Master<span className="font-medium text-foreground">同意</span>後才實際套用 SP 並結案；<span className="font-medium text-foreground">退回</span>則維持原階段，可修正後重送。若需修改內容，請先於簽核紀錄<span className="font-medium text-foreground">撤回</span>該結案簽核。
                 </span>
               </li>
               <li className="flex items-start gap-2">
@@ -1040,11 +1084,15 @@ function AdminDeliveryGuide() {
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="q3">
-              <AccordionTrigger className="text-xs sm:text-sm">需求被駁回後會怎樣？</AccordionTrigger>
+              <AccordionTrigger className="text-xs sm:text-sm">暫緩、取消、終止開發結案差在哪？</AccordionTrigger>
               <AccordionContent>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  駁回後需求不再進入流程，佔用的 SP 會釋放。需求者需根據駁回原因重新建立新需求。
-                </p>
+                <div className="text-xs sm:text-sm text-muted-foreground space-y-1.5">
+                  <p>三者對 SP 的處置與專案是否結束完全不同：</p>
+                  <p>· <span className="font-medium text-foreground">暫緩</span> — 因故先停下、將來可能重啟；SP <span className="font-medium text-foreground">押住不動</span>（停在暫緩前的關卡），專案仍在進行中。</p>
+                  <p>· <span className="font-medium text-foreground">取消</span> — 需求不再成立；SP <span className="font-medium text-foreground">全額釋放、不計費</span>。開案前不續行一律以取消處理，不需 Scrum Master 簽核。</p>
+                  <p>· <span className="font-medium text-foreground">終止開發結案</span> — 就已投入部分結算並結束專案；<span className="font-medium text-foreground">必須經 Scrum Master 簽核</span>，依落點比例（50%／75%／100%）結算，僅限開發中、驗收中發起，結束後不再重開。</p>
+                  <p>· <span className="font-medium text-foreground">駁回</span> — 為簽核當下的退回，需求停在該階段等待修正後重送，SP 依已通過的關卡計算、不會歸零。</p>
+                </div>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="q4">
@@ -1077,7 +1125,7 @@ function AdminDeliveryGuide() {
                     <span className="text-red-700">現有內容不符合 → 駁回</span>；
                     <span className="text-indigo-700">有新需求需要討論 → 設計變更</span>。
                   </p>
-                  <p>設計變更可於開案確認、開發中、驗收中階段發起；<span className="font-medium text-foreground">已結案後不可再發起</span>（SP 已於結案時結算並經董事會核准）。</p>
+                  <p>設計變更可於開發中、驗收中階段發起（即開案之後）；<span className="font-medium text-foreground">已結案後不可再發起</span>（SP 已於結案時結算，有調整者並經 Scrum Master 核准）。</p>
                 </div>
               </AccordionContent>
             </AccordionItem>

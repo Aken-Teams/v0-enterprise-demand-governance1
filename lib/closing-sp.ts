@@ -2,7 +2,7 @@
  * 結案 SP 調整（PhaseSignoff kind = "CLOSING_SP"）的暫存內容。
  *
  * 結案時若 SP 有變動，調整內容不會立即寫入，而是序列化存進 PhaseSignoff.payload，
- * 待董事會全數同意後才由簽核端實際套用並結案。
+ * 待 Scrum Master 全數同意後才由簽核端實際套用並結案。
  */
 export interface ClosingSpPayload {
   /** 發起當下的有效 SP（confirmedSp ?? estimatedSp） */

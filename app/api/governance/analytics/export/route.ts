@@ -98,8 +98,8 @@ export async function GET(request: NextRequest) {
     sheet.columns = [
       { header: "需求編號", key: "demandNumber", width: 16 },
       { header: "專案名稱", key: "title", width: 40 },
-      { header: "需求者組織", key: "org", width: 18 },
-      { header: "需求者窗口", key: "contact", width: 12 },
+      { header: "需求方組織", key: "org", width: 18 },
+      { header: "需求窗口", key: "contact", width: 12 },
       { header: "PM", key: "pm", width: 16 },
       { header: "開發者", key: "dev", width: 16 },
       { header: "開發商", key: "vendor", width: 14 },

@@ -428,7 +428,7 @@ export async function GET(request: NextRequest) {
         // Signoff status for current phase
         const pendingSignoffs = latestRound.filter(s => s.status === "PENDING").length
         const totalSignoffs = latestRound.length
-        // 結案 SP 調整待董事會核准 → 列表顯示為「結案簽核中」而非停留在驗收中
+        // 結案 SP 調整待 Scrum Master 核准 → 列表顯示為「結案簽核中」而非停留在驗收中
         const hasPendingClosingSp = signoffs.some(s => s.kind === "CLOSING_SP" && s.status === "PENDING")
 
         return {
@@ -459,7 +459,7 @@ export async function GET(request: NextRequest) {
           ),
           hasCurrentPhaseReject,
           hasCurrentPhaseApproved,
-          // 有待客戶 Master 確認的代簽終止結算 → 前端顯示「終止簽核中」
+          // 有待 Scrum Master 確認的代簽終止結算 → 前端顯示「終止簽核中」
           hasPendingSettlement: signoffs.some(
             (s) => s.targetRole === "BOARD_OVERRIDE" && s.status === "PENDING" && !!s.overrideTargetStatus,
           ),

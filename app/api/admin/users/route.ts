@@ -8,7 +8,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "管理員",
   delivery: "交付團隊",
   subsidiary: "需求單位",
-  viewer: "董事會",
+  viewer: "Scrum Master",
 }
 
 const VALID_ROLES = new Set(["admin", "delivery", "subsidiary", "viewer"])

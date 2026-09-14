@@ -22,12 +22,12 @@ import { STATUS_MAP } from "@/lib/constants/demand"
 const PHASES = [
   {
     key: "SUBMITTED",
-    summary: "與需求者面談了解需求，記錄會議內容與核心訴求。",
+    summary: "與需求窗口面談了解需求，記錄會議內容與核心訴求。",
     docs: ["MEETING_NOTES"],
   },
   {
     key: "PRD_REVIEW",
-    summary: "PM 撰寫 PRD，詳述功能範圍、使用者故事與驗收標準，指派工程師進行 MVP 架構設計。",
+    summary: "PM 撰寫 PRD，詳述功能範圍、使用者故事與驗收標準，供需求方逐項確認。",
     docs: ["PRD"],
   },
   {
@@ -82,7 +82,7 @@ const MD_TEMPLATES: Record<string, string> = {
 
 ## 3. 核心需求
 
-依優先級排列需求者期望的功能與目標：
+依優先級排列需求方期望的功能與目標：
 
 1. **（需求項目一）**
    - 說明：
@@ -211,7 +211,7 @@ flowchart LR
 | 階段 | SP 點數 | 占比 | 說明 |
 |------|--------|------|------|
 | 需求確認 | | | |
-| MVP 確認 | | | |
+| PRD 文件確認 | | | |
 | 開發 | | | |
 | 驗收 | | | |
 | **合計** | | **100%** | |
@@ -221,7 +221,7 @@ flowchart LR
 | 階段 | 計畫開始 | 計畫結束 | 負責人 |
 |------|---------|---------|--------|
 | 需求確認 | YYYY/MM/DD | YYYY/MM/DD | （姓名） |
-| MVP 確認 | YYYY/MM/DD | YYYY/MM/DD | （姓名） |
+| PRD 文件確認 | YYYY/MM/DD | YYYY/MM/DD | （姓名） |
 | 開案確認 | YYYY/MM/DD | YYYY/MM/DD | （姓名） |
 | 開發 | YYYY/MM/DD | YYYY/MM/DD | （姓名） |
 | 驗收 | YYYY/MM/DD | YYYY/MM/DD | （姓名） |
@@ -234,7 +234,7 @@ gantt
     dateFormat YYYY-MM-DD
     section 需求階段
         需求確認     :a1, 2025-01-01, 7d
-        MVP 確認     :a2, after a1, 7d
+        PRD 文件確認     :a2, after a1, 7d
     section 開案階段
         開案確認     :a3, after a2, 5d
     section 開發階段
@@ -878,7 +878,7 @@ flowchart TD
 ## 四、溝通與確認
 - [ ] 已通知需求窗口此次變更
 - [ ] 需求方逐條確認、無疑慮或問題
-- [ ] （如影響 SP）已送董事會確認 SP 調整
+- [ ] （如影響 SP）已送 Scrum Master 確認 SP 調整
 `,
 }
 

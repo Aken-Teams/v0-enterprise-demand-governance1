@@ -16,7 +16,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://jv-sp.jvision-ai.co
 
 const STATUS_MAP: Record<string, string> = {
   SUBMITTED: "需求確認",
-  PRD_REVIEW: "MVP 架構確認",
+  PRD_REVIEW: "PRD 文件確認",
   SP_REVIEW: "開案確認",
   DEVELOPING: "開發中",
   ACCEPTANCE: "驗收中",

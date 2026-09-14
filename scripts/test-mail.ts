@@ -42,7 +42,7 @@ async function main() {
     const body = signoffNotificationTemplate({
       demandNumber: "TEST-001",
       demandTitle: "這是一封測試信件",
-      phaseLabel: "MVP 架構確認",
+      phaseLabel: "PRD 文件確認",
       shareUrl: `${BASE_URL}/governance`,
       signerNames: [user.name],
     })

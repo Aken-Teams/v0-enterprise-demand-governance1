@@ -201,7 +201,7 @@ export default function CreateDemandPage() {
         <div className="flex items-center gap-2">
           <div>
             <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground">建立需求</h1>
-            <p className="hidden sm:block text-muted-foreground">代需求者建立需求，或根據口頭溝通內容登錄需求</p>
+            <p className="hidden sm:block text-muted-foreground">代需求方建立需求，或根據口頭溝通內容登錄需求</p>
           </div>
         </div>
 

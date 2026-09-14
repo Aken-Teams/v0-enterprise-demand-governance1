@@ -145,7 +145,7 @@ export async function POST(
       return NextResponse.json({ error: "請先指派需求窗口" }, { status: 400 })
     }
 
-    // 第一關「設計變更確認」：董事會 + 需求窗口，不論是否影響 SP 都必須經過
+    // 第一關「設計變更確認」：Scrum Master + 需求窗口，不論是否影響 SP 都必須經過
     const reviewers = await resolveGateReviewers(demand, { contactPersonOverride: finalContactPersonId })
     const checklistItems = parseChecklistMarkdown(checklistMd)
     // SP 影響：現值快照（伺服器端），增減量由前端提供（正=上調，負=下降）

@@ -59,7 +59,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "管理員",
   delivery: "交付團隊",
   subsidiary: "需求單位",
-  viewer: "董事會",
+  viewer: "Scrum Master",
 }
 
 const ROLE_BADGE_COLORS: Record<string, string> = {
@@ -275,7 +275,7 @@ export default function UsersPage() {
                 <SelectItem value="admin">管理員</SelectItem>
                 <SelectItem value="delivery">交付團隊</SelectItem>
                 <SelectItem value="subsidiary">需求單位</SelectItem>
-                <SelectItem value="viewer">董事會</SelectItem>
+                <SelectItem value="viewer">Scrum Master</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterOrg} onValueChange={setFilterOrg}>

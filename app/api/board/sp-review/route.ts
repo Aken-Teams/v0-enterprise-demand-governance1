@@ -6,8 +6,8 @@ import { parseClosingSpPayload } from "@/lib/closing-sp"
 /**
  * GET /api/board/sp-review
  * Returns everything awaiting this board member:
- *  - items        : 開案審核 (SP_REVIEW) 與專案 Master 代簽
- *  - designChanges: 設計變更（設計變更確認）——不論是否影響 SP，董事會皆須背書
+ *  - items        : 開案審核 (SP_REVIEW) 與 Scrum Master 代簽
+ *  - designChanges: 設計變更（設計變更確認）——不論是否影響 SP，Scrum Master 皆須背書
  *  - closingSp    : 結案 SP 調整（kind = CLOSING_SP）
  * ?countOnly=true  → { count } (lightweight, for nav badge)
  */
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!user?.isBoardMember) {
-      return NextResponse.json({ error: "非董事會成員" }, { status: 403 })
+      return NextResponse.json({ error: "非 Scrum Master" }, { status: 403 })
     }
 
     // Org-restricted board members only see their own org's demands
@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
       ],
     }
 
-    // 設計變更：本董事有待審(PENDING)的 BOARD 裁決且為最新版本。
-    // 新流程改為「設計變更確認」——不論是否影響 SP，董事會都必須背書，故不再以 affectsSp 過濾。
+    // 設計變更：本 Scrum Master 有待審(PENDING)的 BOARD 裁決且為最新版本。
+    // 新流程改為「設計變更確認」——不論是否影響 SP，Scrum Master 都必須背書，故不再以 affectsSp 過濾。
     const dcBoardReviews = await prisma.designChangeReview.findMany({
       where: { reviewerId: auth.userId, role: "BOARD", decision: "PENDING", revision: { status: "PENDING" } },
       include: {
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         demand: r.revision.designChange.demand,
       }))
 
-    // 結案 SP 調整：待本董事簽核者（phase=CLOSED、targetRole=BOARD，不會與上方 whereClause 重疊）
+    // 結案 SP 調整：待本 Scrum Master 簽核者（phase=CLOSED、targetRole=BOARD，不會與上方 whereClause 重疊）
     const closingSignoffs = await prisma.phaseSignoff.findMany({
       where: {
         status: "PENDING", kind: "CLOSING_SP", targetUserId: auth.userId, demand: orgDemandFilter,

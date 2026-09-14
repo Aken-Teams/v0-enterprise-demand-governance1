@@ -10,15 +10,15 @@ import type { ClosingSpPayload } from "@/lib/closing-sp"
 import { parseClosingSpPayload } from "@/lib/closing-sp"
 
 /**
- * 結案 SP 調整的董事會簽核。
+ * 結案 SP 調整的 Scrum Master 簽核。
  *
- * 舊流程：管理者在結案精靈直接送出 SP 調整，需求立刻結案，董事會無從得知。
+ * 舊流程：管理者在結案精靈直接送出 SP 調整，需求立刻結案，Scrum Master 無從得知。
  * 新流程：SP 有變動時必須先建立此請求，附上造成調整的設計變更（僅限已通過者），
- *         送董事會簽核；全數同意後才由簽核端實際套用 SP 並結案（見
+ *         送 Scrum Master 簽核；全數同意後才由簽核端實際套用 SP 並結案（見
  *         app/api/demands/[id]/signoffs/[signoffId]/route.ts 的 CLOSING_SP 處理）。
  */
 
-// GET: 取得此需求待董事會簽核的結案 SP 調整（無則回傳 null）
+// GET: 取得此需求待 Scrum Master 簽核的結案 SP 調整（無則回傳 null）
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -49,7 +49,7 @@ export async function GET(
 
     const payload = parseClosingSpPayload(signoffs[0].payload)
 
-    // 附上勾選的設計變更摘要，讓董事會知道這次調整的來由
+    // 附上勾選的設計變更摘要，讓 Scrum Master 知道這次調整的來由
     const designChanges = payload?.designChangeIds?.length
       ? await prisma.designChange.findMany({
           where: { id: { in: payload.designChangeIds }, demandId: id },
@@ -78,7 +78,7 @@ export async function GET(
   }
 }
 
-// POST: 發起結案 SP 調整的董事會簽核
+// POST: 發起結案 SP 調整的 Scrum Master 簽核
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -114,10 +114,10 @@ export async function POST(
       select: { id: true },
     })
     if (existing) {
-      return NextResponse.json({ error: "已有一筆結案 SP 調整待董事會簽核，請先完成或撤回" }, { status: 409 })
+      return NextResponse.json({ error: "已有一筆結案 SP 調整待 Scrum Master 簽核，請先完成或撤回" }, { status: 409 })
     }
 
-    // 尚有未結的設計變更時，不應先送結案 SP 給董事會（董事會需看到完整的變更結果）
+    // 尚有未結的設計變更時，不應先送結案 SP 給 Scrum Master（Scrum Master 需看到完整的變更結果）
     const blockingDC = await prisma.designChange.findFirst({
       where: { demandId: id, status: { in: ["PENDING", "REJECTED"] } },
       select: { seq: true, status: true },
@@ -135,7 +135,7 @@ export async function POST(
       return NextResponse.json({ error: "調整後 SP 需為正數" }, { status: 400 })
     }
     if (newSp === oldSp) {
-      return NextResponse.json({ error: "調整後 SP 與現值相同，無需董事會簽核" }, { status: 400 })
+      return NextResponse.json({ error: "調整後 SP 與現值相同，無需 Scrum Master 簽核" }, { status: 400 })
     }
 
     const reason = ((body.reason as string) ?? "").trim() || null
@@ -212,7 +212,7 @@ export async function POST(
 
     const boardTargets = await resolveBoardReviewers(demand.organizationId)
     if (boardTargets.length === 0) {
-      return NextResponse.json({ error: "查無可簽核的董事會成員，請先設定董事會" }, { status: 400 })
+      return NextResponse.json({ error: "查無可簽核的 Scrum Master，請先設定 Scrum Master" }, { status: 400 })
     }
 
     const payload: ClosingSpPayload = {
@@ -267,7 +267,7 @@ export async function POST(
     if (boardIds.length > 0) {
       notifyUsers(boardIds, {
         type: "SIGNOFF",
-        title: "結案 SP 調整待董事會簽核",
+        title: "結案 SP 調整待 Scrum Master 簽核",
         message: `需求 ${demand.demandNumber}「${demand.title}」結案時 SP 由 ${oldSp} 調整為 ${newSp}（來源：${dcLabel}），請確認是否同意後結案。`,
         linkUrl: `/demands/${id}`,
       })

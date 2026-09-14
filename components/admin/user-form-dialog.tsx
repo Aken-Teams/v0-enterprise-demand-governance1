@@ -739,7 +739,7 @@ export function UserFormDialog({
                       <SelectItem value="admin">管理員</SelectItem>
                       <SelectItem value="delivery">交付團隊</SelectItem>
                       <SelectItem value="subsidiary">需求單位</SelectItem>
-                      <SelectItem value="viewer">董事會</SelectItem>
+                      <SelectItem value="viewer">Scrum Master</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -801,7 +801,7 @@ export function UserFormDialog({
             {step === 2 && form.role === "viewer" && (
               <div className="py-1 sm:py-2 space-y-3 sm:space-y-5">
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  設定此董事會成員可觀看與審核的組織範圍。兩者為獨立設定。
+                  設定此 Scrum Master 可觀看與審核的組織範圍。兩者為獨立設定。
                 </p>
 
                 <div className="space-y-1 sm:space-y-2">
@@ -1074,7 +1074,7 @@ export function UserFormDialog({
                     <span>{form.email}</span>
                     <span className="text-muted-foreground">角色</span>
                     <span>
-                      {{ admin: "管理員", delivery: "交付團隊", subsidiary: "需求單位", viewer: "董事會" }[form.role] || form.role}
+                      {{ admin: "管理員", delivery: "交付團隊", subsidiary: "需求單位", viewer: "Scrum Master" }[form.role] || form.role}
                     </span>
                     <span className="text-muted-foreground">組織</span>
                     <span>{organizations.find((o) => o.id === form.organizationId)?.name || "無"}</span>

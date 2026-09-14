@@ -20,7 +20,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn, copyText } from "@/lib/utils"
 import { preprocessMarkdown } from "@/lib/markdown"
-import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, demandStatusKey } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, SETTLEMENT_TIERS, demandStatusKey } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -462,7 +462,7 @@ export default function DemandDetailPage() {
   const isAdminWithWrite = user?.role === "admin" && (isFullAdmin || adminCanWrite)
   // canManage: full admin or delivery can manage; limited admin with edit can too
   const canManage = isAdminWithWrite || user?.role === "delivery"
-  // 需求方身分優先於全域角色：董事會成員的帳號是 viewer，但他可能同時是某張需求的
+  // 需求方身分優先於全域角色：Scrum Master 的帳號是 viewer，但他可能同時是某張需求的
   // 需求窗口／提出者／需求主管 —— 在那張需求上他就是需求者，該能分享連結。
   const isRequesterSide = !!user && !!demand && (
     demand.submitter?.id === user.id ||
@@ -647,7 +647,7 @@ export default function DemandDetailPage() {
         }),
       })
       if (res.ok) {
-        toast.success("已發起代簽，將通知專案 Master 確認")
+        toast.success("已發起代簽，將通知 Scrum Master 確認")
         setBoardOverrideOpen(false)
         setBoardOverrideComment("")
         setBoardOverrideTargetStatus("")
@@ -826,7 +826,7 @@ export default function DemandDetailPage() {
     )
   }
 
-  // 有待客戶 Master 確認的「代簽終止結算」→ 顯示為「終止簽核中」，讓大家知道這件正在被終止
+  // 有待 Scrum Master 確認的「代簽終止結算」→ 顯示為「終止簽核中」，讓大家知道這件正在被終止
   const hasPendingSettlement = (demand.phaseSignoffs ?? []).some(
     (s) => s.targetRole === "BOARD_OVERRIDE" && s.status === "PENDING" && !!s.overrideTargetStatus
   )
@@ -850,7 +850,7 @@ export default function DemandDetailPage() {
   // When CLOSED, only admin with write retains modification rights
   const effectiveCanManage = canManage && (!isClosed || isAdminWithWrite)
 
-  // 需求窗口／需求主管可指派對象：原本的存取簽核人 + 董事會成員（指派後即以需求者身分簽核）
+  // 需求窗口／需求主管可指派對象：原本的存取簽核人 + Scrum Master（指派後即以需求者身分簽核）
   const boardMemberIdSet = new Set(boardMembers.map((b) => b.id))
   const buildAssigneeOptions = (role: "REQUESTER" | "MANAGER") => {
     const merged: { id: string; name: string }[] = accessUsers
@@ -860,9 +860,10 @@ export default function DemandDetailPage() {
     return merged
   }
 
-  // 可用「專案 Master 代簽 + 直接結案」把專案結算掉。
-  // 僅限這四個階段；「需求確認」尚未投入（請用「取消」）、「已結案」已結算完畢。
-  const TERMINABLE_PHASES = ["PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE"]
+  // 可用「Scrum Master 代簽 + 直接結案」把專案結算掉（＝終止開發結案）。
+  // 僅限開案後的「開發中／驗收中」：開案前（需求確認／PRD 文件確認／開案確認）
+  // 尚未認列任何 SP，不續行時一律以「取消」處理、全額釋放不計費。
+  const TERMINABLE_PHASES = ["DEVELOPING", "ACCEPTANCE"]
   const effectivePhase = demand.status
   // 暫緩／已駁回一律不得代簽——暫緩是「押住 SP、將來可能重啟」，
   // 與終止的「結算在某個落點、案子結束」意義相反；要終止須先解除暫緩。
@@ -1155,7 +1156,7 @@ export default function DemandDetailPage() {
                     ? Math.max(...allStepSignoffs.map(s => new Date(s.requestedAt).getTime()))
                     : 0
                   const stepSignoffs = allStepSignoffs.filter(s => new Date(s.requestedAt).getTime() === latestTime)
-                  // 結案本身不在 SIGNOFF_REQUIRED_PHASES，但 SP 有調整時會有董事會簽核，
+                  // 結案本身不在 SIGNOFF_REQUIRED_PHASES，但 SP 有調整時會有 Scrum Master 簽核，
                   // 需要在「已結案」節點標示出來，否則看起來像卡在驗收中
                   const closingSpPending = step === "CLOSED" && (demand.phaseSignoffs ?? []).some(
                     (s) => (s as { kind?: string }).kind === "CLOSING_SP" && s.status === "PENDING"
@@ -1287,7 +1288,7 @@ export default function DemandDetailPage() {
               const hasSignoff = currentPhaseSignoff != null
               const hasDesignChange = currentDesignChangeSignoffs.length > 0
               const myDcReview = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; stage?: string; affectsSp: boolean } | null }).myDesignChangeReview
-              const dcRoleLabel = myDcReview ? (myDcReview.role === "BOARD" ? "董事會" : myDcReview.role === "MANAGER" ? "需求主管" : "需求窗口") : ""
+              const dcRoleLabel = myDcReview ? (myDcReview.role === "BOARD" ? "Scrum Master" : myDcReview.role === "MANAGER" ? "需求主管" : "需求窗口") : ""
               // 兩階段流程：第一關裁決「准不准開」，第二關才逐項確認內容。
               // 提示需寫明是哪一關，否則需求者會誤以為同一件事被要求簽兩次。
               const dcIsContent = myDcReview?.stage === "CONTENT"
@@ -1394,10 +1395,10 @@ export default function DemandDetailPage() {
                                 }}
                               >
                                 <ShieldCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1" />
-                                <span className="hidden sm:inline text-xs">專案 Master 代簽</span>
+                                <span className="hidden sm:inline text-xs">Scrum Master 代簽</span>
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent className="sm:hidden">專案 Master 代簽</TooltipContent>
+                            <TooltipContent className="sm:hidden">Scrum Master 代簽</TooltipContent>
                           </Tooltip>
                         )}
                         </TooltipProvider>
@@ -1498,7 +1499,7 @@ export default function DemandDetailPage() {
             {isTerminated && (
               <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-center">
                 <p className="font-semibold text-sm text-zinc-700 inline-flex items-center gap-1.5"><Ban className="h-4 w-4" />已終止</p>
-                <p className="text-xs text-zinc-600 mt-1 whitespace-pre-line break-words">此專案經專案 Master 代簽終止結算{terminatedReason ? `（${terminatedReason}）` : ""}。</p>
+                <p className="text-xs text-zinc-600 mt-1 whitespace-pre-line break-words">此專案經 Scrum Master 代簽終止結算{terminatedReason ? `（${terminatedReason}）` : ""}。</p>
               </div>
             )}
             {/* Step Navigation */}
@@ -1879,7 +1880,7 @@ export default function DemandDetailPage() {
                           <SelectContent>
                             <SelectItem value="none">尚未指派</SelectItem>
                             {buildAssigneeOptions("REQUESTER").map((u) => (
-                              <SelectItem key={u.id} value={u.id}>{u.name}{boardMemberIdSet.has(u.id) ? "（董事會）" : ""}</SelectItem>
+                              <SelectItem key={u.id} value={u.id}>{u.name}{boardMemberIdSet.has(u.id) ? "（Scrum Master）" : ""}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1903,7 +1904,7 @@ export default function DemandDetailPage() {
                           <SelectContent>
                             <SelectItem value="none">尚未指派</SelectItem>
                             {buildAssigneeOptions("MANAGER").map((u) => (
-                              <SelectItem key={u.id} value={u.id}>{u.name}{boardMemberIdSet.has(u.id) ? "（董事會）" : ""}</SelectItem>
+                              <SelectItem key={u.id} value={u.id}>{u.name}{boardMemberIdSet.has(u.id) ? "（Scrum Master）" : ""}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -2090,7 +2091,7 @@ export default function DemandDetailPage() {
                     <CardContent className="flex flex-col items-center justify-center min-h-[150px] sm:min-h-[200px] text-muted-foreground">
                       <Package className="h-10 w-10 sm:h-12 sm:w-12 mb-3 opacity-20" />
                       <p className="text-xs sm:text-sm">尚無交付成果</p>
-                      <p className="text-[10px] sm:text-xs mt-1 text-center px-4">在「開發中」或「MVP 架構確認」階段上傳 APP 成果連結後會自動顯示</p>
+                      <p className="text-[10px] sm:text-xs mt-1 text-center px-4">在「開發中」或「PRD 文件確認」階段上傳 APP 成果連結後會自動顯示</p>
                     </CardContent>
                   </Card>
                 )
@@ -2438,7 +2439,7 @@ export default function DemandDetailPage() {
                   />
                 )}
 
-                {/* 原型 Prototype — 只有點進「MVP 架構確認」階段時才出現，放在階段文件下方 */}
+                {/* 原型 Prototype — 只有點進「PRD 文件確認」階段時才出現，放在階段文件下方 */}
                 {docActivePhase === "PRD_REVIEW" && (
                   <PrototypePanel
                     demandId={demand.id}
@@ -2493,7 +2494,7 @@ export default function DemandDetailPage() {
               phaseLabel={STATUS_MAP[demand.status]?.label ?? demand.status}
               token={token}
               currentUserId={user?.id}
-              // 已結案後不可再發起設計變更（SP 已依變更紀錄結算並經董事會核准），
+              // 已結案後不可再發起設計變更（SP 已依變更紀錄結算並經 Scrum Master 核准），
               // 但仍需 canManage 讓管理者檢視既有紀錄；發起與否由後端的
               // DESIGN_CHANGE_ALLOWED_PHASES 把關。
               canManage={canManage}
@@ -2600,9 +2601,9 @@ export default function DemandDetailPage() {
       <AlertDialog open={boardOverrideOpen} onOpenChange={(open) => { setBoardOverrideOpen(open); if (!open) { setBoardOverrideComment(""); setBoardOverrideTargetStatus("") } }}>
         <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base sm:text-lg">專案 Master 代簽</AlertDialogTitle>
+            <AlertDialogTitle className="text-base sm:text-lg">Scrum Master 代簽</AlertDialogTitle>
             <AlertDialogDescription className="text-xs sm:text-sm">
-              將通知專案 Master（董事會成員）代為確認{boardOverrideKind === "DESIGN_CHANGE" ? "設計變更" : "階段"}簽核。Master 確認後，其餘待確認簽核將自動略過。請填寫代簽原因。
+              將通知 Scrum Master 代為確認{boardOverrideKind === "DESIGN_CHANGE" ? "設計變更" : "階段"}簽核。Scrum Master 確認後，其餘待確認簽核將自動略過。請填寫代簽原因。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <textarea
@@ -2612,7 +2613,8 @@ export default function DemandDetailPage() {
             value={boardOverrideComment}
             onChange={(e) => setBoardOverrideComment(e.target.value)}
           />
-          {boardOverrideKind === "PHASE" && demand && (() => {
+          {/* 終止結算（依比例計費）僅限開案後；開案前不續行請用「取消」，SP 全額釋放 */}
+          {boardOverrideKind === "PHASE" && canTerminate && demand && (() => {
             // 以「有效階段」（暫緩前階段）為基準；無待簽核（如開發中）時允許結算在當前階段（等於依當下進度結算）
             const baseIdx = PIPELINE_STEPS.indexOf(effectivePhase as typeof PIPELINE_STEPS[number])
             const settlementStatuses = (["DEVELOPING", "ACCEPTANCE", "CLOSED"] as const)
@@ -2625,14 +2627,25 @@ export default function DemandDetailPage() {
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5">
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-orange-600 shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium text-foreground">代簽通過後直接結案</span>
+                  <span className="text-xs sm:text-sm font-medium text-foreground">終止開發結案（依比例結算）</span>
                 </div>
                 <Select
                   value={boardOverrideTargetStatus || "NONE"}
                   onValueChange={(v) => setBoardOverrideTargetStatus(v === "NONE" ? "" : v)}
                 >
                   <SelectTrigger className="w-full bg-background">
-                    <SelectValue placeholder="請選擇結算比例" />
+                    {boardOverrideTargetStatus ? (
+                      <span className="flex items-center gap-2">
+                        <Badge className="bg-orange-100 text-orange-700 text-[10px] font-normal">
+                          {Math.round((SP_PROGRESS_RATE[boardOverrideTargetStatus] ?? 0) * 100)}%
+                        </Badge>
+                        <span className="text-xs sm:text-sm">
+                          {SETTLEMENT_TIERS[boardOverrideTargetStatus]?.label ?? STATUS_MAP[boardOverrideTargetStatus]?.label}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">請選擇結算落點</span>
+                    )}
                   </SelectTrigger>
                   <SelectContent>
                     {!boardOverrideMustSettle && (
@@ -2641,14 +2654,22 @@ export default function DemandDetailPage() {
                       </SelectItem>
                     )}
                     {settlementStatuses.map((s) => (
-                      <SelectItem key={s} value={s}>
+                      <SelectItem
+                        key={s}
+                        value={s}
+                        textValue={SETTLEMENT_TIERS[s]?.label ?? STATUS_MAP[s]?.label ?? s}
+                        className="items-start py-2 [&>span:last-child]:flex-col [&>span:last-child]:items-start [&>span:last-child]:gap-0.5"
+                      >
                         <span className="flex items-center gap-2">
-                          <Badge className={cn("text-[10px] font-normal", STATUS_MAP[s]?.color)}>
-                            {STATUS_MAP[s]?.label ?? s}
+                          <Badge className="bg-orange-100 text-orange-700 text-[10px] font-normal">
+                            {Math.round((SP_PROGRESS_RATE[s] ?? 0) * 100)}%
                           </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            消耗 {Math.round((SP_PROGRESS_RATE[s] ?? 0) * 100)}%
+                          <span className="text-xs sm:text-sm font-medium text-foreground">
+                            {SETTLEMENT_TIERS[s]?.label ?? STATUS_MAP[s]?.label ?? s}
                           </span>
+                        </span>
+                        <span className="text-[11px] leading-snug text-muted-foreground whitespace-normal">
+                          {SETTLEMENT_TIERS[s]?.desc}
                         </span>
                       </SelectItem>
                     ))}
@@ -2656,10 +2677,10 @@ export default function DemandDetailPage() {
                 </Select>
                 {previewUsed !== null ? (
                   <div className="rounded-md border border-orange-200 bg-orange-50/70 p-2.5 space-y-1.5">
-                    <p className="flex items-center gap-1 text-xs text-orange-900/80">
-                      <span>Master 通過後直接結案，依</span>
-                      <Badge className={cn("text-[10px] font-normal", STATUS_MAP[boardOverrideTargetStatus]?.color)}>
-                        {STATUS_MAP[boardOverrideTargetStatus]?.label}
+                    <p className="flex flex-wrap items-center gap-1 text-xs text-orange-900/80">
+                      <span>Scrum Master 通過後直接結案，依</span>
+                      <Badge className="bg-orange-100 text-orange-700 text-[10px] font-normal">
+                        {SETTLEMENT_TIERS[boardOverrideTargetStatus]?.label ?? STATUS_MAP[boardOverrideTargetStatus]?.label}
                       </Badge>
                       <span>比例結算</span>
                     </p>
@@ -2673,7 +2694,7 @@ export default function DemandDetailPage() {
                     </div>
                   </div>
                 ) : boardOverrideMustSettle ? (
-                  <p className="text-xs text-muted-foreground leading-relaxed">請選擇結算比例；Master 確認後即依此比例結算並結案。</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">請選擇結算落點；Scrum Master 確認後即依此比例結算並結案（需求狀態將顯示為「已終止」）。</p>
                 ) : (
                   <p className="text-xs text-muted-foreground leading-relaxed">不選則照原流程推進，僅完成本階段簽核、不直接結算。</p>
                 )}

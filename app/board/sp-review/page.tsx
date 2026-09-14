@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useAuth } from "@/hooks/use-auth"
-import { STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
+import { STATUS_MAP, SP_PROGRESS_RATE, settlementTierLabel } from "@/lib/constants/demand"
 import Link from "next/link"
 import {
   Building2, Coins, Loader2, Eye, Check, X, ExternalLink,
@@ -74,7 +74,7 @@ interface DesignChangeSp {
   demand: { id: string; demandNumber: string; title: string; organization: { id: string; name: string } | null }
 }
 
-/** 結案時的 SP 調整，需董事會同意後才真正結案 */
+/** 結案時的 SP 調整，需 Scrum Master 同意後才真正結案 */
 interface ClosingSpItem {
   signoffId: string
   requestedAt: string
@@ -544,7 +544,7 @@ function SpReviewCard({ item, token, onComplete }: {
                 {item.signoff.overrideTargetStatus ? (
                   <>
                     <p className="text-[11px] sm:text-xs text-orange-600/80 leading-relaxed">
-                      管理者決定將此需求提前結算並直接結案，依目前進度（{STATUS_MAP[item.signoff.overrideTargetStatus]?.label ?? item.signoff.overrideTargetStatus}）按 {settlementPct}% 計算。
+                      管理者決定終止此需求並直接結案，結算落點為「{settlementTierLabel(item.signoff.overrideTargetStatus)}」，按 {settlementPct}% 計算。
                     </p>
                     <div className="mt-1 flex items-baseline gap-1.5 rounded-md bg-orange-100/70 px-2 py-1 text-xs">
                       <span className="text-orange-700/70">最終收取</span>
@@ -554,7 +554,7 @@ function SpReviewCard({ item, token, onComplete }: {
                   </>
                 ) : (
                   <p className="text-[11px] sm:text-xs text-orange-600/80 leading-relaxed">
-                    需求者目前無法簽核，管理者申請由您代為確認，通過後<span className="font-medium">維持原流程繼續進行</span>（不結案、SP 不變）。
+                    需求方目前無法簽核，管理者申請由您代為確認，通過後<span className="font-medium">維持原流程繼續進行</span>（不結案、SP 不變）。
                   </p>
                 )}
                 {item.signoff.requestComment && (
@@ -651,7 +651,7 @@ function SpReviewCard({ item, token, onComplete }: {
                   {item.signoff.overrideTargetStatus ? (
                     <>
                       <p className="text-sm text-orange-600/80 leading-relaxed">
-                        管理者已決定將此需求提前結算並<span className="font-medium text-orange-700">直接結案</span>，依目前進度（{STATUS_MAP[item.signoff.overrideTargetStatus]?.label ?? item.signoff.overrideTargetStatus}）按 <span className="font-semibold text-orange-700">{settlementPct}%</span> 計算。請確認是否同意此結算方案。
+                        管理者已決定終止此需求並<span className="font-medium text-orange-700">直接結案</span>，結算落點為「{settlementTierLabel(item.signoff.overrideTargetStatus)}」，按 <span className="font-semibold text-orange-700">{settlementPct}%</span> 計算。通過後專案即結束、不可重啟。請確認是否同意此結算方案。
                       </p>
                       <div className="flex items-baseline gap-2 rounded-md bg-orange-100/70 px-3 py-2 text-sm">
                         <span className="text-orange-700/70">最終收取</span>
@@ -661,7 +661,7 @@ function SpReviewCard({ item, token, onComplete }: {
                     </>
                   ) : (
                     <p className="text-sm text-orange-600/80 leading-relaxed">
-                      需求者目前無法簽核，管理者申請由您代為確認，通過後<span className="font-medium">維持原流程繼續進行</span>（不結案、SP 不變）。
+                      需求方目前無法簽核，管理者申請由您代為確認，通過後<span className="font-medium">維持原流程繼續進行</span>（不結案、SP 不變）。
                     </p>
                   )}
                   {item.signoff.requestComment && (
@@ -895,7 +895,7 @@ export default function SpReviewPage() {
               <Badge className="bg-amber-100 text-amber-700 text-sm">{total} 件待審</Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求、專案 Master 代簽、設計變更，以及結案時的 SP 調整</p>
+          <p className="text-sm text-muted-foreground mt-0.5">審核待開案需求、Scrum Master 代簽、設計變更，以及結案時的 SP 調整</p>
         </div>
 
         {/* Content */}

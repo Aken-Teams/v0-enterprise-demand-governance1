@@ -137,7 +137,12 @@
   }
   html,
   body {
-    overflow-x: hidden;
+    /*
+     * 用 clip 而非 hidden：overflow-x: hidden 會讓 html/body 變成捲動容器
+     * （另一軸自動變 auto），導致頁面內所有 position: sticky 失效——
+     * 頁首與側欄目錄會跟著內容捲走。clip 一樣能擋住水平溢出，但不建立捲動容器。
+     */
+    overflow-x: clip;
     width: 100%;
   }
   body {

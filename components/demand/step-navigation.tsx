@@ -22,7 +22,7 @@ import {
 } from "@/lib/constants/demand"
 
 const CLOSING_STEP_BASE = ["簽核確認", "文件確認", "SP 調整"] as const
-/** SP 有調整時，需勾選造成調整的設計變更並送董事會簽核，故多一個步驟 */
+/** SP 有調整時，需勾選造成調整的設計變更並送 Scrum Master 簽核，故多一個步驟 */
 const CLOSING_STEP_DC = "關聯設計變更"
 const CLOSING_STEP_LAST = "確認結案"
 
@@ -53,7 +53,7 @@ interface StepNavigationProps {
   onRefresh?: () => void
   /** Hide the signoff status indicator (when parent already shows it) */
   hideSignoffIndicator?: boolean
-  /** 是否已有待董事會核准的結案 SP 調整（有的話不可重複送出） */
+  /** 是否已有待 Scrum Master 核准的結案 SP 調整（有的話不可重複送出） */
   closingSpPending?: boolean
   /** SP fields for closing adjustment */
   estimatedSp?: number
@@ -97,7 +97,7 @@ export function StepNavigation({
   // Closing wizard state
   const [showClosingWizard, setShowClosingWizard] = useState(false)
   const [closingStep, setClosingStep] = useState(0)
-  // 結案 SP 調整需經董事會簽核，並附上造成調整的設計變更（僅限已通過者）
+  // 結案 SP 調整需經 Scrum Master 簽核，並附上造成調整的設計變更（僅限已通過者）
   const [approvedDcs, setApprovedDcs] = useState<ApprovedDesignChange[]>([])
   const [selectedDcIds, setSelectedDcIds] = useState<string[]>([])
   const [dcLoading, setDcLoading] = useState(false)
@@ -200,7 +200,7 @@ export function StepNavigation({
   const handleClick = (dir: "next" | "prev") => {
     if (dir === "next" && nextPhase === "CLOSED") {
       if (closingSpPending) {
-        toast.error("已有一筆結案 SP 調整待董事會核准，請等待簽核結果")
+        toast.error("已有一筆結案 SP 調整待 Scrum Master 核准，請等待簽核結果")
         return
       }
       setDirection("next")
@@ -221,7 +221,7 @@ export function StepNavigation({
       return
     }
     if (dir === "prev" && closingSpPending) {
-      toast.error("結案 SP 調整待董事會核准中，無法退回上一階段。如需修改，請先撤回該結案簽核。")
+      toast.error("結案 SP 調整待 Scrum Master 核准中，無法退回上一階段。如需修改，請先撤回該結案簽核。")
       return
     }
     setDirection(dir)
@@ -276,7 +276,7 @@ export function StepNavigation({
     setLoading(true)
     const spAdj = buildSpAdjustmentPayload()
 
-    // SP 有調整 → 先送董事會簽核，董事會全數同意後才由簽核端實際結案
+    // SP 有調整 → 先送 Scrum Master 簽核，Scrum Master 全數同意後才由簽核端實際結案
     if (spAdj) {
       try {
         const res = await fetch(`/api/demands/${demandId}/closing-sp`, {
@@ -293,7 +293,7 @@ export function StepNavigation({
         })
         if (res.ok) {
           setShowClosingWizard(false)
-          toast.success("已送出董事會簽核，董事會同意後即完成結案")
+          toast.success("已送出 Scrum Master 簽核，Scrum Master 同意後即完成結案")
           onRefresh?.()
         } else {
           const e = await res.json().catch(() => ({}))
@@ -330,7 +330,7 @@ export function StepNavigation({
     if (!token || !forceComment.trim()) return
 
     // 結案前的略過：只做「略過本階段簽核」這一件事，立即生效並留下紀錄，
-    // 不順便結案。結案仍須另外走完精靈（文件／SP／關聯設計變更／董事會簽核）。
+    // 不順便結案。結案仍須另外走完精靈（文件／SP／關聯設計變更／Scrum Master 簽核）。
     if (nextPhase === "CLOSED") {
       setLoading(true)
       try {
@@ -363,7 +363,7 @@ export function StepNavigation({
       forceComment: forceComment.trim(),
     }
     // 註：結案不會走到這裡（handleClick 已讓 CLOSED 一律進入結案精靈），
-    // 故不再處理完成日期與 SP 調整——SP 調整必須經董事會簽核。
+    // 故不再處理完成日期與 SP 調整——SP 調整必須經 Scrum Master 簽核。
     try {
       const res = await fetch(`/api/demands/${demandId}`, {
         method: "PATCH",
@@ -429,13 +429,13 @@ export function StepNavigation({
           {hasPendingSignoff && (
             <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-amber-700">
               <ClipboardCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-              <span>等待需求者簽核確認中</span>
+              <span>等待需求方簽核確認中</span>
             </div>
           )}
           {isApproved && (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-emerald-700">
               <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-              <span>需求者已簽核確認</span>
+              <span>需求方已簽核確認</span>
             </div>
           )}
         </div>
@@ -445,7 +445,7 @@ export function StepNavigation({
         <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-red-700">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-            <span>需求者已退回簽核</span>
+            <span>需求方已退回簽核</span>
           </div>
           <Button
             variant="outline"
@@ -469,8 +469,8 @@ export function StepNavigation({
         <div className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50/60 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-orange-800">
           <ClipboardCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 mt-0.5" />
           <span>
-            <strong>結案 SP 調整待董事會核准中</strong>，此期間無法變更階段。
-            董事會同意後將自動結案；如需修改內容，請先於簽核紀錄撤回該結案簽核。
+            <strong>結案 SP 調整待 Scrum Master 核准中</strong>，此期間無法變更階段。
+ Scrum Master 同意後將自動結案；如需修改內容，請先於簽核紀錄撤回該結案簽核。
           </span>
         </div>
       )}
@@ -514,7 +514,7 @@ export function StepNavigation({
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
                     <div className="flex items-center gap-2 text-sm text-emerald-700">
                       <Check className="h-4 w-4" />
-                      <span className="font-medium">需求者已簽核確認</span>
+                      <span className="font-medium">需求方已簽核確認</span>
                     </div>
                   </div>
                 )}
@@ -633,21 +633,21 @@ export function StepNavigation({
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
                     <div className="flex items-center gap-2 text-sm text-emerald-700">
                       <Check className="h-4 w-4 shrink-0" />
-                      <span className="font-medium">需求者已簽核確認</span>
+                      <span className="font-medium">需求方已簽核確認</span>
                     </div>
                   </div>
                 ) : isRejected ? (
                   <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
                     <div className="flex items-center gap-2 text-sm text-red-700">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
-                      <span className="font-medium">需求者已退回簽核，尚未重新發起</span>
+                      <span className="font-medium">需求方已退回簽核，尚未重新發起</span>
                     </div>
                   </div>
                 ) : (
                   <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
                     <div className="flex items-center gap-2 text-sm text-amber-700">
                       <ClipboardCheck className="h-4 w-4 shrink-0" />
-                      <span className="font-medium">尚未取得需求者簽核</span>
+                      <span className="font-medium">尚未取得需求方簽核</span>
                     </div>
                   </div>
                 )}
@@ -851,11 +851,11 @@ export function StepNavigation({
             {hasSpAdjustment && closingStep === dcStepIndex && (
               <div className="space-y-3">
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-[13px] text-amber-800 font-medium">此次結案調整了 SP，需經董事會簽核</p>
+                  <p className="text-[13px] text-amber-800 font-medium">此次結案調整了 SP，需經 Scrum Master 簽核</p>
                   <p className="text-xs text-amber-700 mt-1">
                     {dcTotalDelta !== 0
-                      ? "影響 SP 的設計變更已自動勾選，數字即依這些變更推算而來。送出後需求不會立即結案，待董事會同意後才完成結案。"
-                      : "請勾選造成本次 SP 調整的設計變更，讓董事會了解調整來由（這些變更董事會皆已簽核過）。送出後需求不會立即結案，待董事會同意後才完成結案。"}
+                      ? "影響 SP 的設計變更已自動勾選，數字即依這些變更推算而來。送出後需求不會立即結案，待 Scrum Master 同意後才完成結案。"
+                      : "請勾選造成本次 SP 調整的設計變更，讓 Scrum Master 了解調整來由（這些變更 Scrum Master 皆已簽核過）。送出後需求不會立即結案，待 Scrum Master 同意後才完成結案。"}
                   </p>
                 </div>
 
@@ -872,7 +872,7 @@ export function StepNavigation({
                 ) : approvedDcs.length === 0 ? (
                   <div className="rounded-lg border p-3">
                     <p className="text-sm text-muted-foreground">此需求沒有已通過的設計變更。</p>
-                    <p className="text-[11px] text-muted-foreground mt-1">請於上一步填寫 SP 調整原因，董事會將依此判斷。</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">請於上一步填寫 SP 調整原因，Scrum Master 將依此判斷。</p>
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -918,7 +918,7 @@ export function StepNavigation({
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground mb-2">
                   {hasSpAdjustment
-                    ? "請確認以下資訊無誤後送出。因本次調整了 SP，將先送董事會簽核，同意後才完成結案。"
+                    ? "請確認以下資訊無誤後送出。因本次調整了 SP，將先送 Scrum Master 簽核，同意後才完成結案。"
                     : "請確認以下結案資訊無誤後，按下「確認結案」完成操作。"}
                 </p>
 
@@ -931,12 +931,12 @@ export function StepNavigation({
                   {isApproved ? (
                     <div className="flex items-center gap-1.5 text-sm text-emerald-700">
                       <Check className="h-3.5 w-3.5" />
-                      需求者已簽核確認
+                      需求方已簽核確認
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5 text-sm text-amber-700">
                       <ClipboardCheck className="h-3.5 w-3.5" />
-                      {isRejected ? "需求者已退回簽核" : "尚未取得需求者簽核"}
+                      {isRejected ? "需求方已退回簽核" : "尚未取得需求方簽核"}
                     </div>
                   )}
                 </div>
@@ -1051,7 +1051,7 @@ export function StepNavigation({
                 }
               >
                 {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-1" />}
-                {hasSpAdjustment ? "送出董事會簽核" : "確認結案"}
+                {hasSpAdjustment ? "送出 Scrum Master 簽核" : "確認結案"}
               </Button>
             )}
           </div>
@@ -1082,7 +1082,7 @@ export function StepNavigation({
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  請說明針對退回意見所做的調整，讓需求者了解已修改的項目。此內容可稍後補填。
+                  請說明針對退回意見所做的調整，讓需求方了解已修改的項目。此內容可稍後補填。
                 </p>
                 <Textarea
                   placeholder="說明已調整的內容（選填）..."
@@ -1144,13 +1144,13 @@ export function StepNavigation({
       <AlertDialog open={showForceDialog} onOpenChange={setShowForceDialog}>
         <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle>需求者尚未簽核</AlertDialogTitle>
+            <AlertDialogTitle>需求方尚未簽核</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
                   <div className="flex items-center gap-2 text-sm text-amber-700">
                     <ClipboardCheck className="h-4 w-4" />
-                    <span>此階段的簽核請求仍在等待需求者確認</span>
+                    <span>此階段的簽核請求仍在等待需求方確認</span>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">

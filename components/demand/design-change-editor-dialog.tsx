@@ -185,7 +185,7 @@ export function DesignChangeEditorDialog({
             <div className="flex items-start gap-2">
               <Checkbox id="dc-affects-sp" checked={affectsSp} onCheckedChange={(v) => setAffectsSp(!!v)} disabled={loading} className="mt-0.5" />
               <Label htmlFor="dc-affects-sp" className="text-xs sm:text-sm font-medium cursor-pointer leading-snug">
-                此變更影響 SP（需求方通過後將送<strong>董事會</strong>審核）
+                此變更影響 SP（需求方通過後將送<strong>Scrum Master</strong>審核）
               </Label>
             </div>
             {affectsSp && (

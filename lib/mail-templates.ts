@@ -33,7 +33,7 @@ export function signoffNotificationTemplate(params: {
     : `消耗 <strong>${settlementPct}%</strong> SP`
 
   const bodyPara = isTerm
-    ? `需求 <strong>${demandNumber} — ${demandTitle}</strong>（目前 ${phaseBadge} 階段）由管理者申請<strong style="color:#c2410c;">終止此專案並直接結算</strong>，需要您（專案 Master）確認。通過後將依目前進度${settlementText}並結案。`
+    ? `需求 <strong>${demandNumber} — ${demandTitle}</strong>（目前 ${phaseBadge} 階段）由管理者申請<strong style="color:#c2410c;">終止此專案並直接結算</strong>，需要您（Scrum Master）確認。通過後將依目前進度${settlementText}並結案。`
     : `需求 <strong>${demandNumber} — ${demandTitle}</strong> 目前處於 ${phaseBadge} 階段，需要您進行簽核確認。`
 
   return `<!DOCTYPE html>

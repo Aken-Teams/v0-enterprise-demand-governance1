@@ -71,7 +71,7 @@ export function PhaseSignoffBanner({
   const isSettlement = isBoardOverride && !!signoff.overrideTargetStatus
 
   const titleText = isBoardOverride
-    ? "專案 Master 代簽"
+    ? "Scrum Master 代簽"
     : isDevLink
     ? "開發端已首次交付 APP，請確認收到"
     : isDesignChange

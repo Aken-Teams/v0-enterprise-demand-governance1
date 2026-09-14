@@ -64,7 +64,7 @@
 flowchart LR
     A([設計變更發起]) --> B[需求方逐條確認]
     B -->|全部確認| C{影響 SP?}
-    C -->|是| F[董事會審 SP]
+    C -->|是| F[Scrum Master 審 SP]
     F -->|通過| E([設計變更通過<br/>留為正式紀錄])
     C -->|否| E
     B -.有疑慮／問題.-> D[駁回<br/>修訂後重新送出]
@@ -83,7 +83,7 @@ flowchart LR
       <span><i class="dot d-dev"></i>設計變更發起（起點）</span>
       <span><i class="dot d-req"></i>需求方確認 / 判斷影響 SP</span>
       <span><i class="dot d-rej"></i>駁回・修訂重送</span>
-      <span><i class="dot d-board"></i>董事會審 SP</span>
+      <span><i class="dot d-board"></i>Scrum Master 審 SP</span>
       <span><i class="dot d-done"></i>通過・留紀錄（終點）</span>
     </div>
   </div>

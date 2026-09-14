@@ -7,7 +7,7 @@ import { canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers, getAdminUserIds, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
-import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS, spRateOf } from "@/lib/constants/demand"
+import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS, spRateOf, settlementTierLabel } from "@/lib/constants/demand"
 import { DEV_LINK_KIND } from "@/lib/dev-link"
 import { parseClosingSpPayload } from "@/lib/closing-sp"
 
@@ -162,7 +162,7 @@ export async function PATCH(
         // BOARD_OVERRIDE can only be handled by board members or admin/delivery
         if (signoff.targetRole === "BOARD_OVERRIDE" && auth.role === "subsidiary") {
           if (!currentUser?.isBoardMember) {
-            return NextResponse.json({ error: "專案 Master 代簽僅限董事會成員操作" }, { status: 403 })
+            return NextResponse.json({ error: "代簽僅限 Scrum Master 操作" }, { status: 403 })
           }
         }
       } else {
@@ -171,7 +171,7 @@ export async function PATCH(
 
         if (phase === "SP_REVIEW") {
           if (!currentUser?.isBoardMember) {
-            return NextResponse.json({ error: "您無權進行此簽核操作（需為董事會）" }, { status: 403 })
+            return NextResponse.json({ error: "您無權進行此簽核操作（需為 Scrum Master）" }, { status: 403 })
           }
         } else {
           const access = await prisma.demandAccess.findUnique({
@@ -180,7 +180,7 @@ export async function PATCH(
           })
           const userRole = access?.signoffRole
           if (userRole !== "REQUESTER" && userRole !== "MANAGER") {
-            return NextResponse.json({ error: "您無權進行此簽核操作（需為需求者或主管）" }, { status: 403 })
+            return NextResponse.json({ error: "您無權進行此簽核操作（需為需求窗口或需求主管）" }, { status: 403 })
           }
         }
       }
@@ -241,7 +241,7 @@ export async function PATCH(
         },
         data: {
           status: "SKIPPED",
-          comment: "專案 Master 代簽，自動略過",
+          comment: "Scrum Master 代簽，自動略過",
           respondedAt: new Date(),
           respondedById: auth.userId,
         },
@@ -269,7 +269,7 @@ export async function PATCH(
         const oldUsed = Math.round(effectiveSp * oldRate)
         const delta = settledSp - oldUsed
         const year = now.getFullYear()
-        const tierLabel = STATUS_MAP[settlementTier]?.label ?? settlementTier
+        const tierLabel = settlementTierLabel(settlementTier)
 
         await prisma.$transaction(async (tx) => {
           await tx.demand.update({
@@ -290,7 +290,7 @@ export async function PATCH(
                 type: "SP_ADJUSTMENT",
                 oldSp: effectiveSp,
                 newSp: settledSp,
-                reason: `專案 Master 代簽結算（依${tierLabel}比例 ${Math.round(settlementRate * 100)}%）`,
+                reason: `Scrum Master 代簽結算（依${tierLabel}比例 ${Math.round(settlementRate * 100)}%）`,
               }),
               changedBy: auth.userId,
             },
@@ -309,7 +309,7 @@ export async function PATCH(
             where: { demandId: id, status: "PENDING" },
             data: {
               status: "SKIPPED",
-              comment: "專案 Master 代簽結案，自動略過",
+              comment: "Scrum Master 代簽結案，自動略過",
               respondedAt: now,
               respondedById: auth.userId,
             },
@@ -331,7 +331,7 @@ export async function PATCH(
           notifyUsers(recipients, {
             type: "DEMAND_STATUS",
             title: "需求結案",
-            message: `需求 ${dem.demandNumber}「${dem.title}」經專案 Master 代簽結算，已從「${fromLabel}」直接結案（依${tierLabel}比例結算 ${settledSp} SP）。`,
+            message: `需求 ${dem.demandNumber}「${dem.title}」經 Scrum Master 代簽結算，已從「${fromLabel}」直接結案（依${tierLabel}比例結算 ${settledSp} SP）。`,
             linkUrl: `/demands/${id}`,
           })
         })
@@ -382,7 +382,7 @@ export async function PATCH(
     }
 
     // ── 結案 SP 調整 (kind = CLOSING_SP) ──
-    // 董事會全數同意後才實際套用 SP 並結案；任一人退回則需求維持原狀態，
+    // Scrum Master 全數同意後才實際套用 SP 並結案；任一人退回則需求維持原狀態，
     // 由管理者修正後重新發起（見 app/api/demands/[id]/closing-sp/route.ts）。
     if (signoff.kind === "CLOSING_SP") {
       if (action === "approve") {
@@ -503,7 +503,7 @@ export async function PATCH(
                 where: { demandId: id, status: "PENDING", id: { not: signoffId } },
                 data: {
                   status: "SKIPPED",
-                  comment: "需求已結案（結案 SP 調整經董事會核准），自動略過",
+                  comment: "需求已結案（結案 SP 調整經 Scrum Master 核准），自動略過",
                   respondedAt: now,
                   respondedById: auth.userId,
                 },
@@ -516,7 +516,7 @@ export async function PATCH(
               notifyUsers(recipients, {
                 type: "DEMAND_STATUS",
                 title: "需求結案",
-                message: `需求 ${dem.demandNumber}「${dem.title}」的結案 SP 調整（${oldSp} → ${newSp}）已經董事會同意，已從「${fromLabel}」結案。`,
+                message: `需求 ${dem.demandNumber}「${dem.title}」的結案 SP 調整（${oldSp} → ${newSp}）已經 Scrum Master 同意，已從「${fromLabel}」結案。`,
                 linkUrl: `/demands/${id}`,
               })
             })
@@ -541,7 +541,7 @@ export async function PATCH(
           notifyUsers([requesterId], {
             type: "SIGNOFF",
             title: "結案 SP 調整已退回",
-            message: `需求 ${signoff.demand.demandNumber}「${signoff.demand.title}」的結案 SP 調整遭董事會退回${comment ? `：${comment.trim()}` : ""}，需求維持原狀態。`,
+            message: `需求 ${signoff.demand.demandNumber}「${signoff.demand.title}」的結案 SP 調整遭 Scrum Master 退回${comment ? `：${comment.trim()}` : ""}，需求維持原狀態。`,
             linkUrl: `/demands/${id}`,
           })
         }

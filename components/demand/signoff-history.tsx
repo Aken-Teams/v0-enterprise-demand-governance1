@@ -45,8 +45,8 @@ interface SignoffRecord {
 const TARGET_ROLE_LABELS: Record<string, string> = {
   REQUESTER: "需求窗口",
   MANAGER: "需求主管",
-  BOARD: "董事會",
-  BOARD_OVERRIDE: "專案 Master 代簽",
+  BOARD: "Scrum Master",
+  BOARD_OVERRIDE: "Scrum Master 代簽",
 }
 
 interface SpAdjustment {

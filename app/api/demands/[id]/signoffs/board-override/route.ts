@@ -6,14 +6,20 @@ import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
 import { DESIGN_CHANGE_ALLOWED_PHASES, PIPELINE_STEPS, STATUS_MAP } from "@/lib/constants/demand"
 
-// 終止開發結案除「需求確認」（尚未投入）與「已結案」（已結算完畢）外皆可提出。
-// 結算落點另由 PIPELINE_STEPS 索引把關，不得低於目前階段，故最低仍為開發中 50%。
+// 純代簽（代替需求方完成該階段簽核、不結算）可用於這些階段。
 const PHASE_OVERRIDE_ALLOWED: string[] = ["PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE"]
+
+/**
+ * 「終止開發結案」（代簽 + 依比例結算）僅限開案後的開發中／驗收中。
+ * 開案前（需求確認／PRD 文件確認／開案確認）尚未認列任何 SP，不續行時一律以
+ * 「取消」處理、全額釋放不計費，故不得從那些階段發起結算。
+ */
+const TERMINABLE_PHASES: string[] = ["DEVELOPING", "ACCEPTANCE"]
 
 /** 代簽結算可選的目標狀態（有消耗比例、可直接落點的狀態） */
 const SETTLEMENT_STATUSES: string[] = ["DEVELOPING", "ACCEPTANCE", "CLOSED"]
 
-// POST: 管理者發起專案 Master 代簽 — creates PENDING BOARD_OVERRIDE signoffs for board members
+// POST: 管理者發起 Scrum Master 代簽 — creates PENDING BOARD_OVERRIDE signoffs for board members
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -88,8 +94,16 @@ export async function POST(
       )
     }
 
-    // Settlement target: 不可低於目前（有效）階段的結算比例；允許結算在當前階段（終止）或往後
+    // Settlement target: 僅限開案後才可依比例結算；不可低於目前（有效）階段的結算比例
     if (targetStatus !== null) {
+      if (!TERMINABLE_PHASES.includes(effectivePhase)) {
+        return NextResponse.json(
+          {
+            error: `目前階段（${STATUS_MAP[demand.status]?.label ?? demand.status}）尚未開案，不可終止結算。需求不續行請改以「取消」處理，SP 全額釋放、不計費。`,
+          },
+          { status: 400 }
+        )
+      }
       const curIdx = PIPELINE_STEPS.indexOf(effectivePhase as typeof PIPELINE_STEPS[number])
       const tgtIdx = PIPELINE_STEPS.indexOf(targetStatus as typeof PIPELINE_STEPS[number])
       if (curIdx < 0 || tgtIdx < 0 || tgtIdx < curIdx) {
@@ -133,13 +147,13 @@ export async function POST(
       select: { id: true, name: true, restrictBoardToOrg: true, organizationId: true },
     })
 
-    // 董事：一間公司一位（優先序，與 lib/board.ts 一致）
+    // Scrum Master：依廠區／公司別，一間公司一位（優先序，與 lib/board.ts 一致）
     const orgSpecific = boardMembers.filter((u) => u.restrictBoardToOrg && u.organizationId === demand.organizationId)
     const defaults = boardMembers.filter((u) => !u.restrictBoardToOrg)
     const eligibleMembers = orgSpecific.length > 0 ? orgSpecific : defaults.length > 0 ? defaults : boardMembers
 
     if (eligibleMembers.length === 0) {
-      return NextResponse.json({ error: "找不到可代簽的專案 Master" }, { status: 404 })
+      return NextResponse.json({ error: "找不到可代簽的 Scrum Master" }, { status: 404 })
     }
 
     // Use the round timestamp from existing signoffs（終止結算可能無待簽核 → 用現在時間）
@@ -159,7 +173,7 @@ export async function POST(
         },
         data: {
           status: "SKIPPED",
-          comment: "已改由專案 Master 代簽",
+          comment: "已改由 Scrum Master 代簽",
           respondedAt: new Date(),
           respondedById: auth.userId,
         },
@@ -192,7 +206,7 @@ export async function POST(
     const memberIds = eligibleMembers.map((m) => m.id)
     notifyUsers(memberIds, {
       type: "SIGNOFF",
-      title: "專案 Master 代簽請求",
+      title: "Scrum Master 代簽請求",
       message: `需求 ${demand.demandNumber}「${demand.title}」的${kind === "DESIGN_CHANGE" ? "設計變更" : "階段"}簽核需要您代為確認。`,
       linkUrl: `/governance/demands/${id}`,
     })

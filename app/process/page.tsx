@@ -532,7 +532,7 @@ export default function ProcessPage() {
             <div className="space-y-1.5">
               <Label className="text-xs">本版修改摘要</Label>
               <Textarea value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={2}
-                placeholder="例如：MVP 架構確認次數改為三次、新增結案 SP 需董事會簽核" className="text-sm" />
+                placeholder="例如：PRD 文件確認次數改為三次、新增結案 SP 需 Scrum Master 簽核" className="text-sm" />
             </div>
 
             <div className="space-y-2">

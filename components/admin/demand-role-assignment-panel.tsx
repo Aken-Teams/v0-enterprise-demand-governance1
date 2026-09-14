@@ -36,7 +36,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   SUBMITTED: "需求確認",
-  PRD_REVIEW: "MVP 確認",
+  PRD_REVIEW: "PRD 文件確認",
   SP_REVIEW: "開案確認",
   DEVELOPING: "開發中",
   ACCEPTANCE: "驗收中",
@@ -46,8 +46,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 const ROLE_OPTIONS: { value: SignoffRole; label: string }[] = [
   { value: "OBSERVER", label: "觀察者" },
-  { value: "REQUESTER", label: "需求者" },
-  { value: "MANAGER", label: "主管" },
+  { value: "REQUESTER", label: "需求窗口" },
+  { value: "MANAGER", label: "需求主管" },
 ]
 
 interface DemandRoleAssignmentPanelProps {

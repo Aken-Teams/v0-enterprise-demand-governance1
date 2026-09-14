@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma"
 
 /**
- * 依「一間公司一位」的優先序，決定某需求（組織）的董事簽核人：
- *  1) 該組織專屬董事（restrictBoardToOrg 且組織相符）優先，例如 無錫→曹杰、徐州→陳英聖。
- *  2) 否則 → 預設董事（未限定組織者），例如方士碩。
- *  3) 否則 → 全體有效董事（保底，避免無人把關）。
+ * 依案件所屬廠區／公司別，決定某需求（組織）的 Scrum Master 簽核人（一間公司一位）：
+ *  1) 該組織專屬 Scrum Master（restrictBoardToOrg 且組織相符）優先，例如 無錫→曹杰、徐州→陳英聖。
+ *  2) 否則 → 預設 Scrum Master（未限定組織者），例如方士碩。
+ *  3) 否則 → 全體有效 Scrum Master（保底，避免無人把關）。
  * 用於開案確認(SP_REVIEW)與設計變更 SP 審核，確保兩邊一致、不會累加多人。
  */
 export async function resolveBoardReviewers(organizationId: string): Promise<{ userId: string; role: "BOARD" }[]> {

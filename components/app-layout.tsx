@@ -67,7 +67,7 @@ interface NavItem {
 
 const navSections: NavSection[] = [
   {
-    title: "需求者",
+    title: "需求方",
     roles: ["subsidiary"],
     items: [
       { title: "需求總覽", href: "/subsidiary", icon: LayoutDashboard, roles: ["subsidiary"] },
@@ -105,7 +105,7 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    title: "董事會",
+    title: "Scrum Master",
     roles: ["viewer"],
     items: [
       { title: "需求列表", href: "/governance/inbox", icon: Inbox, roles: ["viewer"] },

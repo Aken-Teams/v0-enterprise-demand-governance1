@@ -83,7 +83,7 @@ interface OrgOption {
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700" },
-  PRD_REVIEW: { label: "MVP 架構確認", color: "bg-amber-100 text-amber-700" },
+  PRD_REVIEW: { label: "PRD 文件確認", color: "bg-amber-100 text-amber-700" },
   SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700" },
   DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700" },
   ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700" },
@@ -92,7 +92,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   ON_HOLD: { label: "暫緩", color: "bg-yellow-100 text-yellow-700" },
   CANCELLED: { label: "已取消", color: "bg-slate-200 text-slate-600" },
   TERMINATED: { label: "已終止", color: "bg-zinc-200 text-zinc-700" },
-  // 顯示用：結案 SP 調整待董事會核准
+  // 顯示用：結案 SP 調整待 Scrum Master 核准
   CLOSING_SP_REVIEW: { label: "結案簽核中", color: "bg-orange-100 text-orange-700" },
 }
 
@@ -355,7 +355,7 @@ function InboxContent() {
         <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
           {[
             { label: "全部需求", sub: canSeeAll ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
-            { label: "確認階段", sub: "需求 / MVP / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
+            { label: "確認階段", sub: "需求 / PRD / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
             { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
           ].map((item) => (

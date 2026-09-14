@@ -132,7 +132,7 @@ export async function POST(
       if (demandFull?.contactPersonId) targets.push({ userId: demandFull.contactPersonId, role: "REQUESTER" })
       if (demandFull?.demandManagerId) targets.push({ userId: demandFull.demandManagerId, role: "MANAGER" })
     } else if (phase === "SP_REVIEW") {
-      // 董事：一間公司一位（優先序，見 lib/board.ts）
+      // Scrum Master：依廠區／公司別，一間公司一位（優先序，見 lib/board.ts）
       if (demandFull?.organizationId) targets.push(...(await resolveBoardReviewers(demandFull.organizationId)))
     }
 

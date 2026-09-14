@@ -130,7 +130,7 @@ export async function GET(
           if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
           if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
         } else if (phase === "SP_REVIEW") {
-          // 董事：一間公司一位（優先序，見 lib/board.ts）
+          // Scrum Master：依廠區／公司別，一間公司一位（優先序，見 lib/board.ts）
           requiredTargets.push(...(await resolveBoardReviewers(demand.organizationId)))
         }
 
@@ -215,7 +215,7 @@ export async function GET(
       signoffRole: g.signoffRole,
     }))
 
-    // 可指派為需求窗口／主管的董事會成員（可代表需求者簽核）— 本組織適用者
+    // 可指派為需求窗口／主管的 Scrum Master（可代表需求者簽核）— 本組織適用者
     const boardMembers = await prisma.user.findMany({
       where: {
         isBoardMember: true,
@@ -257,7 +257,7 @@ export async function GET(
     const canSeeQuote = auth.role === "admin" || !!cu?.canViewSpTransfer
     const canApproveQuote = auth.role === "admin" && cu?.managerCompany === "QIANGHE"
     const isZhiheManager = auth.role === "admin" && cu?.managerCompany === "ZHIHE"
-    // 是否有待董事會核准的結案 SP 調整（供狀態徽章顯示為「結案簽核中」）
+    // 是否有待 Scrum Master 核准的結案 SP 調整（供狀態徽章顯示為「結案簽核中」）
     const hasPendingClosingSp = (demand.phaseSignoffs ?? []).some(
       (s) => s.kind === "CLOSING_SP" && s.status === "PENDING"
     )
@@ -281,7 +281,7 @@ export async function GET(
       myDevLinkSignoffId: myDevLinkSignoff?.id ?? null,
     }
     // 扣住的連結數：交付分頁會在有交付被扣住時改顯示說明，
-    // 而不是退回顯示 MVP 階段的舊連結（否則使用者會誤以為交付已經在那）
+    // 而不是退回顯示 PRD 文件確認階段的舊連結（否則使用者會誤以為交付已經在那）
     let withheldDevLinks = 0
     if (maskDevLinks && Array.isArray(demandOut.documents)) {
       const docs = demandOut.documents as { type: string; phase: string | null }[]
@@ -595,7 +595,7 @@ export async function PATCH(
     }
 
     // 結案 SP 調整送審後，需求等同進入結案結算階段：
-    // 此時往前或往後改狀態都會讓董事會核准的內容與實際情況對不上，一律擋下。
+    // 此時往前或往後改狀態都會讓 Scrum Master 核准的內容與實際情況對不上，一律擋下。
     if (body.status && body.status !== demand.status) {
       const pendingClosingSp = await prisma.phaseSignoff.findFirst({
         where: { demandId: id, kind: "CLOSING_SP", status: "PENDING" },
@@ -603,7 +603,7 @@ export async function PATCH(
       })
       if (pendingClosingSp) {
         return NextResponse.json(
-          { error: "結案 SP 調整待董事會核准中，無法變更階段。如需修改，請先撤回該結案簽核。" },
+          { error: "結案 SP 調整待 Scrum Master 核准中，無法變更階段。如需修改，請先撤回該結案簽核。" },
           { status: 409 }
         )
       }
@@ -818,7 +818,7 @@ export async function PATCH(
         if (demand.contactPersonId) requiredTargets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
         if (demand.demandManagerId) requiredTargets.push({ userId: demand.demandManagerId, role: "MANAGER" })
       } else if (phase === "SP_REVIEW") {
-        // 董事：一間公司一位（優先序，見 lib/board.ts）
+        // Scrum Master：依廠區／公司別，一間公司一位（優先序，見 lib/board.ts）
         requiredTargets.push(...(await resolveBoardReviewers(demand.organizationId)))
       }
 
@@ -1018,7 +1018,7 @@ export async function PATCH(
           if (demand.contactPersonId) targets.push({ userId: demand.contactPersonId, role: "REQUESTER" })
           if (demand.demandManagerId) targets.push({ userId: demand.demandManagerId, role: "MANAGER" })
         } else if (status === "SP_REVIEW") {
-          // 董事：一間公司一位（優先序，見 lib/board.ts）
+          // Scrum Master：依廠區／公司別，一間公司一位（優先序，見 lib/board.ts）
           targets.push(...(await resolveBoardReviewers(demand.organizationId)))
         }
 

@@ -870,11 +870,11 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
           />
         )}
 
-        {/* ── 設計變更待審引導（例如董事會審 SP，或需求方逐條確認） ── */}
+        {/* ── 設計變更待審引導（例如 Scrum Master 審 SP，或需求方逐條確認） ── */}
         {(() => {
           const r = (demand as unknown as { myDesignChangeReview?: { seq: number; title: string; role: string; stage?: string; affectsSp: boolean } | null }).myDesignChangeReview
           if (!r) return null
-          const roleLabel = r.role === "BOARD" ? "董事會" : r.role === "MANAGER" ? "需求主管" : "需求窗口"
+          const roleLabel = r.role === "BOARD" ? "Scrum Master" : r.role === "MANAGER" ? "需求主管" : "需求窗口"
           // 兩階段流程：寫明目前是第幾關，避免誤以為重複簽核
           const isContent = r.stage === "CONTENT"
           return (
@@ -1510,7 +1510,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                       </p>
                       {prdLinks.length > 0 && (
                         <p className="text-[11px] mt-2 text-muted-foreground/80">
-                          （MVP 架構確認階段的連結仍可於「文件」分頁取得，但該連結不代表本次開發交付。）
+                          （PRD 文件確認階段的連結仍可於「文件」分頁取得，但該連結不代表本次開發交付。）
                         </p>
                       )}
                     </CardContent>
@@ -1524,7 +1524,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                     <CardContent className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground">
                       <Package className="h-12 w-12 mb-3 opacity-20" />
                       <p className="text-sm">尚無交付成果</p>
-                      <p className="text-xs mt-1">在「開發中」或「MVP 架構確認」階段上傳 APP 成果連結後會自動顯示</p>
+                      <p className="text-xs mt-1">在「開發中」或「PRD 文件確認」階段上傳 APP 成果連結後會自動顯示</p>
                     </CardContent>
                   </Card>
                 )
@@ -1840,7 +1840,7 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                   </CardContent>
                 </Card>
 
-                {/* 原型 Prototype — 只有點進「MVP 架構確認」階段時才出現（唯讀） */}
+                {/* 原型 Prototype — 只有點進「PRD 文件確認」階段時才出現（唯讀） */}
                 {docActivePhase === "PRD_REVIEW" && (
                   <div className="mt-4">
                     <PrototypePanel

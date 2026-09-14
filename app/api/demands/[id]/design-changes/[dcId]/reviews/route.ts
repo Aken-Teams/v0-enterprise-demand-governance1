@@ -208,7 +208,7 @@ export async function POST(
         notifyUsers(contentIds, {
           type: "SIGNOFF",
           title: "設計變更待逐項確認",
-          message: `需求 ${dm.demandNumber}「${dm.title}」的設計變更「${dcTitle}」已通過設計變更確認（董事會與需求窗口皆同意），請您逐項確認變更內容。`,
+          message: `需求 ${dm.demandNumber}「${dm.title}」的設計變更「${dcTitle}」已通過設計變更確認（Scrum Master 與需求窗口皆同意），請您逐項確認變更內容。`,
           linkUrl: `/demands/${id}`,
         })
       }
