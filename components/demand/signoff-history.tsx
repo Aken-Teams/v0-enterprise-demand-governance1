@@ -21,6 +21,9 @@ interface SignoffDocument {
   fileName: string
   fileUrl: string | null
   fileSize: number | null
+  /** 上傳者 userId：用來判斷這份檔案是「提出時附的」還是「回應時附的」 */
+  uploadedBy?: string | null
+  createdAt?: string | null
 }
 
 interface SignoffRecord {
@@ -524,17 +527,100 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
 
   // --- Render helpers ---
 
+  /**
+   * 把簽核附件拆成「提出時附上的」與「審核回應附上的」。
+   *
+   * 兩者都存成同一張表的 ATTACHMENT，只差在上傳者：發起時由 requestedBy 上傳，
+   * 回應時由 respondedBy 上傳。同一人既發起又回應（例如代簽）時無法用身分區分，
+   * 改以回應時間為界；再無資訊可判斷的舊資料則不分組，維持原樣呈現。
+   */
+  const splitDocs = (s: SignoffRecord, docs: SignoffDocument[]) => {
+    const request: SignoffDocument[] = []
+    const response: SignoffDocument[] = []
+    const unknown: SignoffDocument[] = []
+    const sameUser = !!s.requestedBy?.id && s.requestedBy.id === s.respondedBy?.id
+    const byTime = (d: SignoffDocument) => {
+      if (!s.respondedAt || !d.createdAt) return null
+      return new Date(d.createdAt).getTime() >= new Date(s.respondedAt).getTime() - 60_000
+    }
+    for (const d of docs) {
+      if (!sameUser && d.uploadedBy && d.uploadedBy === s.respondedBy?.id) { response.push(d); continue }
+      if (!sameUser && d.uploadedBy && d.uploadedBy === s.requestedBy?.id) { request.push(d); continue }
+      const t = byTime(d)
+      if (t === true) response.push(d)
+      else if (t === false) request.push(d)
+      else unknown.push(d)
+    }
+    return { request, response, unknown }
+  }
+
   /** Render the per-signer detail row (comment, response, docs) */
   const renderSignerDetail = (s: SignoffRecord, isMulti: boolean) => {
     const Icon = STATUS_ICONS[s.status] || Clock
     const iconColor = STATUS_ICON_COLORS[s.status] || "text-gray-400"
     const statusInfo = SIGNOFF_STATUS_MAP[s.status]
     const docs = s.documents?.filter((d) => d.fileUrl) || []
+    const grouped = splitDocs(s, docs)
     const isUploading = uploadingId === s.id
     const isPending = s.status === "PENDING"
     const canAddDocs = canUpload && isPending
     const name = s.targetUser?.name || s.respondedBy?.name || null
     const roleLabel = s.targetRole ? TARGET_ROLE_LABELS[s.targetRole] || s.targetRole : null
+
+    const docRow = (doc: SignoffDocument) => (
+      <div key={doc.id} className="flex items-center gap-1.5 sm:gap-2 rounded-md bg-white/80 border border-border/40 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm group/doc">
+        <a
+          href={doc.fileUrl!}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 hover:text-foreground transition-colors"
+        >
+          <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+          <span className="truncate flex-1 text-muted-foreground group-hover/doc:text-foreground">
+            {doc.fileName}
+          </span>
+          {doc.fileSize != null && (
+            <span className="text-muted-foreground/60 shrink-0 text-[10px] sm:text-xs">
+              {formatFileSize(doc.fileSize)}
+            </span>
+          )}
+          <Download className="h-3 w-3 text-muted-foreground/40 group-hover/doc:text-foreground shrink-0" />
+        </a>
+        {canUpload && isPending && (
+          <button
+            className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground/50 hover:text-red-500 shrink-0"
+            onClick={() => { setConfirmDeleteDocId(doc.id); setConfirmDeleteDocName(doc.fileName) }}
+            disabled={deletingDocId === doc.id}
+          >
+            {deletingDocId === doc.id
+              ? <Loader2 className="h-3 w-3 animate-spin" />
+              : <Trash2 className="h-3 w-3" />}
+          </button>
+        )}
+      </div>
+    )
+
+    /** 分組標題讓人一眼看出是誰附的，避免雙方文件混在一起分不清 */
+    const docGroup = (list: SignoffDocument[], label: string | null, tone: "request" | "response" | "plain") => {
+      if (list.length === 0) return null
+      return (
+        <div className="space-y-1">
+          {label && (
+            <span className={cn(
+              "flex items-center gap-1 text-[10px] sm:text-[11px] font-medium",
+              tone === "request" && "text-blue-500/70",
+              tone === "response" && "text-muted-foreground/70",
+              tone === "plain" && "text-muted-foreground/60",
+            )}>
+              <Paperclip className="h-3 w-3" />
+              {label}
+              <span className="text-muted-foreground/50">· {list.length}</span>
+            </span>
+          )}
+          {list.map(docRow)}
+        </div>
+      )
+    }
 
     return (
       <div key={s.id} className={cn(
@@ -568,6 +654,9 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
             )}
           </div>
         )}
+
+        {/* 我方於提出簽核時附上的文件 */}
+        {docGroup(grouped.request, "提出時附上的文件", "request")}
 
         {/* 審核回應 */}
         {canEditComment && editingResponseId === s.id ? (
@@ -624,43 +713,11 @@ export function SignoffHistory({ signoffs, demandId, token, userRole, currentUse
           </button>
         ) : null}
 
-        {/* 附件 */}
-        {docs.length > 0 && (
-          <div className="space-y-1">
-            {docs.map((doc) => (
-              <div key={doc.id} className="flex items-center gap-1.5 sm:gap-2 rounded-md bg-white/80 border border-border/40 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm group/doc">
-                <a
-                  href={doc.fileUrl!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 hover:text-foreground transition-colors"
-                >
-                  <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="truncate flex-1 text-muted-foreground group-hover/doc:text-foreground">
-                    {doc.fileName}
-                  </span>
-                  {doc.fileSize != null && (
-                    <span className="text-muted-foreground/60 shrink-0 text-[10px] sm:text-xs">
-                      {formatFileSize(doc.fileSize)}
-                    </span>
-                  )}
-                  <Download className="h-3 w-3 text-muted-foreground/40 group-hover/doc:text-foreground shrink-0" />
-                </a>
-                {canUpload && isPending && (
-                  <button
-                    className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground/50 hover:text-red-500 shrink-0"
-                    onClick={() => { setConfirmDeleteDocId(doc.id); setConfirmDeleteDocName(doc.fileName) }}
-                    disabled={deletingDocId === doc.id}
-                  >
-                    {deletingDocId === doc.id
-                      ? <Loader2 className="h-3 w-3 animate-spin" />
-                      : <Trash2 className="h-3 w-3" />}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        {/* 需求方回應時附上的文件 */}
+        {docGroup(grouped.response, "審核回應附件", "response")}
+
+        {/* 舊資料無從判斷來源時不分組，維持原樣 */}
+        {docGroup(grouped.unknown, grouped.request.length + grouped.response.length > 0 ? "其他附件" : null, "plain")}
 
         {canAddDocs && !isUploading && (
           <button

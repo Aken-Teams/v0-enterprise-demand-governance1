@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
           },
         },
         requestedBy: { select: { id: true, name: true } },
-        documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true } },
+        documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true, uploadedBy: true, createdAt: true } },
       },
       orderBy: { requestedAt: "desc" },
     })

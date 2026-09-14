@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { isDevDeliveryLink, shouldMaskDevLinks } from "@/lib/dev-link"
+import { annotateSignoffDocs } from "@/lib/signoff-docs"
 
 // GET: Public demand view via share token (no JWT required)
 export async function GET(
@@ -60,7 +61,7 @@ export async function GET(
             requestedBy: { select: { id: true, name: true } },
             respondedBy: { select: { id: true, name: true } },
             targetUser: { select: { id: true, name: true } },
-            documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true } },
+            documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true, uploadedBy: true, createdAt: true } },
           },
           orderBy: { requestedAt: "desc" },
         },
@@ -98,7 +99,18 @@ export async function GET(
       // Filter out GITHUB_REPO + 報價單 documents
       // 開發中的 APP 交付連結須由需求方登入確認後才開放（確認即認列 25%），
       // 匿名檢視一律看不到；登入後改走 /api/demands/[id]，由該處依身分判斷。
-      documents: visibleDocuments,
+      documents: annotateSignoffDocs(
+        visibleDocuments,
+        (demand.phaseSignoffs ?? []).map((s) => ({
+          id: s.id,
+          phase: s.phase as string,
+          status: s.status as string,
+          requestedById: s.requestedById,
+          respondedById: s.respondedById,
+          requestedAt: s.requestedAt,
+          respondedAt: s.respondedAt,
+        }))
+      ),
       // 僅在確實有交付被扣住時為 true——開發中但尚未交付者不應誤報
       devLinkMasked: withheldDevLinks > 0,
     }

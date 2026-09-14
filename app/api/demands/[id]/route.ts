@@ -5,6 +5,7 @@ import { canAccessDemand, canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { PIPELINE_STEPS, SIGNOFF_REQUIRED_PHASES, STATUS_MAP, SP_PROGRESS_RATE, spRateOf } from "@/lib/constants/demand"
 import { DEV_LINK_KIND, isDevDeliveryLink, shouldMaskDevLinks } from "@/lib/dev-link"
+import { annotateSignoffDocs } from "@/lib/signoff-docs"
 import { updateDemandSchema } from "@/lib/validations/demand"
 import { notifyUsers, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { resolveBoardReviewers } from "@/lib/board"
@@ -62,7 +63,7 @@ export async function GET(
             requestedBy: { select: { id: true, name: true } },
             respondedBy: { select: { id: true, name: true } },
             targetUser: { select: { id: true, name: true, email: true } },
-            documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true } },
+            documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true, uploadedBy: true, createdAt: true } },
           },
           orderBy: { requestedAt: "desc" },
         },
@@ -187,7 +188,7 @@ export async function GET(
               requestedBy: { select: { id: true, name: true } },
               respondedBy: { select: { id: true, name: true } },
               targetUser: { select: { id: true, name: true, email: true } },
-              documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true } },
+              documents: { select: { id: true, fileName: true, fileUrl: true, fileSize: true, uploadedBy: true, createdAt: true } },
             },
             orderBy: { requestedAt: "desc" },
           })
@@ -272,8 +273,21 @@ export async function GET(
       (s) => s.kind === DEV_LINK_KIND && s.status === "PENDING"
     ).length
 
+    // 標出哪些階段文件其實是簽核往返的附件（我方提出 / 需求方回應），
+    // 否則兩邊的檔案混在同一份清單裡，看的人分不出是誰給的。
+    const signoffRefs = (demand.phaseSignoffs ?? []).map((s) => ({
+      id: s.id,
+      phase: s.phase as string,
+      status: s.status as string,
+      requestedById: s.requestedById,
+      respondedById: s.respondedById,
+      requestedAt: s.requestedAt,
+      respondedAt: s.respondedAt,
+    }))
+
     const demandOut: Record<string, unknown> = {
       ...demandRest,
+      documents: annotateSignoffDocs(demandRest.documents ?? [], signoffRefs),
       contactPerson: contactPersonUser,
       myDesignChangeReview,
       hasPendingClosingSp,

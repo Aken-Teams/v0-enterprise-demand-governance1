@@ -12,7 +12,7 @@ import {
 import {
   FileText, FileSpreadsheet, FileImage, FileVideo2, FileAudio, File, Presentation,
   Download, Upload, Loader2, Check, Circle, ExternalLink, Link, Trash2,
-  ChevronRight, ChevronLeft, History, FileEdit, Plus,
+  ChevronRight, ChevronLeft, History, FileEdit, Plus, ClipboardCheck,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -23,6 +23,7 @@ import {
   PHASE_COLORS,
   PHASE_DOCUMENT_MAP,
   DOCUMENT_TYPE_LABELS,
+  SIGNOFF_STATUS_MAP,
 } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
@@ -40,6 +41,27 @@ interface Document {
   changeNote?: string | null
   designChangeId?: string | null
   designChange?: { id: string; seq: number; title: string } | null
+  /** 此檔案是簽核往返的附件：request = 我方提出時附的、response = 需求方回應時附的 */
+  signoffSource?: "request" | "response" | null
+  /** 所屬的簽核往返（同一次送簽與其回覆），供依審核日期分組 */
+  signoffRound?: { key: string; date: string; status: string } | null
+}
+
+/** 文件清單的一個區塊：一般文件，或某一次簽核往返 */
+interface DocSection {
+  key: string
+  /** null = 一般階段文件，不加標題、恆常展開 */
+  title: string | null
+  status?: string
+  /** 預設展開：最近一次往返展開，更早的收合 */
+  defaultOpen?: boolean
+  groups: DocGroup[]
+}
+
+/** 簽核附件的來源標籤——避免雙方的檔案混在同一份清單裡看不出是誰給的 */
+const SIGNOFF_SOURCE_BADGE: Record<string, { label: string; className: string }> = {
+  request: { label: "簽核送出附件", className: "border-blue-200 bg-blue-50 text-blue-600" },
+  response: { label: "需求方回饋", className: "border-amber-200 bg-amber-50 text-amber-700" },
 }
 
 interface DesignChangeOption {
@@ -124,6 +146,41 @@ function groupDocs(docs: Document[]): DocGroup[] {
   return groups
 }
 
+/**
+ * 依「簽核往返」把文件分區：一般階段文件排前面，其後每一次送簽各成一區，
+ * 以審核日期為標題。否則同一階段裡我方送簽的附件與需求方回覆的附件會
+ * 跟真正的階段文件混在一起，看不出哪幾份屬於同一次往返。
+ */
+function sectionizeDocs(groups: DocGroup[]): DocSection[] {
+  const plain: DocGroup[] = []
+  const rounds = new Map<string, { date: string; status: string; groups: DocGroup[] }>()
+
+  for (const g of groups) {
+    const r = g.latest.signoffRound
+    if (!r) { plain.push(g); continue }
+    const cur = rounds.get(r.key)
+    if (cur) cur.groups.push(g)
+    else rounds.set(r.key, { date: r.date, status: r.status, groups: [g] })
+  }
+
+  const sections: DocSection[] = []
+  if (plain.length > 0) sections.push({ key: "plain", title: null, groups: plain })
+  const sorted = [...rounds.entries()].sort(
+    (a, b) => new Date(b[1].date).getTime() - new Date(a[1].date).getTime()
+  )
+  sorted.forEach(([key, r], i) => {
+    sections.push({
+      key,
+      title: `${fmtDate(r.date)} 簽核往返`,
+      status: r.status,
+      // 最近一次預設展開，較早的收起來，避免往返多了以後整頁都是附件
+      defaultOpen: i === 0,
+      groups: r.groups,
+    })
+  })
+  return sections
+}
+
 export function PhaseDocuments({
   documents,
   currentPhase,
@@ -173,6 +230,9 @@ export function PhaseDocuments({
     return () => el.removeEventListener("click", handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadTriggerSelector])
+
+  /** 簽核往返區塊的展開狀態；未設定者依 defaultOpen */
+  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({})
 
   const resetUploadFields = () => {
     setSelectedFiles([])
@@ -399,6 +459,17 @@ export function PhaseDocuments({
                     v{active.version || 1}
                   </Badge>
                 )}
+                {active.signoffSource && SIGNOFF_SOURCE_BADGE[active.signoffSource] && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] h-4 px-1 rounded shrink-0 font-normal",
+                      SIGNOFF_SOURCE_BADGE[active.signoffSource].className,
+                    )}
+                  >
+                    {SIGNOFF_SOURCE_BADGE[active.signoffSource].label}
+                  </Badge>
+                )}
               </div>
               <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                 {DOCUMENT_TYPE_LABELS[active.type] || active.type}
@@ -617,10 +688,41 @@ export function PhaseDocuments({
                 ))}
               </div>
             )}
-            {/* Document groups */}
+            {/* Document groups —— 一般文件在前，其後依簽核往返分區 */}
             {activeGroups.length > 0 ? (
               <div className="space-y-1.5 min-w-0">
-                {activeGroups.map(renderDocGroup)}
+                {sectionizeDocs(activeGroups).map((sec) => {
+                  const open = sec.title ? (sectionOpen[sec.key] ?? !!sec.defaultOpen) : true
+                  return (
+                    <div key={sec.key} className="space-y-1.5">
+                      {sec.title && (
+                        <button
+                          type="button"
+                          onClick={() => setSectionOpen((prev) => ({ ...prev, [sec.key]: !open }))}
+                          className="flex w-full items-center gap-1.5 pt-1.5 text-left"
+                          title={open ? "收合此次往返" : "展開此次往返"}
+                        >
+                          <ChevronRight
+                            className={cn(
+                              "h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform",
+                              open && "rotate-90",
+                            )}
+                          />
+                          <ClipboardCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                          <span className="shrink-0 text-xs font-medium text-foreground/80 sm:text-[13px]">{sec.title}</span>
+                          {sec.status && SIGNOFF_STATUS_MAP[sec.status] && (
+                            <Badge className={cn("h-[18px] shrink-0 px-1.5 text-[11px] font-normal", SIGNOFF_STATUS_MAP[sec.status].color)}>
+                              {SIGNOFF_STATUS_MAP[sec.status].label}
+                            </Badge>
+                          )}
+                          <span className="shrink-0 text-[11px] text-muted-foreground/60">{sec.groups.length} 份</span>
+                          <span className="h-px flex-1 bg-border/60" />
+                        </button>
+                      )}
+                      {open && sec.groups.map(renderDocGroup)}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground/40 text-center py-4">尚無文件</p>
