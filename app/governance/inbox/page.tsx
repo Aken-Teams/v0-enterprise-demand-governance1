@@ -738,7 +738,9 @@ function InboxContent() {
                 const pc = demand.phaseCompletion
                 return (
                   <Card key={demand.id} className="hover:shadow-md hover:border-primary/30 transition-all h-full">
-                    <CardContent className="px-3 py-2 sm:px-4 sm:py-3 space-y-1.5 sm:space-y-2">
+                    {/* 卡片一律等高：標題固定兩行、狀態列保留固定高度、footer 以 mt-auto 貼底，
+                        避免有無「缺文件／待簽核／暫緩原因」造成整片卡片忽高忽低 */}
+                    <CardContent className="flex h-full flex-col gap-1.5 px-3 py-2 sm:gap-2 sm:px-4 sm:py-3">
                       {/* Row 1: number + vendor + status */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
@@ -765,9 +767,11 @@ function InboxContent() {
                         </div>
                       </div>
 
-                      {/* Title */}
-                      <p className="font-semibold leading-snug line-clamp-2">{demand.title}</p>
+                      {/* Title：固定兩行高，一行的標題也不會讓卡片縮短 */}
+                      <p className="min-h-[2.75rem] font-semibold leading-snug line-clamp-2">{demand.title}</p>
 
+                      {/* 狀態列插槽：保留一行高度，沒有提示時留白而非塌陷 */}
+                      <div className="min-h-[1.375rem] space-y-1.5">
                       {/* Hold reason */}
                       {demand.status === "ON_HOLD" && demand.holdReason && (
                         <div className="flex items-center gap-1.5 text-xs text-yellow-700 bg-yellow-50 rounded px-2 py-1" title={demand.holdReason}>
@@ -808,7 +812,9 @@ function InboxContent() {
                         </div>
                       )}
 
-                      <hr className="border-border/60" />
+                      </div>
+
+                      <hr className="mt-auto border-border/60" />
 
                       {/* Meta row + actions */}
                       <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground gap-2">
