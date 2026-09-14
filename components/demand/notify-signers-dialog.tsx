@@ -118,7 +118,7 @@ export function NotifySignersDialog({
         ? Math.round((SP_PROGRESS_RATE[settleSignoff.overrideTargetStatus] ?? 0) * 100)
         : undefined
       const settledSp = settleSignoff?.overrideTargetStatus && effectiveSp != null
-        ? Math.round(effectiveSp * (SP_PROGRESS_RATE[settleSignoff.overrideTargetStatus] ?? 0))
+        ? effectiveSp * (SP_PROGRESS_RATE[settleSignoff.overrideTargetStatus] ?? 0)
         : null
 
       const defaultSubject = isTermination

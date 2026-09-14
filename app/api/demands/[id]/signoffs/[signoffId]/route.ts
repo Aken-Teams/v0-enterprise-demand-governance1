@@ -7,7 +7,7 @@ import { canAdminWrite } from "@/lib/demand-access"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers, getAdminUserIds, getDemandStakeholderIds, getOrgSubsidiaryUserIds } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
-import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS, spRateOf, settlementTierLabel } from "@/lib/constants/demand"
+import { SP_PROGRESS_RATE, STATUS_MAP, PIPELINE_STEPS, spRateOf, settlementTierLabel, formatSp } from "@/lib/constants/demand"
 import { DEV_LINK_KIND } from "@/lib/dev-link"
 import { parseClosingSpPayload } from "@/lib/closing-sp"
 
@@ -264,9 +264,11 @@ export async function PATCH(
           : dem.status) as DemandStatus
         const effectiveSp = dem.confirmedSp ?? dem.estimatedSp
         const settlementRate = SP_PROGRESS_RATE[settlementTier] ?? 0
-        const settledSp = Math.round(effectiveSp * settlementRate)
+        // 不四捨五入：15 SP 的 75% 就是 11.25，取整會少收 0.25 SP，
+        // 也會和錢包用 calcUsedSp 精算出來的已認列數字對不起來。
+        const settledSp = effectiveSp * settlementRate
         const oldRate = spRateOf(fromStatus, !!dem.devLinkConfirmedAt)
-        const oldUsed = Math.round(effectiveSp * oldRate)
+        const oldUsed = effectiveSp * oldRate
         const delta = settledSp - oldUsed
         const year = now.getFullYear()
         const tierLabel = settlementTierLabel(settlementTier)
@@ -318,8 +320,9 @@ export async function PATCH(
           if (delta !== 0) {
             await tx.spWallet.upsert({
               where: { organizationId_year_vendor: { organizationId: dem.organizationId, year, vendor: dem.vendor } },
-              create: { organizationId: dem.organizationId, year, vendor: dem.vendor, totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0 },
-              update: { usedSp: { increment: delta } },
+              create: { organizationId: dem.organizationId, year, vendor: dem.vendor, totalQuota: 0, usedSp: Math.max(0, Math.round(delta)), committedSp: 0 },
+              // SpWallet.usedSp 為 Int 欄位，僅作內部流水（畫面顯示的已認列由 calcUsedSp 精算）
+              update: { usedSp: { increment: Math.round(delta) } },
             })
           }
         })
@@ -331,7 +334,7 @@ export async function PATCH(
           notifyUsers(recipients, {
             type: "DEMAND_STATUS",
             title: "需求結案",
-            message: `需求 ${dem.demandNumber}「${dem.title}」經 Scrum Master 代簽結算，已從「${fromLabel}」直接結案（依${tierLabel}比例結算 ${settledSp} SP）。`,
+            message: `需求 ${dem.demandNumber}「${dem.title}」經 Scrum Master 代簽結算，已從「${fromLabel}」直接結案（依${tierLabel}比例結算 ${formatSp(settledSp)} SP）。`,
             linkUrl: `/demands/${id}`,
           })
         })
@@ -492,9 +495,11 @@ export async function PATCH(
                   where: { organizationId_year_vendor: { organizationId: dem.organizationId, year, vendor: dem.vendor } },
                   create: {
                     organizationId: dem.organizationId, year, vendor: dem.vendor,
-                    totalQuota: 0, usedSp: Math.max(0, delta), committedSp: 0,
+                    totalQuota: 0, usedSp: Math.max(0, Math.round(delta)), committedSp: 0,
                   },
-                  update: { usedSp: { increment: delta } },
+                  // SpWallet.usedSp 為 Int 欄位，僅作內部流水；畫面顯示的已認列一律由
+                  // calcUsedSp 即時精算，故此處取整不影響對外數字。
+                  update: { usedSp: { increment: Math.round(delta) } },
                 })
               }
 
@@ -575,8 +580,8 @@ export async function PATCH(
         if (dem && !dem.devLinkConfirmedAt) {
           const now = new Date()
           const effectiveSp = dem.confirmedSp ?? dem.estimatedSp
-          const oldUsed = Math.round(effectiveSp * spRateOf(dem.status, false))
-          const newUsed = Math.round(effectiveSp * spRateOf(dem.status, true))
+          const oldUsed = effectiveSp * spRateOf(dem.status, false)
+          const newUsed = effectiveSp * spRateOf(dem.status, true)
           const delta = newUsed - oldUsed
           const year = now.getFullYear()
 

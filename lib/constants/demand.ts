@@ -224,6 +224,17 @@ export function settlementTierLabel(status: string): string {
   return SETTLEMENT_TIERS[status]?.label ?? STATUS_MAP[status]?.label ?? status
 }
 
+/**
+ * SP 數值顯示：保留最多兩位小數並去掉尾隨的 0。
+ *
+ * SP 本來就可能不是整數（15 SP 的 75% = 11.25），四捨五入會讓畫面上的
+ * 金額與實際結算對不起來，故一律以精確值呈現。
+ */
+export function formatSp(n: number): string {
+  if (!Number.isFinite(n)) return "0"
+  return String(Math.round(n * 100) / 100)
+}
+
 /** SP 單價 (NT$) */
 export const SP_RATE = 20000
 

@@ -20,7 +20,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn, copyText } from "@/lib/utils"
 import { preprocessMarkdown } from "@/lib/markdown"
-import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, SETTLEMENT_TIERS, spRateOf, demandStatusKey } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, SETTLEMENT_TIERS, spRateOf, formatSp, demandStatusKey } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -2626,7 +2626,7 @@ export default function DemandDetailPage() {
             if (settlementStatuses.length === 0) return null
             const sp = demand.confirmedSp ?? demand.estimatedSp
             const previewRate = boardOverrideTargetStatus ? (SP_PROGRESS_RATE[boardOverrideTargetStatus] ?? 0) : null
-            const previewUsed = previewRate !== null ? Math.round(sp * previewRate) : null
+            const previewUsed = previewRate !== null ? sp * previewRate : null
             return (
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5">
                 <div className="flex items-center gap-1.5">
@@ -2692,8 +2692,8 @@ export default function DemandDetailPage() {
                       <span className="text-orange-900/60">結算 SP</span>
                       <span className="text-orange-900/70">
                         <span className="font-semibold text-orange-900">{Math.round((previewRate as number) * 100)}%</span>
-                        {" × "}SP {sp}{" = "}
-                        <span className="font-semibold text-sm text-orange-700">{previewUsed} SP</span>
+                        {" × "}SP {formatSp(sp)}{" = "}
+                        <span className="font-semibold text-sm text-orange-700">{formatSp(previewUsed)} SP</span>
                       </span>
                     </div>
                   </div>

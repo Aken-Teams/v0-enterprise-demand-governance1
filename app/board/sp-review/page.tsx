@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useAuth } from "@/hooks/use-auth"
-import { STATUS_MAP, SP_PROGRESS_RATE, settlementTierLabel } from "@/lib/constants/demand"
+import { STATUS_MAP, SP_PROGRESS_RATE, settlementTierLabel, formatSp } from "@/lib/constants/demand"
 import Link from "next/link"
 import {
   Building2, Coins, Loader2, Eye, Check, X, ExternalLink,
@@ -424,7 +424,7 @@ function SpReviewCard({ item, token, onComplete }: {
   // 結算：依所選階段比例算出最終收取的 SP
   const settlementRate = item.signoff.overrideTargetStatus ? (SP_PROGRESS_RATE[item.signoff.overrideTargetStatus] ?? 0) : 0
   const settlementPct = Math.round(settlementRate * 100)
-  const settledSp = Math.round(sp * settlementRate)
+  const settledSp = sp * settlementRate
 
   // ── Action state ──
   const [actionLoading, setActionLoading] = useState(false)
@@ -548,8 +548,8 @@ function SpReviewCard({ item, token, onComplete }: {
                     </p>
                     <div className="mt-1 flex items-baseline gap-1.5 rounded-md bg-orange-100/70 px-2 py-1 text-xs">
                       <span className="text-orange-700/70">最終收取</span>
-                      <span className="font-semibold text-orange-800">{settledSp} SP</span>
-                      <span className="text-orange-600/60">（原估 {sp} SP × {settlementPct}%）</span>
+                      <span className="font-semibold text-orange-800">{formatSp(settledSp)} SP</span>
+                      <span className="text-orange-600/60">（原估 {formatSp(sp)} SP × {settlementPct}%）</span>
                     </div>
                   </>
                 ) : (
@@ -655,8 +655,8 @@ function SpReviewCard({ item, token, onComplete }: {
                       </p>
                       <div className="flex items-baseline gap-2 rounded-md bg-orange-100/70 px-3 py-2 text-sm">
                         <span className="text-orange-700/70">最終收取</span>
-                        <span className="text-base font-semibold text-orange-800">{settledSp} SP</span>
-                        <span className="text-xs text-orange-600/60">原估 {sp} SP × {settlementPct}%</span>
+                        <span className="text-base font-semibold text-orange-800">{formatSp(settledSp)} SP</span>
+                        <span className="text-xs text-orange-600/60">原估 {formatSp(sp)} SP × {settlementPct}%</span>
                       </div>
                     </>
                   ) : (

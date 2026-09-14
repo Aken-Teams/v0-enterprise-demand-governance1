@@ -1,3 +1,4 @@
+import { formatSp } from "@/lib/constants/demand"
 /**
  * HTML email templates for the demand governance system.
  */
@@ -29,7 +30,7 @@ export function signoffNotificationTemplate(params: {
   const phaseBadge = `<span style="display:inline-block;background:${isTerm ? "#ffedd5" : "#dbeafe"};color:${isTerm ? "#c2410c" : "#1d4ed8"};padding:2px 8px;border-radius:4px;font-size:13px;font-weight:600;">${phaseLabel}</span>`
 
   const settlementText = settledSp != null
-    ? `結算 <strong>${settledSp} SP</strong>（原 ${effectiveSp} × ${settlementPct}%）`
+    ? `結算 <strong>${formatSp(settledSp)} SP</strong>（原 ${effectiveSp != null ? formatSp(effectiveSp) : "-"} × ${settlementPct}%）`
     : `消耗 <strong>${settlementPct}%</strong> SP`
 
   const bodyPara = isTerm

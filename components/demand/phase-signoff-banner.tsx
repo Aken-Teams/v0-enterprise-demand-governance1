@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ClipboardCheck, Check, X, Loader2, Paperclip, FileIcon, Trash2, FileEdit, Download, ShieldCheck, Smartphone } from "lucide-react"
-import { STATUS_MAP, SIGNOFF_STATUS_MAP, SP_PROGRESS_RATE } from "@/lib/constants/demand"
+import { STATUS_MAP, SIGNOFF_STATUS_MAP, SP_PROGRESS_RATE, formatSp } from "@/lib/constants/demand"
 import { cn } from "@/lib/utils"
 
 interface PhaseSignoffBannerProps {
@@ -191,14 +191,14 @@ export function PhaseSignoffBanner({
 
           {isBoardOverride && signoff.overrideTargetStatus && (() => {
             const pct = Math.round((SP_PROGRESS_RATE[signoff.overrideTargetStatus] ?? 0) * 100)
-            const settled = effectiveSp != null ? Math.round(effectiveSp * (SP_PROGRESS_RATE[signoff.overrideTargetStatus] ?? 0)) : null
+            const settled = effectiveSp != null ? effectiveSp * (SP_PROGRESS_RATE[signoff.overrideTargetStatus] ?? 0) : null
             return (
               <div className="rounded-md bg-orange-100/70 border border-orange-300 p-2.5 sm:p-3 flex items-start gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-orange-600 mt-0.5 shrink-0" />
                 <p className="text-[13px] sm:text-sm text-orange-900/80 leading-relaxed">
                   確認後<span className="font-medium">直接結案</span>，
                   {settled != null
-                    ? <>結算 <span className="font-semibold">{settled} SP</span>（原 {effectiveSp} × {pct}%）。</>
+                    ? <>結算 <span className="font-semibold">{formatSp(settled)} SP</span>（原 {effectiveSp != null ? formatSp(effectiveSp) : "-"} × {pct}%）。</>
                     : <>依目前進度消耗 <span className="font-semibold">{pct}%</span> SP。</>}
                 </p>
               </div>
