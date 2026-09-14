@@ -4,7 +4,7 @@ import { verifyRole, AuthError } from "@/lib/auth"
 import { DemandStatus } from "@/lib/generated/prisma/client"
 import { notifyUsers } from "@/lib/notify"
 import { logAudit } from "@/lib/audit"
-import { DESIGN_CHANGE_ALLOWED_PHASES, PIPELINE_STEPS, STATUS_MAP } from "@/lib/constants/demand"
+import { DESIGN_CHANGE_ALLOWED_PHASES, SP_PROGRESS_RATE, STATUS_MAP, spRateOf } from "@/lib/constants/demand"
 
 // 純代簽（代替需求方完成該階段簽核、不結算）可用於這些階段。
 const PHASE_OVERRIDE_ALLOWED: string[] = ["PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE"]
@@ -54,6 +54,7 @@ export async function POST(
         id: true,
         status: true,
         heldFromStatus: true,
+        devLinkConfirmedAt: true,
         organizationId: true,
         demandNumber: true,
         title: true,
@@ -104,10 +105,14 @@ export async function POST(
           { status: 400 }
         )
       }
-      const curIdx = PIPELINE_STEPS.indexOf(effectivePhase as typeof PIPELINE_STEPS[number])
-      const tgtIdx = PIPELINE_STEPS.indexOf(targetStatus as typeof PIPELINE_STEPS[number])
-      if (curIdx < 0 || tgtIdx < 0 || tgtIdx < curIdx) {
-        return NextResponse.json({ error: "結算狀態不可低於目前階段" }, { status: 400 })
+      // 落點比例不可低於目前已認列的比例（開發中若已完成首次 APP 交付確認即為 75%）
+      const currentRate = spRateOf(effectivePhase, !!demand.devLinkConfirmedAt)
+      const targetRate = SP_PROGRESS_RATE[targetStatus] ?? 0
+      if (targetRate < currentRate) {
+        return NextResponse.json(
+          { error: `結算落點不可低於目前已認列的比例（${Math.round(currentRate * 100)}%）` },
+          { status: 400 }
+        )
       }
     }
 

@@ -20,7 +20,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn, copyText } from "@/lib/utils"
 import { preprocessMarkdown } from "@/lib/markdown"
-import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, SETTLEMENT_TIERS, demandStatusKey } from "@/lib/constants/demand"
+import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, SETTLEMENT_TIERS, spRateOf, demandStatusKey } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -72,6 +72,8 @@ interface DemandDetail {
   rejectReason: string | null
   holdReason: string | null
   heldFromStatus: string | null
+  /** 開發中「APP 交付連結」經需求方確認的時間（已確認即認列 75%） */
+  devLinkConfirmedAt: string | null
   adminNotes: string | null
   contactPersonId: string | null
   contactPerson: { id: string; name: string } | null
@@ -2615,10 +2617,12 @@ export default function DemandDetailPage() {
           />
           {/* 終止結算（依比例計費）僅限開案後；開案前不續行請用「取消」，SP 全額釋放 */}
           {boardOverrideKind === "PHASE" && canTerminate && demand && (() => {
-            // 以「有效階段」（暫緩前階段）為基準；無待簽核（如開發中）時允許結算在當前階段（等於依當下進度結算）
-            const baseIdx = PIPELINE_STEPS.indexOf(effectivePhase as typeof PIPELINE_STEPS[number])
+            // 可選落點以「目前已認列比例」為下限——含當前階段（例如驗收中可結算 75%）。
+            // 用比例而非階段索引，開發中若已完成首次 APP 交付確認（已認列 75%），
+            // 就不會再出現 50% 這個比現況還低的落點。
+            const currentRate = spRateOf(effectivePhase, !!demand.devLinkConfirmedAt)
             const settlementStatuses = (["DEVELOPING", "ACCEPTANCE", "CLOSED"] as const)
-              .filter((s) => boardOverrideMustSettle ? PIPELINE_STEPS.indexOf(s) >= baseIdx : PIPELINE_STEPS.indexOf(s) > baseIdx)
+              .filter((s) => (SP_PROGRESS_RATE[s] ?? 0) >= currentRate)
             if (settlementStatuses.length === 0) return null
             const sp = demand.confirmedSp ?? demand.estimatedSp
             const previewRate = boardOverrideTargetStatus ? (SP_PROGRESS_RATE[boardOverrideTargetStatus] ?? 0) : null
