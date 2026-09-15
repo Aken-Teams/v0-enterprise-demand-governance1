@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { useAuth } from "@/hooks/use-auth"
-import { STATUS_MAP } from "@/lib/constants/demand"
+import { STATUS_MAP, formatSp } from "@/lib/constants/demand"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, Legend,
   LineChart, Line,
@@ -96,14 +96,29 @@ interface AnalyticsData {
   }
 }
 
+/**
+ * 需求狀態的顏色——藍／天藍／橘／淡紫／黃／綠／紅／灰，不用飽和的紫與青綠。
+ *
+ * 流程中的五個階段：藍 → 天藍 → 橘 → 紫 → 黃，最後以綠色收在「已結案」。
+ * 停住的狀態收斂成灰色家族：暫緩（深灰）、已取消（暖灰），只有「已駁回」用紅色示警。
+ *
+ * 於此色系內以 OKLab ΔE 搜尋最佳解，任兩色最小 ΔE 14.7。
+ * 已取消用暖灰（而非藍灰），才不會和開發中的紫、暫緩的深灰糊在一起。
+ */
 const STATUS_COLORS: Record<string, string> = {
-  SUBMITTED: "#3b82f6",
-  PRD_REVIEW: "#f59e0b",
+  // 流程中
+  SUBMITTED: "#2563eb",
+  PRD_REVIEW: "#0ea5e9",
   SP_REVIEW: "#f97316",
-  DEVELOPING: "#8b5cf6",
-  ACCEPTANCE: "#ec4899",
-  CLOSED: "#22c55e",
-  REJECTED: "#ef4444",
+  DEVELOPING: "#a78bfa",
+  ACCEPTANCE: "#eab308",
+  // 已結束／中止
+  CLOSED: "#10b981",
+  ON_HOLD: "#64748b",
+  REJECTED: "#dc2626",
+  CANCELLED: "#a8a29e",
+  // 終止並結案在此圖併入已結案（狀態同為 CLOSED），僅為其他用途保留
+  TERMINATED: "#57534e",
 }
 
 const ORG_COLORS = ["#0ea5e9", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"]
@@ -119,7 +134,8 @@ const fmtAmountShort = (n: number) => {
   return `${sign}${abs.toLocaleString("zh-TW")}`
 }
 
-const fmtSp = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+/** SP 一律沿用共用格式（最多兩位小數、去尾零）——原本只取一位會把 11.25 寫成 11.3 */
+const fmtSp = formatSp
 
 /** KPI 格子下方的開發商說明，例如「強合 JV 1250 SP · 83%｜智合 Zhaoi 250 SP · 17%」 */
 function VendorNote({
@@ -239,7 +255,8 @@ export default function GovernanceAnalyticsPage() {
 
   const trendChartConfig = {
     submitted: { label: "新增需求", color: "#3b82f6" },
-    completed: { label: "完成結案", color: "#22c55e" },
+    // 終止並結案的需求同樣有 completedDate、狀態也是 CLOSED，本來就計入此線
+    completed: { label: "完成結案（含終止）", color: "#10b981" },
   }
 
   const statusChartConfig = Object.fromEntries(
@@ -300,7 +317,7 @@ export default function GovernanceAnalyticsPage() {
             d.sp.byVendor && d.sp.byVendor.length > 1
               ? <div className="flex flex-col sm:flex-row sm:gap-1">
                   {d.sp.byVendor.map((v, i) => (
-                    <span key={v.vendor}>{v.vendor}: {v.usedSp}/{v.totalQuota}{i < d.sp.byVendor!.length - 1 && <span className="hidden sm:inline"> · </span>}</span>
+                    <span key={v.vendor}>{v.vendor}: {fmtSp(v.usedSp)}/{fmtSp(v.totalQuota)}{i < d.sp.byVendor!.length - 1 && <span className="hidden sm:inline"> · </span>}</span>
                   ))}
                 </div>
               : `可用 ${d.sp.totalAvailable}`
@@ -334,6 +351,8 @@ export default function GovernanceAnalyticsPage() {
                           cx="50%"
                           cy={isMobile ? "40%" : "50%"}
                           outerRadius={isMobile ? 60 : 90}
+                          stroke="var(--card)"
+                          strokeWidth={2}
                           label={isMobile ? false : ({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
                         >
                           {statusChartData.map((entry, i) => (
@@ -368,6 +387,8 @@ export default function GovernanceAnalyticsPage() {
                           cx="50%"
                           cy={isMobile ? "40%" : "50%"}
                           outerRadius={isMobile ? 60 : 90}
+                          stroke="var(--card)"
+                          strokeWidth={2}
                           label={isMobile ? false : ({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
                         >
                           {orgChartData.map((entry, i) => (
@@ -402,6 +423,8 @@ export default function GovernanceAnalyticsPage() {
                           cx="50%"
                           cy={isMobile ? "40%" : "50%"}
                           outerRadius={isMobile ? 60 : 90}
+                          stroke="var(--card)"
+                          strokeWidth={2}
                           label={isMobile ? false : ({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
                         >
                           {devChartData.map((entry, i) => (
@@ -422,7 +445,7 @@ export default function GovernanceAnalyticsPage() {
             <Card className="mt-3 sm:mt-4">
               <CardHeader className="p-3 sm:p-6 pb-0 sm:pb-0">
                 <CardTitle className="text-sm sm:text-base">月度需求趨勢</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">近 8 個月新增與完成需求數</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">近 8 個月新增與完成需求數（完成含終止並結案）</CardDescription>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-2 sm:pt-4">
                 {d.monthlyTrends.some((m) => m.submitted > 0 || m.completed > 0) ? (
@@ -487,7 +510,7 @@ export default function GovernanceAnalyticsPage() {
                               {dev.usedSp > 0 && <div className="bg-violet-500" style={{ width: `${usedPct}%` }} />}
                             </div>
                             <div className="flex gap-3 text-[11px] text-muted-foreground">
-                              <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-violet-500" />已使用 {dev.usedSp} / {dev.totalSp} SP</span>
+                              <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-violet-500" />已使用 {fmtSp(dev.usedSp)} / {fmtSp(dev.totalSp)} SP</span>
                             </div>
                           </>
                         )}
@@ -639,6 +662,8 @@ export default function GovernanceAnalyticsPage() {
                           cx="50%"
                           cy={isMobile ? "40%" : "50%"}
                           outerRadius={isMobile ? 60 : 90}
+                          stroke="var(--card)"
+                          strokeWidth={2}
                           label={isMobile ? false : ({ name, value, cx: cxVal, cy: cyVal, midAngle, outerRadius: or }) => { const rad = (Math.PI / 180) * midAngle; const x = Number(cxVal) + (Number(or) + 20) * Math.cos(-rad); const y = Number(cyVal) + (Number(or) + 20) * Math.sin(-rad); return (<text x={x} y={y} textAnchor={x > Number(cxVal) ? "start" : "end"} dominantBaseline="central" fontSize={14} fill="currentColor">{`${name} ${value}`}</text>); }}
                         >
                           {spPieData.map((entry, i) => (
@@ -698,7 +723,7 @@ export default function GovernanceAnalyticsPage() {
                             <div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
                           </div>
                           <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>已使用 {v.usedSp}</span>
+                            <span>已使用 {fmtSp(v.usedSp)}</span>
                             <span>配額 {v.totalQuota}</span>
                           </div>
                         </div>
@@ -733,7 +758,7 @@ export default function GovernanceAnalyticsPage() {
                             <tr className="border-b last:border-0">
                               <td className="py-1.5 sm:py-2 font-medium">{org.name}</td>
                               <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.totalQuota}</td>
-                              <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.usedSp}</td>
+                              <td className="py-1.5 sm:py-2 text-right tabular-nums">{fmtSp(org.usedSp)}</td>
                               <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.availableSp}</td>
                               <td className="py-1.5 sm:py-2 text-right tabular-nums">{org.demandCount}</td>
                             </tr>
@@ -741,7 +766,7 @@ export default function GovernanceAnalyticsPage() {
                               <tr key={`${org.name}-${v.vendor}`} className="border-b last:border-0 text-muted-foreground">
                                 <td className="py-1 sm:py-1.5 pl-4 text-xs">└ {v.vendor}</td>
                                 <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.totalQuota}</td>
-                                <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.usedSp}</td>
+                                <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{fmtSp(v.usedSp)}</td>
                                 <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.availableSp}</td>
                                 <td className="py-1 sm:py-1.5 text-right tabular-nums text-xs">{v.demandCount}</td>
                               </tr>

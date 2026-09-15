@@ -281,6 +281,47 @@ export function calcUsedSp(
   return effectiveSp * spRateOf(effectiveStatus, devLinkConfirmed)
 }
 
+/**
+ * 「已承諾」SP：已通過開案確認、但尚未認列的那一段。
+ *
+ * 只看 `開發中`／`驗收中`——那是已經確定會發生、只是還沒走到認列節點的部分。
+ * 開案前的階段（需求確認／PRD 文件確認／開案確認送審中）不算，因為那些仍可能
+ * 以「取消」結束、全額釋放；暫緩與已駁回也不算，它們已停在原地、是否續行未定。
+ *
+ * 這個數字不改變「可用餘額 ＝ 年度配額 − 已認列」的定義（流程文件如此規範），
+ * 而是額外告訴需求方「扣掉必然會發生的部分之後，實際還能規劃多少」。
+ */
+export function calcCommittedSp(
+  status: string,
+  effectiveSp: number,
+  devLinkConfirmed?: boolean | null
+): number {
+  if (status !== "DEVELOPING" && status !== "ACCEPTANCE") return 0
+  const used = effectiveSp * spRateOf(status, devLinkConfirmed)
+  return Math.max(0, effectiveSp - used)
+}
+
+/**
+ * 「規劃中」SP：已提出但尚未開案（或已暫緩）而還沒認列、也還不算承諾的部分。
+ *
+ * 這一層的確定性最低——可能調整估點、也可能以「取消」結束、全額釋放；
+ * 但管理上必須看得見，否則需求方只看「可用餘額」會一路提到超出配額。
+ *
+ * 定義刻意與管理端報表的「已提出」對齊（排除已駁回與已取消），使得
+ * 已認列 ＋ 已承諾 ＋ 規劃中 ＝ 管理端看到的已提出總額，兩邊對帳不會打架。
+ */
+export function calcPlannedSp(
+  status: string,
+  effectiveSp: number,
+  heldFromStatus?: string | null,
+  devLinkConfirmed?: boolean | null
+): number {
+  if (status === "REJECTED" || status === "CANCELLED" || status === "CLOSED") return 0
+  const used = calcUsedSp(status, effectiveSp, heldFromStatus, devLinkConfirmed)
+  const committed = calcCommittedSp(status, effectiveSp, devLinkConfirmed)
+  return Math.max(0, effectiveSp - used - committed)
+}
+
 export const DEFAULT_SUBTASK_TEMPLATES = [
   "前端開發",
   "後端開發",

@@ -357,7 +357,9 @@ function InboxContent() {
             { label: "全部需求", sub: canSeeAll ? "累計建立" : "指派給我", value: total, color: "border-l-blue-500", icon: Inbox },
             { label: "確認階段", sub: "需求 / PRD / 開案", value: confirmStage, color: "border-l-amber-500", icon: ClipboardList },
             { label: "開發中", sub: "開發 + 驗收", value: devStage, color: "border-l-violet-500", icon: Code2 },
-            { label: "已結案", sub: "驗收完成", value: getCount("CLOSED"), color: "border-l-emerald-500", icon: CircleCheckBig },
+            // 已終止＝終止開發結案，同樣是「案子已結束並完成結算」，故併入已結案統計；
+            // 已取消則否——那是開案前不續行、SP 全額釋放，需求還可能重新啟動。
+            { label: "已結案", sub: "驗收完成 + 終止並結案", value: getCount("CLOSED") + getCount("TERMINATED"), color: "border-l-emerald-500", icon: CircleCheckBig },
           ].map((item) => (
             <div key={item.label} className={`flex items-center gap-2 sm:gap-4 rounded-lg border-l-4 ${item.color} border bg-card p-2 sm:p-4`}>
               <span className="text-xl sm:text-3xl font-bold">{item.value}</span>

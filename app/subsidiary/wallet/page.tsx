@@ -5,23 +5,23 @@ import { useRouter } from "next/navigation"
 import { AppLayout } from "@/components/app-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Inbox } from "lucide-react"
+import { Loader2, Inbox, Info, AlertTriangle } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { STATUS_MAP, formatSp, demandStatusKey } from "@/lib/constants/demand"
 
 /** Vendor color palette */
 const VENDOR_COLORS = ["#3b82f6", "#f59e0b", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4"]
 
-const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  SUBMITTED: { label: "需求確認", color: "bg-blue-100 text-blue-700" },
-  PRD_REVIEW: { label: "PRD 文件確認", color: "bg-amber-100 text-amber-700" },
-  SP_REVIEW: { label: "開案確認", color: "bg-orange-100 text-orange-700" },
-  DEVELOPING: { label: "開發中", color: "bg-violet-100 text-violet-700" },
-  ACCEPTANCE: { label: "驗收中", color: "bg-purple-100 text-purple-700" },
-  CLOSED: { label: "已結案", color: "bg-emerald-100 text-emerald-700" },
-}
+/**
+ * 直接沿用全站的狀態對照表，避免這裡漏掉暫緩／已取消／已駁回等狀態時，
+ * 畫面上會冒出 ON_HOLD 這種原始鍵值。
+ */
+const STATUS_LABEL = STATUS_MAP
 
 /**
  * 實際認列比例由「已認列 SP ÷ 需求 SP」反推，不看階段硬表。
@@ -36,7 +36,13 @@ interface WalletData {
   totalQuota: number
   usedSp: number
   availableSp: number
-  byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number; demands: { id: string; demandNumber: string; title: string; status: string; sp: number; estimatedSp?: number; spUsed: number; settlementType?: string | null; vendor: string; updatedAt: string }[] }[]
+  /** 已開案、尚未認列的部分（必然會發生） */
+  committedSp?: number
+  /** 已提出但尚未開案（含暫緩）的預估 SP */
+  plannedSp?: number
+  /** 扣掉已認列與已承諾後，真正還能規劃的額度 */
+  plannableSp?: number
+  byVendor?: { vendor: string; totalQuota: number; usedSp: number; committedSp?: number; plannedSp?: number; availableSp: number; plannableSp?: number; demands: { id: string; demandNumber: string; title: string; status: string; sp: number; estimatedSp?: number; spUsed: number; spCommitted?: number; spPlanned?: number; settlementType?: string | null; isTerminated?: boolean; vendor: string; updatedAt: string }[] }[]
   demands: {
     id: string
     demandNumber: string
@@ -45,7 +51,11 @@ interface WalletData {
     sp: number
     estimatedSp?: number
     spUsed: number
+    spCommitted?: number
+    spPlanned?: number
     settlementType?: string | null
+    /** 經終止開發結案者，狀態仍為 CLOSED，但客戶認知是「已終止」 */
+    isTerminated?: boolean
     vendor?: string
     updatedAt: string
   }[]
@@ -56,6 +66,10 @@ export default function WalletPage() {
   const router = useRouter()
   const [data, setData] = useState<WalletData | null>(null)
   const [loading, setLoading] = useState(true)
+  /** 右上角的廠商篩選：all = 全部合計 */
+  const [vendorFilter, setVendorFilter] = useState<string>("all")
+  /** 點四層額度可以只看該層的需求 */
+  const [tierFilter, setTierFilter] = useState<string>("all")
 
   useEffect(() => {
     if (user?.restrictedView) router.replace("/subsidiary/demands")
@@ -82,15 +96,65 @@ export default function WalletPage() {
     )
   }
 
-  const totalQuota = data?.totalQuota ?? 0
   const year = data?.year ?? new Date().getFullYear()
-  const demands = data?.demands ?? []
+  const allDemands = data?.demands ?? []
+  const vendors = data?.byVendor?.map((v) => v.vendor) ?? []
 
-  const usedSp = data?.usedSp ?? 0
-  const availableSp = data?.availableSp ?? (totalQuota - usedSp)
+  /**
+   * 四層額度都可以只看單一開發商。選了廠商就取該廠商的錢包，
+   * 否則取全部合計——兩者的欄位結構一致，下面的呈現不用分岔。
+   */
+  const scope = vendorFilter === "all"
+    ? {
+        totalQuota: data?.totalQuota ?? 0,
+        usedSp: data?.usedSp ?? 0,
+        committedSp: data?.committedSp ?? 0,
+        plannedSp: data?.plannedSp ?? 0,
+        plannableSp: data?.plannableSp ?? 0,
+      }
+    : (() => {
+        const v = data?.byVendor?.find((x) => x.vendor === vendorFilter)
+        return {
+          totalQuota: v?.totalQuota ?? 0,
+          usedSp: v?.usedSp ?? 0,
+          committedSp: v?.committedSp ?? 0,
+          plannedSp: v?.plannedSp ?? 0,
+          plannableSp: v?.plannableSp ?? 0,
+        }
+      })()
 
-  const pctUsed = totalQuota > 0 ? (usedSp / totalQuota) * 100 : 0
-  const pctAvailable = totalQuota > 0 ? (availableSp / totalQuota) * 100 : 0
+  const totalQuota = scope.totalQuota
+  const usedSp = scope.usedSp
+  const committedSp = scope.committedSp
+  const plannedSp = scope.plannedSp
+  const plannableSp = scope.plannableSp
+  const vendorDemands = vendorFilter === "all" ? allDemands : allDemands.filter((d) => d.vendor === vendorFilter)
+  /**
+   * 點某一層額度就只列出撐起那個數字的需求——四層加起來是多少一目了然，
+   * 不必反過來自己對帳。「尚可規劃」沒有對應的需求，故不可點。
+   */
+  const demands = tierFilter === "all"
+    ? vendorDemands
+    : vendorDemands.filter((d) =>
+        tierFilter === "used" ? d.spUsed > 0
+        : tierFilter === "committed" ? (d.spCommitted ?? 0) > 0
+        : (d.spPlanned ?? 0) > 0
+      )
+
+  const pct = (n: number) => (totalQuota > 0 ? (n / totalQuota) * 100 : 0)
+  /** 提出量逼近配額時要主動示警，否則使用者只看「可用」會一路提到爆 */
+  const overCommitted = totalQuota > 0 && plannableSp < totalQuota * 0.1
+
+  const TIERS = [
+    { key: "used", label: "已認列", value: usedSp, color: "bg-blue-500", dot: "bg-blue-500",
+      desc: "已實際扣除的 SP，不會再變動。" },
+    { key: "committed", label: "已承諾", value: committedSp, color: "bg-amber-400", dot: "bg-amber-400",
+      desc: "已通過開案確認、尚未走到認列節點的部分，後續必然扣除。" },
+    { key: "planned", label: "規劃中", value: plannedSp, color: "bg-sky-300", dot: "bg-sky-300",
+      desc: "已提出但尚未開案（含暫緩）的預估 SP，可能調整估點，也可能以「取消」結束並全額釋放。" },
+    { key: "plannable", label: "尚可規劃", value: Math.max(0, plannableSp), color: "bg-slate-200", dot: "bg-slate-300",
+      desc: "配額扣掉上述三層後，還能安心提出新需求的額度。" },
+  ]
 
   return (
     <AppLayout userRole="subsidiary">
@@ -100,68 +164,123 @@ export default function WalletPage() {
           <p className="text-xs sm:text-base text-muted-foreground">管理您的 Story Points 配額與使用記錄</p>
         </div>
 
-        {/* SP summary */}
+        {/* SP summary — 四層額度：已認列／已承諾／規劃中／尚可規劃 */}
         <Card>
           <CardContent className="pt-3 sm:pt-4 space-y-3 px-4 sm:px-6">
-            {/* Numbers row */}
-            <div className="flex items-baseline gap-3 sm:gap-6 flex-wrap">
-              <div>
-                <span className="text-2xl sm:text-3xl font-bold text-primary tabular-nums">{availableSp}</span>
-                <span className="text-xs sm:text-sm text-muted-foreground ml-1 sm:ml-1.5">可用</span>
+            {/* 標題列：配額 + 右上角廠商篩選與說明 */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl sm:text-3xl font-bold tabular-nums">{formatSp(totalQuota)}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground">SP 配額</span>
+                {vendorFilter !== "all" && (
+                  <Badge variant="outline" className="ml-1 text-[10px] font-normal">{vendorFilter}</Badge>
+                )}
               </div>
-              <span className="text-muted-foreground/30">/</span>
-              <div>
-                <span className="text-lg sm:text-xl font-semibold tabular-nums">{totalQuota}</span>
-                <span className="text-xs sm:text-sm text-muted-foreground ml-1 sm:ml-1.5">配額</span>
-              </div>
-              <span className="text-muted-foreground/30">/</span>
-              <div>
-                <span className="text-lg sm:text-xl font-semibold tabular-nums">{usedSp}</span>
-                <span className="text-xs sm:text-sm text-muted-foreground ml-1 sm:ml-1.5">已使用</span>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {vendors.length > 1 && (
+                  <div className="flex items-center rounded-md border p-0.5">
+                    {["all", ...vendors].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setVendorFilter(v)}
+                        className={cn(
+                          "rounded px-2 py-1 text-[11px] transition-colors sm:text-xs",
+                          vendorFilter === v
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        {v === "all" ? "全部" : v}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" title="欄位說明">
+                      <Info className="h-3.5 w-3.5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-[19rem] text-xs">
+                    <p className="mb-2 font-medium text-foreground">四層額度怎麼看</p>
+                    <div className="space-y-2">
+                      {TIERS.map((t) => (
+                        <div key={t.key} className="flex gap-2">
+                          <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-sm", t.dot)} />
+                          <div>
+                            <p className="font-medium text-foreground">{t.label}</p>
+                            <p className="text-muted-foreground leading-relaxed">{t.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 border-t pt-2 text-muted-foreground leading-relaxed">
+                      流程文件定義的「可用餘額」＝ 配額 − 已認列 ＝ {formatSp(totalQuota - usedSp)} SP；
+                      但其中已有部分被開案中與規劃中的需求佔住，故以「尚可規劃」作為提新需求的依據。
+                    </p>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
             {totalQuota > 0 ? (
               <>
-                {/* Stacked bar — per-vendor colors when available */}
-                <div className="h-2.5 sm:h-3 w-full overflow-hidden rounded-full bg-secondary flex">
-                  {data?.byVendor && data.byVendor.length > 1
-                    ? data.byVendor.map((v, i) => {
-                        const w = totalQuota > 0 ? (v.usedSp / totalQuota) * 100 : 0
-                        return w > 0 ? (
-                          <div key={v.vendor} className="h-full transition-all" style={{ width: `${w}%`, backgroundColor: VENDOR_COLORS[i % VENDOR_COLORS.length] }} />
-                        ) : null
-                      })
-                    : pctUsed > 0 && (
-                        <div className="h-full bg-chart-1 transition-all" style={{ width: `${pctUsed}%` }} />
-                      )
-                  }
+                {/* 四段式進度條 */}
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-secondary sm:h-3">
+                  {TIERS.filter((t) => t.key !== "plannable").map((t) => (
+                    t.value > 0 ? (
+                      <div
+                        key={t.key}
+                        className={cn("h-full transition-all", t.color)}
+                        style={{ width: `${pct(t.value)}%` }}
+                        title={`${t.label} ${formatSp(t.value)} SP`}
+                      />
+                    ) : null
+                  ))}
                 </div>
 
-                {/* Legend */}
-                <div className="flex items-center gap-4 sm:gap-5 flex-wrap text-[10px] sm:text-xs text-muted-foreground">
-                  {data?.byVendor && data.byVendor.length > 1
-                    ? <>
-                        {data.byVendor.map((v, i) => (
-                          <span key={v.vendor} className="flex items-center gap-1 sm:gap-1.5">
-                            <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm shrink-0" style={{ backgroundColor: VENDOR_COLORS[i % VENDOR_COLORS.length] }} />
-                            {v.vendor} {v.usedSp}/{v.totalQuota}
-                          </span>
-                        ))}
-                        <span className="flex items-center gap-1 sm:gap-1.5">
-                          <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
+                {/* 數字列：標籤與數字相鄰，四組靠左排在一起才讀得出對應關係 */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 sm:gap-x-6">
+                  {TIERS.map((t) => {
+                    const clickable = t.key !== "plannable"
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        disabled={!clickable}
+                        onClick={() => setTierFilter(tierFilter === t.key ? "all" : t.key)}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors",
+                          clickable && "hover:bg-muted",
+                          tierFilter === t.key && "bg-muted ring-1 ring-border",
+                        )}
+                        title={clickable ? `只看${t.label}的需求` : undefined}
+                      >
+                        <span className={cn("h-2 w-2 shrink-0 rounded-sm", t.dot)} />
+                        <span className="text-[11px] text-muted-foreground sm:text-xs">{t.label}</span>
+                        <span className={cn(
+                          "text-sm font-semibold tabular-nums sm:text-base",
+                          t.key === "plannable" && overCommitted && "text-red-600",
+                        )}>
+                          {formatSp(t.value)}
                         </span>
-                      </>
-                    : <>
-                        <span className="flex items-center gap-1 sm:gap-1.5">
-                          <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-chart-1" />已使用 {pctUsed.toFixed(0)}%
-                        </span>
-                        <span className="flex items-center gap-1 sm:gap-1.5">
-                          <span className="inline-block h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-sm bg-secondary" />剩餘 {pctAvailable.toFixed(0)}%
-                        </span>
-                      </>
-                  }
+                      </button>
+                    )
+                  })}
                 </div>
+
+                {overCommitted && (
+                  <p className="flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900 sm:text-xs">
+                    <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      本年度已認列／承諾／規劃中的 SP 合計已達配額的 {Math.round(((totalQuota - plannableSp) / totalQuota) * 100)}%，
+                      尚可規劃僅剩 <span className="font-semibold">{formatSp(Math.max(0, plannableSp))}</span> SP。
+                      再提出新需求可能無法於今年度開案，建議先與管理者確認額度。
+                    </span>
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-xs sm:text-sm text-muted-foreground">尚未分配年度配額</p>
@@ -172,7 +291,21 @@ export default function WalletPage() {
         {/* Demand SP Breakdown */}
         <Card className="overflow-hidden">
           <CardHeader className="px-4 sm:px-6">
-            <CardTitle className="text-sm sm:text-base">需求 SP 明細</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm sm:text-base">
+                需求 SP 明細
+                <span className="ml-2 text-xs font-normal text-muted-foreground">{demands.length} 筆</span>
+              </CardTitle>
+              {tierFilter !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setTierFilter("all")}
+                  className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted sm:text-xs"
+                >
+                  只看「{TIERS.find((t) => t.key === tierFilter)?.label}」· 清除
+                </button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="px-0 sm:px-6">
             {demands.length === 0 ? (
@@ -185,7 +318,8 @@ export default function WalletPage() {
                 {/* Mobile: card layout */}
                 <div className="sm:hidden divide-y">
                   {demands.map((d) => {
-                    const si = STATUS_LABEL[d.status]
+                    // 終止開發結案的狀態仍是 CLOSED，顯示上要區分成「已終止」
+                    const si = STATUS_LABEL[demandStatusKey(d.status, d.isTerminated)]
                     return (
                       <Link
                         key={d.id}
@@ -234,7 +368,8 @@ export default function WalletPage() {
                     </TableHeader>
                     <TableBody>
                       {demands.map((d) => {
-                        const si = STATUS_LABEL[d.status]
+                        // 終止開發結案的狀態仍是 CLOSED，顯示上要區分成「已終止」
+                    const si = STATUS_LABEL[demandStatusKey(d.status, d.isTerminated)]
                         return (
                           <TableRow key={d.id}>
                             <TableCell className="text-center">

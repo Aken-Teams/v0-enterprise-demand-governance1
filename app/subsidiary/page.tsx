@@ -13,8 +13,7 @@ import {
   PieChart as PieChartIcon,
   Gauge,
   Loader2,
-  Radio,
-} from "lucide-react"
+  Radio, Info } from "lucide-react"
 import { PieChart, Pie, Cell, Label } from "recharts"
 import {
   ChartContainer,
@@ -22,9 +21,12 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
+import { formatSp } from "@/lib/constants/demand"
+import { cn } from "@/lib/utils"
 
 /** Vendor color palette — first vendor gets blue, then rotate */
 const VENDOR_COLORS = ["#3b82f6", "#f59e0b", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4"]
@@ -47,9 +49,15 @@ interface DashboardData {
   sp: {
     totalQuota: number
     usedSp: number
+    /** 已開案、尚未認列（必然會發生） */
+    committedSp?: number
+    /** 已提出但尚未開案（含暫緩） */
+    plannedSp?: number
+    /** 扣掉已認列與已承諾後真正可規劃的額度 */
+    plannableSp?: number
     availableSp: number
     availablePercent: number
-    byVendor?: { vendor: string; totalQuota: number; usedSp: number; availableSp: number }[]
+    byVendor?: { vendor: string; totalQuota: number; usedSp: number; committedSp?: number; plannedSp?: number; availableSp: number; plannableSp?: number }[]
   }
   performance: {
     deliveryRate: number
@@ -77,6 +85,7 @@ export default function SubsidiaryDashboard() {
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [spVendor, setSpVendor] = useState<string>("all")
 
   useEffect(() => {
     if (user?.restrictedView) router.replace("/subsidiary/demands")
@@ -105,25 +114,51 @@ export default function SubsidiaryDashboard() {
 
   const kpi = data?.kpi ?? { totalDemands: 0, inProgress: 0, completed: 0, completionRate: 0 }
   const sp = data?.sp ?? { totalQuota: 0, usedSp: 0, availableSp: 0, availablePercent: 0 }
+  const committedSp = sp.committedSp ?? 0
+  const plannedSp = sp.plannedSp ?? 0
+  const plannableSp = sp.plannableSp ?? (sp.availableSp - committedSp - plannedSp)
   const perf = data?.performance ?? { deliveryRate: 0, deliveryOnTime: 0, deliveryTotal: 0, passRate: 0, passClosed: 0, passTotal: 0, avgProcessingDays: 0 }
   const monthlyTrends = data?.monthlyTrends ?? []
+  /** SP 甜甜圈的開發商篩選：all = 全部合計 */
+  const spVendorList = data?.sp?.byVendor?.map((v) => v.vendor) ?? []
   const recentChanges = data?.recentChanges ?? []
 
-  // Recharts data for SP donut — per-vendor colored segments + available
-  const spDonutData = sp.byVendor && sp.byVendor.length > 1
-    ? [
-        ...sp.byVendor.map((v, i) => ({
-          key: `vendor-${v.vendor}`,
-          label: v.vendor,
-          value: v.usedSp,
-          fill: VENDOR_COLORS[i % VENDOR_COLORS.length],
-        })),
-        { key: "available", label: "可用", value: sp.availableSp, fill: "#e5e7eb" },
-      ]
-    : [
-        { key: "used", label: "已使用", value: sp.usedSp, fill: "#3b82f6" },
-        { key: "available", label: "可用", value: sp.availableSp, fill: "#e5e7eb" },
-      ]
+  /**
+   * SP 甜甜圈：改以「四層額度」呈現（已認列／已承諾／規劃中／尚可規劃），
+   * 不再用開發商切片——開發商改成右上角的篩選，選了就只看那一家的四層。
+   */
+  const spScope = spVendor === "all"
+    ? { totalQuota: sp.totalQuota, usedSp: sp.usedSp, committedSp, plannedSp, plannableSp }
+    : (() => {
+        const v = sp.byVendor?.find((x) => x.vendor === spVendor)
+        return {
+          totalQuota: v?.totalQuota ?? 0,
+          usedSp: v?.usedSp ?? 0,
+          committedSp: v?.committedSp ?? 0,
+          plannedSp: v?.plannedSp ?? 0,
+          plannableSp: v?.plannableSp ?? 0,
+        }
+      })()
+
+  const SP_TIERS = [
+    { key: "used", label: "已認列", value: spScope.usedSp, fill: "#3b82f6",
+      desc: "已實際扣除的 SP，不會再變動。" },
+    { key: "committed", label: "已承諾", value: spScope.committedSp, fill: "#fbbf24",
+      desc: "已通過開案確認、尚未走到認列節點，後續必然扣除。" },
+    { key: "planned", label: "規劃中", value: spScope.plannedSp, fill: "#7dd3fc",
+      desc: "已提出但尚未開案（含暫緩），可能調整估點或取消釋放。" },
+    { key: "plannable", label: "尚可規劃", value: Math.max(0, spScope.plannableSp), fill: "#e5e7eb",
+      desc: "扣掉上述三層後，還能安心提出新需求的額度。" },
+  ]
+  const spDonutData = SP_TIERS.filter((t) => t.value > 0)
+
+  /** 取某一層在單一開發商下的數值，供 tooltip 的分廠明細使用 */
+  type VendorSp = NonNullable<DashboardData["sp"]["byVendor"]>[number]
+  const tierValueOf = (key: string, v: VendorSp) =>
+    key === "used" ? v.usedSp
+    : key === "committed" ? (v.committedSp ?? 0)
+    : key === "planned" ? (v.plannedSp ?? 0)
+    : Math.max(0, v.plannableSp ?? 0)
 
   const maxMonthlyVal = Math.max(...monthlyTrends.map((m) => Math.max(m.submitted, m.completed)), 1)
 
@@ -169,11 +204,20 @@ export default function SubsidiaryDashboard() {
                   <span className="text-muted-foreground">進行中</span>
                   <span className="font-medium">{kpi.inProgress}</span>
                 </div>
-                <div className="flex items-center gap-1 sm:gap-1.5">
-                  <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-cyan-500 shrink-0" />
-                  <span className="text-muted-foreground">已完成</span>
-                  <span className="font-medium">{kpi.completed}</span>
-                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1 cursor-default sm:gap-1.5">
+                        <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-cyan-500 shrink-0" />
+                        <span className="text-muted-foreground">已完成</span>
+                        <span className="font-medium">{kpi.completed}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs text-background">含「終止並結案」的需求——終止同樣是案子已結束並完成結算</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </CardContent>
           </Card>
@@ -187,17 +231,17 @@ export default function SubsidiaryDashboard() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-baseline gap-1 cursor-default">
-                        <span className="text-xl sm:text-2xl font-bold">{sp.totalQuota}</span>
+                        <span className="text-xl sm:text-2xl font-bold">{formatSp(sp.totalQuota)}</span>
                         <span className="text-xs sm:text-sm text-muted-foreground">SP 配額</span>
                       </div>
                     </TooltipTrigger>
                     {sp.byVendor && sp.byVendor.length > 1 && (
                       <TooltipContent>
-                        <div className="space-y-1 text-xs">
+                        <div className="space-y-1 text-xs text-background">
                           {sp.byVendor.map((v) => (
                             <div key={v.vendor} className="flex justify-between gap-4">
-                              <span>{v.vendor}</span>
-                              <span className="font-medium">{v.totalQuota}</span>
+                              <span className="text-background/80">{v.vendor}</span>
+                              <span className="font-medium tabular-nums">{formatSp(v.totalQuota)}</span>
                             </div>
                           ))}
                         </div>
@@ -205,49 +249,36 @@ export default function SubsidiaryDashboard() {
                     )}
                   </Tooltip>
                   <div className="h-6 sm:h-8 w-px bg-border" />
-                  <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 sm:gap-1.5 cursor-default">
-                          <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-blue-500 shrink-0" />
-                          <span className="text-muted-foreground">已使用</span>
-                          <span className="font-medium">{sp.usedSp}</span>
-                        </div>
-                      </TooltipTrigger>
-                      {sp.byVendor && sp.byVendor.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:gap-x-4 sm:text-sm">
+                    {/* 四層額度；每一項的 tooltip 給該層自己的定義與分廠數字 */}
+                    {SP_TIERS.map((t) => (
+                      <Tooltip key={t.key}>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-1 cursor-default sm:gap-1.5">
+                            <div className="h-1.5 w-1.5 shrink-0 rounded-full sm:h-2 sm:w-2" style={{ backgroundColor: t.fill }} />
+                            <span className="text-muted-foreground">{t.label}</span>
+                            <span className="font-medium tabular-nums">{formatSp(t.value)}</span>
+                          </div>
+                        </TooltipTrigger>
                         <TooltipContent>
-                          <div className="space-y-1 text-xs">
-                            {sp.byVendor.map((v) => (
-                              <div key={v.vendor} className="flex justify-between gap-4">
-                                <span>{v.vendor}</span>
-                                <span className="font-medium">{v.usedSp}</span>
+                          {/* tooltip 底色是 bg-foreground（深色），內文一律用白字，
+                              不能用 text-muted-foreground——在深底上會糊成看不清的灰 */}
+                          <div className="max-w-[15rem] space-y-1.5 text-xs text-background">
+                            <p className="leading-relaxed">{t.desc}</p>
+                            {spVendor === "all" && (sp.byVendor?.length ?? 0) > 1 && (
+                              <div className="space-y-0.5 border-t border-background/25 pt-1.5">
+                                {sp.byVendor!.map((v) => (
+                                  <div key={v.vendor} className="flex justify-between gap-4">
+                                    <span className="text-background/80">{v.vendor}</span>
+                                    <span className="font-medium tabular-nums text-background">{formatSp(tierValueOf(t.key, v))}</span>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
                           </div>
                         </TooltipContent>
-                      )}
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 sm:gap-1.5 cursor-default">
-                          <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0" />
-                          <span className="text-muted-foreground">可用</span>
-                          <span className="font-medium">{sp.availableSp}</span>
-                        </div>
-                      </TooltipTrigger>
-                      {sp.byVendor && sp.byVendor.length > 1 && (
-                        <TooltipContent>
-                          <div className="space-y-1 text-xs">
-                            {sp.byVendor.map((v) => (
-                              <div key={v.vendor} className="flex justify-between gap-4">
-                                <span>{v.vendor}</span>
-                                <span className="font-medium">{v.availableSp}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
+                      </Tooltip>
+                    ))}
                   </div>
                 </div>
               </TooltipProvider>
@@ -260,10 +291,52 @@ export default function SubsidiaryDashboard() {
           {/* Left - SP 使用分析 */}
           <Card className="lg:col-span-1">
             <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-                <PieChartIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                SP 使用分析
-              </CardTitle>
+              <div className="flex items-start justify-between gap-2">
+                <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                  <PieChartIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  SP 使用分析
+                </CardTitle>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {spVendorList.length > 1 && (
+                    <div className="flex items-center rounded-md border p-0.5">
+                      {["all", ...spVendorList].map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setSpVendor(v)}
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[10px] transition-colors sm:text-[11px]",
+                            spVendor === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                          )}
+                        >
+                          {v === "all" ? "全部" : v}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-6 w-6 shrink-0" title="欄位說明">
+                        <Info className="h-3 w-3" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-[18rem] text-xs">
+                      <p className="mb-2 font-medium text-foreground">四層額度怎麼看</p>
+                      <div className="space-y-2">
+                        {SP_TIERS.map((t) => (
+                          <div key={t.key} className="flex gap-2">
+                            <span className="mt-1 h-2 w-2 shrink-0 rounded-sm" style={{ backgroundColor: t.fill }} />
+                            <div>
+                              <p className="font-medium text-foreground">{t.label}</p>
+                              <p className="text-muted-foreground leading-relaxed">{t.desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-3 sm:space-y-4 px-4 sm:px-6">
               <ChartContainer config={spChartConfig} className="aspect-square w-[140px] sm:w-[200px]">
@@ -272,7 +345,7 @@ export default function SubsidiaryDashboard() {
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
                       const d = payload[0].payload
-                      const pct = sp.totalQuota > 0 ? Math.round((d.value / sp.totalQuota) * 100) : 0
+                      const pct = spScope.totalQuota > 0 ? Math.round((d.value / spScope.totalQuota) * 100) : 0
                       return (
                         <div className="rounded-md bg-popover border px-2.5 py-1 sm:px-3 sm:py-1.5 shadow-md text-xs sm:text-sm">
                           <span className="font-medium">{d.label}</span>
@@ -302,7 +375,7 @@ export default function SubsidiaryDashboard() {
                           return (
                             <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
                               <tspan x={viewBox.cx} y={(viewBox.cy || 0) - 6} className="fill-foreground text-xl sm:text-2xl font-bold">
-                                {sp.totalQuota}
+                                {formatSp(spScope.totalQuota)}
                               </tspan>
                               <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 10} className="fill-muted-foreground text-[10px] sm:text-xs">
                                 總配額
@@ -315,36 +388,14 @@ export default function SubsidiaryDashboard() {
                   </Pie>
                 </PieChart>
               </ChartContainer>
-              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-5 w-full">
-                {sp.byVendor && sp.byVendor.length > 1 ? (
-                  <>
-                    {sp.byVendor.map((v, i) => (
-                      <div key={v.vendor} className="flex items-center gap-1.5 text-center">
-                        <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: VENDOR_COLORS[i % VENDOR_COLORS.length] }} />
-                        <div className="text-xs sm:text-sm font-medium">{v.usedSp}</div>
-                        <div className="text-[10px] sm:text-xs text-muted-foreground">{v.vendor}</div>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-1.5 text-center">
-                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-gray-300 shrink-0" />
-                      <div className="text-xs sm:text-sm font-medium">{sp.availableSp}</div>
-                      <div className="text-[10px] sm:text-xs text-muted-foreground">可用</div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-1.5 text-center">
-                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-blue-500 shrink-0" />
-                      <div className="text-xs sm:text-sm font-medium">{sp.usedSp}</div>
-                      <div className="text-[10px] sm:text-xs text-muted-foreground">已使用</div>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-center">
-                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-gray-300 shrink-0" />
-                      <div className="text-xs sm:text-sm font-medium">{sp.availableSp}</div>
-                      <div className="text-[10px] sm:text-xs text-muted-foreground">可用</div>
-                    </div>
-                  </>
-                )}
+              <div className="grid w-full grid-cols-2 gap-x-3 gap-y-1.5">
+                {SP_TIERS.map((t) => (
+                  <div key={t.key} className="flex items-center gap-1.5 min-w-0">
+                    <span className="h-2 w-2 shrink-0 rounded-full sm:h-2.5 sm:w-2.5" style={{ backgroundColor: t.fill }} />
+                    <span className="text-[10px] text-muted-foreground sm:text-xs">{t.label}</span>
+                    <span className="ml-auto text-xs font-medium tabular-nums sm:text-sm">{formatSp(t.value)}</span>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -433,7 +484,7 @@ export default function SubsidiaryDashboard() {
                     </div>
                     <div className="flex items-center gap-1 sm:gap-1.5">
                       <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500" />
-                      <span>完成</span>
+                      <span>完成（含終止）</span>
                     </div>
                   </div>
                   {/* Rows */}

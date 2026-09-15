@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth, AuthError } from "@/lib/auth"
-import { calcUsedSp } from "@/lib/constants/demand"
+import { calcUsedSp, calcCommittedSp, calcPlannedSp } from "@/lib/constants/demand"
 
 export async function GET(request: NextRequest) {
   try {
@@ -78,16 +78,32 @@ export async function GET(request: NextRequest) {
       const w = orgWallets.find(ww => ww.vendor === vendor)
       const vQuota = w?.totalQuota ?? 0
       let vUsed = 0
+      let vCommitted = 0
+      let vPlanned = 0
       for (const d of demands) {
         if (d.vendor !== vendor) continue
         const sp = d.confirmedSp ?? d.estimatedSp
         vUsed += calcUsedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
+        // 已開案、尚未認列的部分：必然會發生，只是還沒走到認列節點
+        vCommitted += calcCommittedSp(d.status, sp, !!d.devLinkConfirmedAt)
+        vPlanned += calcPlannedSp(d.status, sp, d.heldFromStatus, !!d.devLinkConfirmedAt)
       }
-      return { vendor, totalQuota: vQuota, usedSp: vUsed, availableSp: vQuota - vUsed }
+      return {
+        vendor,
+        totalQuota: vQuota,
+        usedSp: vUsed,
+        committedSp: vCommitted,
+        plannedSp: vPlanned,
+        availableSp: vQuota - vUsed,
+        plannableSp: vQuota - vUsed - vCommitted - vPlanned,
+      }
     })
     const totalQuota = spByVendor.reduce((s, v) => s + v.totalQuota, 0)
     const usedSp = spByVendor.reduce((s, v) => s + v.usedSp, 0)
+    const committedSp = spByVendor.reduce((s, v) => s + v.committedSp, 0)
+    const plannedSp = spByVendor.reduce((s, v) => s + v.plannedSp, 0)
     const availableSp = totalQuota - usedSp
+    const plannableSp = availableSp - committedSp - plannedSp
 
     // Completion rate (completed / total excluding rejected & cancelled)
     const nonRejected = demands.filter((d) => d.status !== "REJECTED" && d.status !== "CANCELLED").length
@@ -224,7 +240,10 @@ export async function GET(request: NextRequest) {
       sp: {
         totalQuota,
         usedSp,
+        committedSp,
+        plannedSp,
         availableSp,
+        plannableSp,
         availablePercent: totalQuota > 0 ? Math.round((availableSp / totalQuota) * 1000) / 10 : 0,
         byVendor: spByVendor,
       },
