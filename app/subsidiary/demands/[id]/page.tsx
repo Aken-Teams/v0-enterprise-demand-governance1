@@ -62,8 +62,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypeRaw from "rehype-raw"
-import mermaid from "mermaid"
-import "@/lib/mermaid-config"
+import { MermaidBlock } from "@/components/mermaid-block"
 
 
 /** Pre-process raw Gherkin / BDD text into well-structured Markdown.
@@ -197,63 +196,6 @@ function formatGherkinInMarkdown(input: string): string {
   return result.join('\n')
 }
 
-function MermaidBlock({ code }: { code: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading")
-  useEffect(() => {
-    if (!ref.current) return
-    setStatus("loading")
-    const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
-
-    mermaid.render(id, code).then(({ svg }) => {
-      if (ref.current) {
-        ref.current.innerHTML = svg
-        ref.current.querySelectorAll("svg").forEach((s) => {
-          s.style.background = "transparent"
-          s.style.maxWidth = "100%"
-        })
-      }
-      setStatus("ok")
-    }).catch(() => {
-      if (!ref.current) return
-      const pre = document.createElement("pre")
-      pre.className = "mermaid"
-      pre.textContent = code
-      ref.current.innerHTML = ""
-      ref.current.appendChild(pre)
-      mermaid.run({ nodes: [pre], suppressErrors: true }).then(() => {
-        if (ref.current) {
-          ref.current.querySelectorAll("svg").forEach((s) => {
-            s.style.background = "transparent"
-            s.style.maxWidth = "100%"
-          })
-          if (ref.current.querySelector("svg")) {
-            setStatus("ok")
-          } else {
-            setStatus("error")
-          }
-        }
-      }).catch(() => {
-        setStatus("error")
-      })
-    })
-
-    return () => {
-      if (ref.current) ref.current.innerHTML = ""
-    }
-  }, [code])
-
-  if (status === "error") {
-    return (
-      <div className="w-full rounded-lg border border-amber-200 bg-amber-50/50 p-4 not-prose">
-        <p className="text-xs font-medium text-amber-700 mb-2">此圖表格式無法解析</p>
-        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-white/60 rounded p-3">{code}</pre>
-      </div>
-    )
-  }
-
-  return <div ref={ref} data-mermaid-container className="flex justify-center not-prose [&_svg]:!bg-transparent" />
-}
 
 // ── Pie chart colors (one per pipeline phase) ──
 const PIE_COLORS: Record<string, string> = {
@@ -999,6 +941,19 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                           rehypePlugins={[rehypeRaw]}
                           remarkRehypeOptions={{ allowDangerousHtml: true }}
                           components={{
+                            // 內嵌預覽的圖片可點擊放大（與 Mermaid 一致的操作）
+                            img({ src, alt }) {
+                              const url = typeof src === "string" ? src : ""
+                              return (
+                                <img
+                                  src={url}
+                                  alt={alt ?? ""}
+                                  className="mx-auto max-h-[55vh] w-auto cursor-zoom-in rounded-lg border"
+                                  onClick={() => url && setZoomedImg(url)}
+                                  title="點擊放大"
+                                />
+                              )
+                            },
                             pre({ children }) {
                               // Only unwrap <pre> for mermaid blocks
                               if (React.isValidElement(children)) {
@@ -1722,6 +1677,19 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                       remarkPlugins={[remarkGfm, remarkBreaks]}
                                       rehypePlugins={[rehypeRaw]}
                                       components={{
+                                        // 內嵌預覽的圖片可點擊放大（與 Mermaid 一致的操作）
+                                        img({ src, alt }) {
+                                          const url = typeof src === "string" ? src : ""
+                                          return (
+                                            <img
+                                              src={url}
+                                              alt={alt ?? ""}
+                                              className="mx-auto max-h-[55vh] w-auto cursor-zoom-in rounded-lg border"
+                                              onClick={() => url && setZoomedImg(url)}
+                                              title="點擊放大"
+                                            />
+                                          )
+                                        },
                                         pre({ children }) {
                                           // Only unwrap <pre> for mermaid blocks
                                           if (React.isValidElement(children)) {
