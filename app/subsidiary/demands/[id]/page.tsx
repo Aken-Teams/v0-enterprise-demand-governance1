@@ -63,6 +63,7 @@ import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypeRaw from "rehype-raw"
 import { MermaidBlock } from "@/components/mermaid-block"
+import { MarkdownDocView } from "@/components/demand/markdown-doc-view"
 
 
 /** Pre-process raw Gherkin / BDD text into well-structured Markdown.
@@ -338,6 +339,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
+  /** 預覽標題列上的掛載點，供差異標註按鈕 portal 進去 */
+  const [diffToolbar, setDiffToolbar] = useState<HTMLElement | null>(null)
   const [activeTab, setActiveTab] = useState("overview")
   const [fullScreenDoc, setFullScreenDoc] = useState<DemandDetail["documents"][0] | null>(null)
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
@@ -1554,6 +1557,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                   {docLinkCopied ? "已複製" : "複製文件分享連結"}
                                 </TooltipContent>
                               </UiTooltip>
+                              {/* 「標註本版變更」由 MarkdownDocView portal 進來，放在放大鈕左側 */}
+                              <span ref={setDiffToolbar} className="flex items-center" />
                               <UiTooltip>
                                 <TooltipTrigger asChild>
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFullScreenDoc(selectedDoc)}>
@@ -1671,47 +1676,18 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                                 )
                               }
                               if (ext === "md") {
+                                // 差異標註、圖片／Mermaid 放大都封裝在 MarkdownDocView，三個頁面共用一份
+                                const prev = findPrevVersion(demand?.documents ?? [], selectedDoc as never)
                                 return (
-                                  <div className="w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5 prose-img:mx-auto prose-img:max-h-[55vh] prose-img:w-auto prose-img:rounded-lg prose-img:border [&_[data-mermaid-container]]:overflow-x-auto [&_[data-mermaid-container]_svg]:max-h-[50vh]">
-                                    <ReactMarkdown
-                                      remarkPlugins={[remarkGfm, remarkBreaks]}
-                                      rehypePlugins={[rehypeRaw]}
-                                      components={{
-                                        // 內嵌預覽的圖片可點擊放大（與 Mermaid 一致的操作）
-                                        img({ src, alt }) {
-                                          const url = typeof src === "string" ? src : ""
-                                          return (
-                                            <img
-                                              src={url}
-                                              alt={alt ?? ""}
-                                              className="mx-auto max-h-[55vh] w-auto cursor-zoom-in rounded-lg border"
-                                              onClick={() => url && setZoomedImg(url)}
-                                              title="點擊放大"
-                                            />
-                                          )
-                                        },
-                                        pre({ children }) {
-                                          // Only unwrap <pre> for mermaid blocks
-                                          if (React.isValidElement(children)) {
-                                            const cp = children.props as { className?: string }
-                                            if (/language-mermaid/.test(cp.className || "")) {
-                                              return <>{children}</>
-                                            }
-                                          }
-                                          return <pre>{children}</pre>
-                                        },
-                                        code({ className, children, ...props }) {
-                                          const match = /language-(\w+)/.exec(className || "")
-                                          if (match?.[1] === "mermaid") {
-                                            return <MermaidBlock code={String(children).trim()} />
-                                          }
-                                          return <code className={className} {...props}>{children}</code>
-                                        },
-                                      }}
-                                    >
-                                      {formatGherkinInMarkdown(textContent)}
-                                    </ReactMarkdown>
-                                  </div>
+                                  <MarkdownDocView
+                                    content={formatGherkinInMarkdown(textContent)}
+                                    prevFileUrl={prev?.fileUrl ?? null}
+                                    version={(selectedDoc as { version?: number } | null)?.version}
+                                    prevVersion={(prev as { version?: number } | null)?.version}
+                                    onZoomImage={setZoomedImg}
+      toolbarTarget={diffToolbar}
+                                    className="w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5 [&_[data-mermaid-container]]:overflow-x-auto [&_[data-mermaid-container]_svg]:max-h-[50vh]"
+                                  />
                                 )
                               }
                               return (

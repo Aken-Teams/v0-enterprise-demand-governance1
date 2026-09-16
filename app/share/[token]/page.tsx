@@ -63,6 +63,7 @@ import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypeRaw from "rehype-raw"
 import { MermaidBlock } from "@/components/mermaid-block"
+import { MarkdownDocView } from "@/components/demand/markdown-doc-view"
 
 
 function formatGherkinInMarkdown(input: string): string {
@@ -549,6 +550,8 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
+  /** 預覽標題列上的掛載點，供差異標註按鈕 portal 進去 */
+  const [diffToolbar, setDiffToolbar] = useState<HTMLElement | null>(null)
 
   const isLoggedIn = !!authUser && !!authToken
 
@@ -1545,9 +1548,13 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                         {/* Preview toolbar */}
                         <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/20">
                           <span className="text-xs text-muted-foreground truncate">{selectedDoc.fileName}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                          {/* 「標註本版變更」由 MarkdownDocView portal 進來，放在放大鈕左側 */}
+                          <span ref={setDiffToolbar} className="flex items-center" />
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFullScreenDoc(selectedDoc)} title="全螢幕預覽">
                             <Maximize2 className="h-3.5 w-3.5" />
                           </Button>
+                          </div>
                         </div>
                         <div className="h-full flex items-center justify-center p-4 overflow-hidden">
                           {(() => {
@@ -1617,12 +1624,18 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                                 )
                               }
                               if (ext === "md") {
+                                // 差異標註、圖片／Mermaid 放大都封裝在 MarkdownDocView，三個頁面共用一份
+                                const prev = findPrevVersion(demand?.documents ?? [], selectedDoc as never)
                                 return (
-                                  <div className="w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5 prose-img:mx-auto prose-img:max-h-[55vh] prose-img:w-auto prose-img:rounded-lg prose-img:border [&_[data-mermaid-container]]:overflow-x-auto [&_[data-mermaid-container]_svg]:max-h-[50vh]">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mdComponents}>
-                                      {formatGherkinInMarkdown(textContent)}
-                                    </ReactMarkdown>
-                                  </div>
+                                  <MarkdownDocView
+                                    content={formatGherkinInMarkdown(textContent)}
+                                    prevFileUrl={prev?.fileUrl ?? null}
+                                    version={(selectedDoc as { version?: number } | null)?.version}
+                                    prevVersion={(prev as { version?: number } | null)?.version}
+                                    onZoomImage={setZoomedImg}
+      toolbarTarget={diffToolbar}
+                                    className="w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5 [&_[data-mermaid-container]]:overflow-x-auto [&_[data-mermaid-container]_svg]:max-h-[50vh]"
+                                  />
                                 )
                               }
                               return <pre className="text-sm whitespace-pre-wrap break-words w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-4 bg-muted/30 rounded-lg font-mono leading-relaxed">{textContent}</pre>
