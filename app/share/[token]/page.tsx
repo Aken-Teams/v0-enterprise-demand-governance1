@@ -54,6 +54,7 @@ import { DevLinkRevealDialog } from "@/components/demand/dev-link-reveal-dialog"
 import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { SignoffHistory } from "@/components/demand/signoff-history"
 import { ProjectGantt } from "@/components/demand/project-gantt"
+import { findPrevVersion } from "@/lib/doc-version"
 import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { ExcelPreview } from "@/components/excel-preview"
@@ -1781,10 +1782,12 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
       </main>
 
       {/* Full-screen document preview */}
+      {/* prevDoc：.md 預覽才會用到，供「標註本版變更」比對 */}
       <FullScreenDocumentPreview
         open={!!fullScreenDoc}
         onOpenChange={(open) => { if (!open) setFullScreenDoc(null) }}
         doc={fullScreenDoc}
+        prevDoc={findPrevVersion(demand?.documents ?? [], fullScreenDoc as never)}
         userName={authUser?.name}
       />
 

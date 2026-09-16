@@ -47,7 +47,8 @@ function plainHeadingText(raw: string): string {
  */
 export function buildToc(processedMd: string, maxLevel = 3): TocItem[] {
   if (!processedMd) return []
-  const lines = processedMd.split("\n")
+  // 保險：呼叫端多半已由 preprocessMarkdown 正規化，但直接傳原始檔進來也要能解析
+  const lines = processedMd.replace(/\r\n?/g, "\n").split("\n")
   const items: TocItem[] = []
   let inFence = false
 

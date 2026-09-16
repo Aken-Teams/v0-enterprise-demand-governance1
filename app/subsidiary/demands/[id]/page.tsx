@@ -55,6 +55,7 @@ import { ProjectGantt } from "@/components/demand/project-gantt"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { findPrevVersion } from "@/lib/doc-version"
 import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
 import { ExcelPreview } from "@/components/excel-preview"
 import ReactMarkdown from "react-markdown"
@@ -756,7 +757,8 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
                         return (
                         <>
                           {shareLinks.length > 0 ? (
-                            <div className="space-y-2">
+                            // 失效的連結會一直累積，清單自行捲動，對話框才不會被撐得很長
+                            <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1 -mr-1">
                               {shareLinks.map((s) => {
                                 const expired = new Date(s.expiresAt) <= new Date()
                                 return (
@@ -1907,10 +1909,12 @@ export default function DemandDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Full-screen document preview */}
+      {/* prevDoc：.md 預覽才會用到，供「標註本版變更」比對 */}
       <FullScreenDocumentPreview
         open={!!fullScreenDoc}
         onOpenChange={(open) => { if (!open) setFullScreenDoc(null) }}
         doc={fullScreenDoc}
+        prevDoc={findPrevVersion(demand?.documents ?? [], fullScreenDoc as never)}
         watermarkBg={watermarkBg}
       />
 

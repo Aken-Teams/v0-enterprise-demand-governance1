@@ -40,6 +40,7 @@ import { DesignChangeTab } from "@/components/demand/design-change-tab"
 import { NotifySignersDialog } from "@/components/demand/notify-signers-dialog"
 import { PhasePlanInlineEditor } from "@/components/demand/phase-plan-inline-editor"
 import { SubTaskEditor } from "@/components/demand/sub-task-editor"
+import { findPrevVersion } from "@/lib/doc-version"
 import { FullScreenDocumentPreview } from "@/components/demand/full-screen-document-preview"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -972,7 +973,8 @@ export default function DemandDetailPage() {
                       return (
                       <>
                         {shareLinks.length > 0 ? (
-                          <div className="space-y-2">
+                          // 失效的連結會一直累積，清單自行捲動，對話框才不會被撐得很長
+                          <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1 -mr-1">
                             {shareLinks.map((s) => {
                               const expired = new Date(s.expiresAt) <= new Date()
                               return (
@@ -2608,10 +2610,12 @@ export default function DemandDetailPage() {
       )}
 
       {/* Full-screen document preview */}
+      {/* prevDoc：.md 預覽才會用到，供「標註本版變更」比對 */}
       <FullScreenDocumentPreview
         open={!!fullScreenDoc}
         onOpenChange={(open) => { if (!open) setFullScreenDoc(null) }}
         doc={fullScreenDoc}
+        prevDoc={findPrevVersion(demand?.documents ?? [], fullScreenDoc as never)}
         watermarkBg={watermarkBg}
       />
 

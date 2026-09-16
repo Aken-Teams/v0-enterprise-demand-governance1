@@ -5,9 +5,11 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { X, FileText, Loader2, Download, ExternalLink, FileAudio, ZoomIn } from "lucide-react"
+import { X, FileText, Loader2, Download, ExternalLink, FileAudio, ZoomIn, Highlighter, List, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
 import { preprocessMarkdown } from "@/lib/markdown"
+import { buildToc, changedLineSet, headingId, rangeHasChange } from "@/lib/process-doc"
+import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
@@ -130,23 +132,35 @@ interface DocumentInfo {
   fileSize: number | null
   uploadedBy: string
   createdAt: string
+  version?: number
 }
 
 interface FullScreenDocumentPreviewProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   doc: DocumentInfo | null
+  /**
+   * 同一份文件的前一個版本；有的話 .md 預覽會多出「標註本版變更」開關。
+   * PDF／Word 無法做行級比對，傳了也不會用到。
+   */
+  prevDoc?: { fileName: string; fileUrl: string | null; version?: number } | null
   watermarkBg?: string
   userName?: string
 }
 
-export function FullScreenDocumentPreview({ open, onOpenChange, doc, watermarkBg: watermarkBgProp, userName }: FullScreenDocumentPreviewProps) {
+export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, watermarkBg: watermarkBgProp, userName }: FullScreenDocumentPreviewProps) {
   const [textContent, setTextContent] = useState("")
   const [textLoading, setTextLoading] = useState(false)
   const [excelReady, setExcelReady] = useState(false)
   const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null)
   const [officeLoading, setOfficeLoading] = useState(false)
   const [zoomedImg, setZoomedImg] = useState<string | null>(null)
+  /** 前一版內容（僅 .md 會抓），供「標註本版變更」比對 */
+  const [prevContent, setPrevContent] = useState("")
+  const [showChanges, setShowChanges] = useState(false)
+  const [tocOpen, setTocOpen] = useState(true)
+  const [activeHeading, setActiveHeading] = useState<string | null>(null)
+  const mdScrollRef = useRef<HTMLDivElement>(null)
 
   const watermarkBg = useMemo(() => {
     if (watermarkBgProp) return watermarkBgProp
@@ -171,6 +185,17 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, watermarkBg
       .catch(() => setTextContent(""))
       .finally(() => setTextLoading(false))
   }, [open, doc])
+
+  // 前一版內容：只有 .md 需要（其他格式無法行級比對）
+  useEffect(() => {
+    setShowChanges(false)
+    const ext = doc?.fileName.split(".").pop()?.toLowerCase() || ""
+    if (!open || ext !== "md" || !prevDoc?.fileUrl) { setPrevContent(""); return }
+    fetch(prevDoc.fileUrl)
+      .then((res) => (res.ok ? res.text() : ""))
+      .then((t) => setPrevContent(t || ""))
+      .catch(() => setPrevContent(""))
+  }, [open, doc, prevDoc])
 
   // Excel readiness
   useEffect(() => {
@@ -275,28 +300,102 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, watermarkBg
         )
       }
       if (ext === "md") {
+        const processed = preprocessMarkdown(formatGherkinInMarkdown(textContent))
+        const changed = prevContent
+          ? changedLineSet(formatGherkinInMarkdown(prevContent), formatGherkinInMarkdown(textContent))
+          : new Set<number>()
+        const toc = buildToc(processed)
+        const hl = (node: unknown) => {
+          if (!showChanges) return false
+          const pos = (node as { position?: { start?: { line?: number }; end?: { line?: number } } })?.position
+          return rangeHasChange(changed, pos?.start?.line, pos?.end?.line)
+        }
+        const HL = "bg-yellow-100/80 rounded-[3px] ring-1 ring-yellow-300/70 px-1"
+        const heading = (level: number) =>
+          function H({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+            const Tag = `h${level}` as "h1"
+            const line = (node as { position?: { start?: { line?: number } } })?.position?.start?.line
+            return <Tag id={headingId(line)} className={cn("scroll-mt-6", hl(node) && HL)}>{children}</Tag>
+          }
+
         return (
-          <div className="w-full h-full overflow-auto p-8 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkBreaks]}
-              rehypePlugins={[rehypeRaw]}
-              components={{
-                pre({ children }) {
-                  if (children && typeof children === "object" && "props" in (children as any)) {
-                    const cp = (children as any).props as { className?: string }
-                    if (/language-mermaid/.test(cp.className || "")) return <>{children}</>
-                  }
-                  return <pre>{children}</pre>
-                },
-                code({ className, children, ...props }) {
-                  const match = /language-(\w+)/.exec(className || "")
-                  if (match?.[1] === "mermaid") return <MermaidBlock code={String(children).trim()} />
-                  return <code className={className} {...props}>{children}</code>
-                },
-              }}
+          <div className="flex h-full w-full overflow-hidden">
+            {/* 目錄：AI 產的 PRD 動輒數十頁，沒有目錄很難找到要看的段落 */}
+            {toc.length > 1 && tocOpen && (
+              <aside className="hidden w-60 shrink-0 overflow-y-auto border-r bg-muted/20 p-2 lg:block">
+                <p className="mb-1.5 flex items-center gap-1.5 px-2 text-xs font-semibold text-muted-foreground">
+                  <List className="h-3.5 w-3.5" />目錄
+                </p>
+                <ul className="space-y-0.5">
+                  {toc.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = mdScrollRef.current?.querySelector(`#${item.id}`)
+                          el?.scrollIntoView({ behavior: "smooth", block: "start" })
+                          setActiveHeading(item.id)
+                        }}
+                        className={cn(
+                          "flex w-full items-start gap-1.5 rounded px-2 py-1 text-left text-[13px] leading-snug transition-colors hover:bg-muted",
+                          item.level === 1 ? "font-medium text-foreground" : "text-muted-foreground",
+                          item.level === 2 && "pl-4",
+                          item.level >= 3 && "pl-7 text-[12px]",
+                          activeHeading === item.id && "bg-indigo-50 text-indigo-700",
+                        )}
+                      >
+                        <span className="min-w-0 flex-1 break-words">{item.text}</span>
+                        {showChanges && rangeHasChange(changed, item.line, item.endLine) && (
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-400" />
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            )}
+
+            <div
+              ref={mdScrollRef}
+              className="prose prose-sm prose-neutral dark:prose-invert h-full max-w-none flex-1 overflow-auto p-8 prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5"
             >
-              {formatGherkinInMarkdown(textContent)}
-            </ReactMarkdown>
+              {showChanges && (
+                <div className="not-prose mb-4 flex items-start gap-1.5 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-900">
+                  <Highlighter className="mt-px h-3.5 w-3.5 shrink-0" />
+                  <p>
+                    黃底為本版（v{doc.version ?? "—"}）相對於 v{prevDoc?.version ?? "前一版"} 新增或修改的內容；
+                    純刪除的段落無法在內文標示。
+                  </p>
+                </div>
+              )}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkBreaks]}
+                rehypePlugins={[rehypeRaw]}
+                remarkRehypeOptions={{ allowDangerousHtml: true }}
+                components={{
+                  h1: heading(1), h2: heading(2), h3: heading(3),
+                  h4: heading(4), h5: heading(5), h6: heading(6),
+                  p({ node, children }) { return <p className={cn(hl(node) && HL)}>{children}</p> },
+                  li({ node, children }) { return <li className={cn(hl(node) && HL)}>{children}</li> },
+                  tr({ node, children }) { return <tr className={cn(hl(node) && "bg-yellow-100/80")}>{children}</tr> },
+                  blockquote({ node, children }) { return <blockquote className={cn(hl(node) && HL)}>{children}</blockquote> },
+                  pre({ children }) {
+                    if (children && typeof children === "object" && "props" in (children as any)) {
+                      const cp = (children as any).props as { className?: string }
+                      if (/language-mermaid/.test(cp.className || "")) return <>{children}</>
+                    }
+                    return <pre>{children}</pre>
+                  },
+                  code({ className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || "")
+                    if (match?.[1] === "mermaid") return <MermaidBlock code={String(children).trim()} />
+                    return <code className={className} {...props}>{children}</code>
+                  },
+                }}
+              >
+                {processed}
+              </ReactMarkdown>
+            </div>
           </div>
         )
       }
@@ -358,10 +457,39 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, watermarkBg
               <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-sm font-medium truncate">{doc.fileName}</span>
               <Badge variant="secondary" className="text-[10px] h-5 shrink-0">{typeLabel}</Badge>
+              {doc.version != null && (
+                <Badge variant="outline" className="h-5 shrink-0 font-mono text-[10px]">v{doc.version}</Badge>
+              )}
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onOpenChange(false)}>
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* 只有 .md 才有目錄與差異標註——PDF／Word 做不到行級比對 */}
+              {ext === "md" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden h-8 w-8 lg:inline-flex"
+                  title={tocOpen ? "收合目錄" : "展開目錄"}
+                  onClick={() => setTocOpen((v) => !v)}
+                >
+                  {tocOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                </Button>
+              )}
+              {ext === "md" && !!prevContent && (
+                <Button
+                  variant={showChanges ? "default" : "outline"}
+                  size="sm"
+                  className={cn("h-8", showChanges && "bg-yellow-500 text-yellow-950 hover:bg-yellow-500/90")}
+                  onClick={() => setShowChanges((v) => !v)}
+                  title={`標出與 v${prevDoc?.version ?? "前一版"} 相比新增或修改的內容`}
+                >
+                  <Highlighter className="h-3.5 w-3.5" />
+                  <span className="ml-1 text-xs">{showChanges ? "隱藏變更" : "標註本版變更"}</span>
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Content */}

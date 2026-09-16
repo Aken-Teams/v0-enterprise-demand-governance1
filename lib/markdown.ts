@@ -60,9 +60,12 @@ function markHighlightsInLine(line: string): string {
  */
 export function preprocessMarkdown(md: string): string {
   if (!md) return md
+  // 一律先正規化換行。CRLF 的檔案若保留 CR，後續逐行解析（目錄、差異標註）會整個失效：
+  // JS 正則的 `.` 不匹配 CR，`^#{1,6}\s+(.*)$` 於是對不上任何一行標題。
+  md = md.replace(/\r\n?/g, "\n")
   if (!md.includes(":::") && !md.includes("==")) return md
 
-  const lines = md.replace(/\r\n?/g, "\n").split("\n")
+  const lines = md.split("\n")
   const out: string[] = []
   // 以堆疊追蹤巢狀容器，收到 ::: 就關掉最近開啟的那一層
   const stack: string[] = []
