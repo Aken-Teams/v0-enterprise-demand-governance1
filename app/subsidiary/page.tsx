@@ -114,9 +114,6 @@ export default function SubsidiaryDashboard() {
 
   const kpi = data?.kpi ?? { totalDemands: 0, inProgress: 0, completed: 0, completionRate: 0 }
   const sp = data?.sp ?? { totalQuota: 0, usedSp: 0, availableSp: 0, availablePercent: 0 }
-  const committedSp = sp.committedSp ?? 0
-  const plannedSp = sp.plannedSp ?? 0
-  const plannableSp = sp.plannableSp ?? (sp.availableSp - committedSp - plannedSp)
   const perf = data?.performance ?? { deliveryRate: 0, deliveryOnTime: 0, deliveryTotal: 0, passRate: 0, passClosed: 0, passTotal: 0, avgProcessingDays: 0 }
   const monthlyTrends = data?.monthlyTrends ?? []
   /** SP 甜甜圈的開發商篩選：all = 全部合計 */
@@ -124,41 +121,30 @@ export default function SubsidiaryDashboard() {
   const recentChanges = data?.recentChanges ?? []
 
   /**
-   * SP 甜甜圈：改以「四層額度」呈現（已認列／已承諾／規劃中／尚可規劃），
-   * 不再用開發商切片——開發商改成右上角的篩選，選了就只看那一家的四層。
+   * SP 甜甜圈：只呈現「已認列」與「未認列」兩層。
+   *
+   * 已承諾／規劃中會隨開案與估點浮動、不保證走到結案；此平台是開發方的帳，
+   * 帳面只認確定發生的數字，故不對需求方呈現（API 仍有回傳，日後要開很容易）。
    */
   const spScope = spVendor === "all"
-    ? { totalQuota: sp.totalQuota, usedSp: sp.usedSp, committedSp, plannedSp, plannableSp }
+    ? { totalQuota: sp.totalQuota, usedSp: sp.usedSp }
     : (() => {
         const v = sp.byVendor?.find((x) => x.vendor === spVendor)
-        return {
-          totalQuota: v?.totalQuota ?? 0,
-          usedSp: v?.usedSp ?? 0,
-          committedSp: v?.committedSp ?? 0,
-          plannedSp: v?.plannedSp ?? 0,
-          plannableSp: v?.plannableSp ?? 0,
-        }
+        return { totalQuota: v?.totalQuota ?? 0, usedSp: v?.usedSp ?? 0 }
       })()
 
   const SP_TIERS = [
     { key: "used", label: "已認列", value: spScope.usedSp, fill: "#3b82f6",
       desc: "已實際扣除的 SP，不會再變動。" },
-    { key: "committed", label: "已承諾", value: spScope.committedSp, fill: "#fbbf24",
-      desc: "已通過開案確認、尚未走到認列節點，後續必然扣除。" },
-    { key: "planned", label: "規劃中", value: spScope.plannedSp, fill: "#7dd3fc",
-      desc: "已提出但尚未開案（含暫緩），可能調整估點或取消釋放。" },
-    { key: "plannable", label: "尚可規劃", value: Math.max(0, spScope.plannableSp), fill: "#e5e7eb",
-      desc: "扣掉上述三層後，還能安心提出新需求的額度。" },
+    { key: "unused", label: "未認列", value: Math.max(0, spScope.totalQuota - spScope.usedSp), fill: "#e5e7eb",
+      desc: "年度配額尚未認列的部分。" },
   ]
   const spDonutData = SP_TIERS.filter((t) => t.value > 0)
 
   /** 取某一層在單一開發商下的數值，供 tooltip 的分廠明細使用 */
   type VendorSp = NonNullable<DashboardData["sp"]["byVendor"]>[number]
   const tierValueOf = (key: string, v: VendorSp) =>
-    key === "used" ? v.usedSp
-    : key === "committed" ? (v.committedSp ?? 0)
-    : key === "planned" ? (v.plannedSp ?? 0)
-    : Math.max(0, v.plannableSp ?? 0)
+    key === "used" ? v.usedSp : Math.max(0, v.totalQuota - v.usedSp)
 
   const maxMonthlyVal = Math.max(...monthlyTrends.map((m) => Math.max(m.submitted, m.completed)), 1)
 
