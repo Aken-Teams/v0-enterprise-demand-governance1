@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { createPortal } from "react-dom"
 import mermaid from "mermaid"
 import { Maximize2, X } from "lucide-react"
 import "@/lib/mermaid-config"
@@ -105,12 +104,16 @@ export function MermaidBlock({ code }: { code: string }) {
         )}
       </div>
 
-      {/* 同樣 portal 到 body：此元件可能被渲染在對話框、捲動容器或 prose 內，
-          留在原處會被外層的堆疊脈絡限制住 */}
-      {zoomed && typeof document !== "undefined" && createPortal((
+      {/*
+        放大層留在原處、不 portal 到 body：若 portal 出去，在 Radix 對話框內
+        會被視為「對話框外的點擊」，按關閉會連整個對話框一起關掉。
+        另外對 pointerdown 停止傳遞，避免點擊被外層的關閉偵測吃掉。
+      */}
+      {zoomed && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-6 cursor-zoom-out"
           onClick={() => setZoomed(false)}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           <div
             className="max-h-[80vh] overflow-auto rounded-lg bg-white p-6 [&_svg]:!max-w-none [&_svg]:!h-auto [&_svg]:!w-full"
@@ -121,13 +124,13 @@ export function MermaidBlock({ code }: { code: string }) {
           <button
             type="button"
             className="absolute right-4 top-4 rounded-md bg-white/90 p-2 text-foreground shadow"
-            onClick={() => setZoomed(false)}
+            onClick={(e) => { e.stopPropagation(); setZoomed(false) }}
             title="關閉"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-      ), document.body)}
+      )}
     </>
   )
 }

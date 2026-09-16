@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { createPortal } from "react-dom"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { Button } from "@/components/ui/button"
@@ -163,18 +162,27 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
    * 捲動同步：內文捲到哪一節，目錄就標到哪一節。
    *
    * 監聽掛在 document 的捕獲階段——預覽對話框裡實際在捲的可能是內文容器，
-   * 也可能是它的外層包裝，而 scroll 事件不會冒泡；用捕獲才抓得到，
-   * 不必猜是哪一層在捲。
+   * 也可能是它的外層包裝，而 scroll 事件不會冒泡，用捕獲才抓得到。
    *
-   * 判定線取內文容器頂端往下 96px：標題剛滑出視野才換下一節，捲動中不會來回跳。
+   * 效能：捲動事件每秒可達數十次，若每次都 querySelectorAll 再逐一量測
+   * getBoundingClientRect（這份 PRD 有 29 個標題），捲動會明顯卡頓。
+   * 故標題清單只在內容變動時取一次，量測則以 requestAnimationFrame 節流，
+   * 一個影格最多算一次。
    */
   useEffect(() => {
     if (!open) return
+    const box = mdScrollRef.current
+    if (!box) return
 
-    const onScroll = () => {
-      const box = mdScrollRef.current
-      if (!box) return
-      const heads = Array.from(box.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]"))
+    let heads: HTMLElement[] = []
+    const collect = () => {
+      heads = Array.from(box.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]"))
+    }
+
+    let ticking = false
+    const measure = () => {
+      ticking = false
+      if (heads.length === 0) collect()
       if (heads.length === 0) return
       const line = box.getBoundingClientRect().top + 96
       let current = heads[0].id
@@ -184,10 +192,16 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
       }
       setActiveHeading((prev) => (prev === current ? prev : current))
     }
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(measure)
+    }
 
-    // 內容為非同步載入，掛上後先跑一次並延遲補一次，確保標題已渲染
-    onScroll()
-    const t = setTimeout(onScroll, 300)
+    // 內容為非同步載入（Mermaid 還會再改變高度），掛上後先取一次並延遲補一次
+    collect()
+    measure()
+    const t = setTimeout(() => { collect(); measure() }, 400)
     document.addEventListener("scroll", onScroll, { capture: true, passive: true })
     return () => {
       clearTimeout(t)
@@ -542,37 +556,37 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
               style={{ backgroundImage: watermarkBg, backgroundRepeat: "repeat" }}
             />
           </div>
+          {/*
+            放大層必須留在 DialogContent 內：portal 到 body 會被 Radix 視為
+            「對話框外的點擊」，按下關閉時連整個預覽都被 dismiss 掉。
+            留在內層則 z-index 只需贏過同層元素即可。
+          */}
+          {zoomedImg && (
+            <div
+              className="fixed inset-0 z-[60] flex cursor-zoom-out items-center justify-center bg-black/80 p-6"
+              onClick={() => setZoomedImg(null)}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <img
+                src={zoomedImg}
+                className="max-h-[88vh] max-w-[90vw] object-contain"
+                alt="Zoomed"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                type="button"
+                className="absolute right-4 top-4 rounded-md bg-white/90 p-2 text-foreground shadow transition-colors hover:bg-white"
+                onClick={(e) => { e.stopPropagation(); setZoomedImg(null) }}
+                title="關閉"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
       {/* Zoomed image overlay */}
-      {/*
-        以 Portal 掛到 body：Radix Dialog 的內容本身就是 portal 到 body 的，
-        若這層留在元件原處，它的 z-index 屬於外層的堆疊脈絡，會被 Dialog 蓋住——
-        點「關閉」實際上點到 Dialog 遮罩，整個預覽就被關掉了。
-      */}
-      {zoomedImg && typeof document !== "undefined" && createPortal((
-        <div
-          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 p-6 cursor-zoom-out"
-          onClick={() => setZoomedImg(null)}
-        >
-          <img
-            src={zoomedImg}
-            className="max-h-[88vh] max-w-[90vw] object-contain"
-            alt="Zoomed"
-            onClick={(e) => e.stopPropagation()}
-          />
-          {/* 點背景可關閉，但仍要有明確的關閉鈕——不是每個人都會想到點旁邊 */}
-          <button
-            type="button"
-            className="absolute right-4 top-4 rounded-md bg-white/90 p-2 text-foreground shadow transition-colors hover:bg-white"
-            onClick={() => setZoomedImg(null)}
-            title="關閉"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      ), document.body)}
     </>
   )
 }
