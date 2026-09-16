@@ -161,6 +161,7 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
   const [tocOpen, setTocOpen] = useState(true)
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const mdScrollRef = useRef<HTMLDivElement>(null)
+  const tocNavRef = useRef<HTMLElement>(null)
 
   const watermarkBg = useMemo(() => {
     if (watermarkBgProp) return watermarkBgProp
@@ -196,6 +197,52 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
       .then((t) => setPrevContent(t || ""))
       .catch(() => setPrevContent(""))
   }, [open, doc, prevDoc])
+
+  /**
+   * 捲動同步：內文捲到哪一節，目錄就標到哪一節。
+   *
+   * 監聽掛在 document 的捕獲階段——預覽對話框裡實際在捲的可能是內文容器，
+   * 也可能是它的外層包裝，而 scroll 事件不會冒泡；用捕獲才抓得到，
+   * 不必猜是哪一層在捲。
+   *
+   * 判定線取內文容器頂端往下 96px：標題剛滑出視野才換下一節，捲動中不會來回跳。
+   */
+  useEffect(() => {
+    if (!open) return
+
+    const onScroll = () => {
+      const box = mdScrollRef.current
+      if (!box) return
+      const heads = Array.from(box.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]"))
+      if (heads.length === 0) return
+      const line = box.getBoundingClientRect().top + 96
+      let current = heads[0].id
+      for (const h of heads) {
+        if (h.getBoundingClientRect().top <= line) current = h.id
+        else break
+      }
+      setActiveHeading((prev) => (prev === current ? prev : current))
+    }
+
+    // 內容為非同步載入，掛上後先跑一次並延遲補一次，確保標題已渲染
+    onScroll()
+    const t = setTimeout(onScroll, 300)
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true })
+    return () => {
+      clearTimeout(t)
+      document.removeEventListener("scroll", onScroll, { capture: true })
+    }
+  }, [open, textContent, tocOpen])
+
+  // 目錄很長時，把目前章節捲進可視範圍，否則使用者找不到自己在哪
+  useEffect(() => {
+    if (!activeHeading || !tocNavRef.current) return
+    const el = tocNavRef.current.querySelector<HTMLElement>(`[data-toc-id="${activeHeading}"]`)
+    if (!el) return
+    const box = tocNavRef.current.getBoundingClientRect()
+    const item = el.getBoundingClientRect()
+    if (item.top < box.top + 8 || item.bottom > box.bottom - 8) el.scrollIntoView({ block: "nearest" })
+  }, [activeHeading])
 
   // Excel readiness
   useEffect(() => {
@@ -322,45 +369,60 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
           <div className="flex h-full w-full overflow-hidden">
             {/* 目錄：AI 產的 PRD 動輒數十頁，沒有目錄很難找到要看的段落 */}
             {toc.length > 1 && tocOpen && (
-              <aside className="hidden w-60 shrink-0 overflow-y-auto border-r bg-muted/20 p-2 lg:block">
-                <p className="mb-1.5 flex items-center gap-1.5 px-2 text-xs font-semibold text-muted-foreground">
-                  <List className="h-3.5 w-3.5" />目錄
-                </p>
-                <ul className="space-y-0.5">
-                  {toc.map((item) => (
-                    <li key={item.id}>
+              <aside className="hidden w-64 shrink-0 flex-col border-r bg-muted/20 lg:flex">
+                <div className="flex items-center gap-1.5 border-b px-3 py-2">
+                  <List className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-xs font-semibold text-muted-foreground">目錄</span>
+                  <span className="text-[11px] text-muted-foreground/60">{toc.length}</span>
+                </div>
+                <nav ref={tocNavRef} className="flex-1 overflow-y-auto p-1.5">
+                  {toc.map((item) => {
+                    const active = activeHeading === item.id
+                    const changedHere = showChanges && rangeHasChange(changed, item.line, item.endLine)
+                    return (
                       <button
+                        key={item.id}
                         type="button"
+                        data-toc-id={item.id}
                         onClick={() => {
-                          const el = mdScrollRef.current?.querySelector(`#${item.id}`)
-                          el?.scrollIntoView({ behavior: "smooth", block: "start" })
+                          mdScrollRef.current?.querySelector(`#${item.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
                           setActiveHeading(item.id)
                         }}
                         className={cn(
-                          "flex w-full items-start gap-1.5 rounded px-2 py-1 text-left text-[13px] leading-snug transition-colors hover:bg-muted",
-                          item.level === 1 ? "font-medium text-foreground" : "text-muted-foreground",
-                          item.level === 2 && "pl-4",
-                          item.level >= 3 && "pl-7 text-[12px]",
-                          activeHeading === item.id && "bg-indigo-50 text-indigo-700",
+                          "group relative flex w-full items-start gap-1.5 rounded-md py-1.5 pr-2 text-left transition-colors",
+                          // 以左側細線表達層級，比單純縮排更容易看出從屬關係
+                          item.level === 1 && "pl-2.5 text-[13px] font-semibold text-foreground",
+                          item.level === 2 && "pl-4 text-[13px] text-foreground/80",
+                          item.level >= 3 && "pl-7 text-[12px] text-muted-foreground",
+                          active ? "bg-primary/10 text-primary" : "hover:bg-muted",
                         )}
                       >
-                        <span className="min-w-0 flex-1 break-words">{item.text}</span>
-                        {showChanges && rangeHasChange(changed, item.line, item.endLine) && (
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-400" />
+                        {item.level > 1 && (
+                          <span
+                            className={cn(
+                              "absolute top-0 bottom-0 w-px",
+                              item.level === 2 ? "left-2" : "left-5",
+                              active ? "bg-primary/40" : "bg-border",
+                            )}
+                          />
+                        )}
+                        <span className="min-w-0 flex-1 line-clamp-2 leading-snug break-words">{item.text}</span>
+                        {changedHere && (
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-400" title="此章節有本版變更" />
                         )}
                       </button>
-                    </li>
-                  ))}
-                </ul>
+                    )
+                  })}
+                </nav>
               </aside>
             )}
 
             <div
               ref={mdScrollRef}
-              className="prose prose-sm prose-neutral dark:prose-invert h-full max-w-none flex-1 overflow-auto p-8 prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5"
+              className="h-full flex-1 overflow-auto px-6 py-8"
             >
               {showChanges && (
-                <div className="not-prose mb-4 flex items-start gap-1.5 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-900">
+                <div className="mx-auto mb-4 flex max-w-4xl items-start gap-1.5 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-900">
                   <Highlighter className="mt-px h-3.5 w-3.5 shrink-0" />
                   <p>
                     黃底為本版（v{doc.version ?? "—"}）相對於 v{prevDoc?.version ?? "前一版"} 新增或修改的內容；
@@ -368,6 +430,8 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
                   </p>
                 </div>
               )}
+              {/* 限制行寬與圖片尺寸：95vw 全滿的長文很難讀，圖片撐滿也會蓋掉上下文 */}
+              <div className="prose prose-sm prose-neutral dark:prose-invert mx-auto max-w-4xl prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5 prose-img:mx-auto prose-img:max-h-[60vh] prose-img:w-auto prose-img:rounded-lg prose-img:border [&_[data-mermaid-container]_svg]:max-h-[55vh] [&_[data-mermaid-container]]:overflow-x-auto">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkBreaks]}
                 rehypePlugins={[rehypeRaw]}
@@ -395,6 +459,7 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
               >
                 {processed}
               </ReactMarkdown>
+              </div>
             </div>
           </div>
         )
