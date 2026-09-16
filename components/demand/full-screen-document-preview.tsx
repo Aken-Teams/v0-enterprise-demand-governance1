@@ -161,51 +161,54 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
   /**
    * 捲動同步：內文捲到哪一節，目錄就標到哪一節。
    *
-   * 監聽掛在 document 的捕獲階段——預覽對話框裡實際在捲的可能是內文容器，
-   * 也可能是它的外層包裝，而 scroll 事件不會冒泡，用捕獲才抓得到。
-   *
-   * 效能：捲動事件每秒可達數十次，若每次都 querySelectorAll 再逐一量測
-   * getBoundingClientRect（這份 PRD 有 29 個標題），捲動會明顯卡頓。
-   * 故標題清單只在內容變動時取一次，量測則以 requestAnimationFrame 節流，
-   * 一個影格最多算一次。
+   * 幾個踩過的坑，寫在這裡免得又改回去：
+   *  1. scroll 事件不冒泡，掛在內文容器上收不到（實際在捲的是它的外層）；
+   *     故改掛 document 的捕獲階段，不必知道是哪一層在捲。
+   *  2. 不可快取標題節點——Mermaid 渲染完 React 會換掉節點，對已脫離文件的
+   *     元素量測會得到全 0，於是每個標題都「在判定線之上」，目錄永遠停在最後一節。
+   *  3. 判定線以**視窗座標**為準，不用容器的 getBoundingClientRect().top。
+   *     容器可能本身就是被捲動的那個（top 會變成負值），也可能不是，用視窗座標
+   *     兩種情況都成立。
+   *  4. 若量到的位置全是 0（尚未完成版面計算），直接跳過不更新，避免寫入錯誤狀態。
    */
   useEffect(() => {
     if (!open) return
-    const box = mdScrollRef.current
-    if (!box) return
-
-    let heads: HTMLElement[] = []
-    const collect = () => {
-      heads = Array.from(box.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]"))
-    }
 
     let ticking = false
     const measure = () => {
       ticking = false
-      if (heads.length === 0) collect()
+      const box = mdScrollRef.current
+      if (!box) return
+      const heads = Array.from(box.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]"))
       if (heads.length === 0) return
-      const line = box.getBoundingClientRect().top + 96
+
+      const tops = heads.map((h) => h.getBoundingClientRect().top)
+      // 版面尚未完成時所有位置都是 0，這時量測沒有意義
+      if (tops.every((t) => t === 0)) return
+
+      const line = 180
       let current = heads[0].id
-      for (const h of heads) {
-        if (h.getBoundingClientRect().top <= line) current = h.id
+      for (let i = 0; i < heads.length; i++) {
+        if (tops[i] <= line) current = heads[i].id
         else break
       }
       setActiveHeading((prev) => (prev === current ? prev : current))
     }
+
     const onScroll = () => {
       if (ticking) return
       ticking = true
       requestAnimationFrame(measure)
     }
 
-    // 內容為非同步載入（Mermaid 還會再改變高度），掛上後先取一次並延遲補一次
-    collect()
-    measure()
-    const t = setTimeout(() => { collect(); measure() }, 400)
+    // 內容非同步載入、Mermaid 還會再改變高度，故多補幾次
+    const timers = [0, 400, 1200].map((d) => setTimeout(measure, d))
     document.addEventListener("scroll", onScroll, { capture: true, passive: true })
+    window.addEventListener("resize", onScroll)
     return () => {
-      clearTimeout(t)
+      timers.forEach(clearTimeout)
       document.removeEventListener("scroll", onScroll, { capture: true })
+      window.removeEventListener("resize", onScroll)
     }
   }, [open, textContent, tocOpen])
 
