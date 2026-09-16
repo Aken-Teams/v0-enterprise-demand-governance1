@@ -19,6 +19,8 @@ import { useParams, useRouter } from "next/navigation"
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { cn, copyText } from "@/lib/utils"
+import { Input } from "@/components/ui/input"
+import { DEFAULT_SHARE_DAYS, MAX_SHARE_DAYS, SHARE_DAY_PRESETS } from "@/lib/share-expiry"
 import { preprocessMarkdown } from "@/lib/markdown"
 import { STATUS_MAP, PIPELINE_STEPS, SP_PROGRESS_RATE, PHASE_DOCUMENT_MAP, PHASE_DESCRIPTIONS, PHASE_ACTIONS, DOCUMENT_TYPE_LABELS, SIGNOFF_REQUIRED_PHASES, SIGNOFF_STATUS_MAP, DESIGN_CHANGE_ALLOWED_PHASES, SETTLEMENT_TIERS, spRateOf, formatSp, demandStatusKey } from "@/lib/constants/demand"
 import { Upload, Download, Eye, ExternalLink, FileAudio, X, ZoomIn } from "lucide-react"
@@ -453,6 +455,8 @@ export default function DemandDetailPage() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
   const [shareLoading, setShareLoading] = useState(false)
+  /** 管理者自訂的分享連結天數 */
+  const [shareDays, setShareDays] = useState<number>(DEFAULT_SHARE_DAYS)
   const [shareCopied, setShareCopied] = useState<string | null>(null)
   const [docLinkBusy, setDocLinkBusy] = useState(false)
   const [adminCanWrite, setAdminCanWrite] = useState(true)
@@ -692,7 +696,8 @@ export default function DemandDetailPage() {
     try {
       const res = await fetch(`/api/demands/${demandId}/share`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ days: shareDays }),
       })
       if (res.ok) fetchShareLinks()
     } catch { /* ignore */ }
@@ -1012,9 +1017,47 @@ export default function DemandDetailPage() {
                         ) : (
                           <p className="text-sm text-muted-foreground text-center py-2">目前沒有分享連結</p>
                         )}
+                        {/* 有效期：僅管理者可調整，其餘角色由後端固定 7 天 */}
+                        {canManage && !hasActive && (
+                          <div className="rounded-lg border bg-muted/30 p-2.5 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium">連結有效期</span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {new Date(Date.now() + shareDays * 86400000).toLocaleDateString("zh-TW")} 到期
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {SHARE_DAY_PRESETS.map((d) => (
+                                <button
+                                  key={d}
+                                  type="button"
+                                  onClick={() => setShareDays(d)}
+                                  className={cn(
+                                    "rounded-md border px-2 py-1 text-xs transition-colors",
+                                    shareDays === d ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted",
+                                  )}
+                                >
+                                  {d} 天
+                                </button>
+                              ))}
+                              <Input
+                                type="date"
+                                className="ml-auto h-7 w-[9.5rem] text-xs"
+                                min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                                max={new Date(Date.now() + MAX_SHARE_DAYS * 86400000).toISOString().slice(0, 10)}
+                                value={new Date(Date.now() + shareDays * 86400000).toISOString().slice(0, 10)}
+                                onChange={(e) => {
+                                  if (!e.target.value) return
+                                  const diff = Math.ceil((new Date(e.target.value).getTime() - Date.now()) / 86400000)
+                                  setShareDays(Math.min(MAX_SHARE_DAYS, Math.max(1, diff)))
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
                         <Button onClick={createShareLink} disabled={shareLoading || hasActive} className="w-full">
                           {shareLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Share2 className="h-4 w-4 mr-2" />}
-                          產生新的分享連結（7 天有效）
+                          產生新的分享連結（{canManage ? `${shareDays} 天有效` : "7 天有效"}）
                         </Button>
                         <p className="text-[11px] text-muted-foreground text-center">
                           {hasActive ? "已有有效連結，到期後才可產生新連結" : "唯讀分享，登入後可簽核"}

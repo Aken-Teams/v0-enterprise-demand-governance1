@@ -3,24 +3,33 @@ import { nanoid } from "nanoid"
 import { prisma } from "@/lib/prisma"
 import { verifyRole, verifyAdminFull, AuthError } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { resolveShareExpiry } from "@/lib/share-expiry"
 
 /**
- * 開發流程文件的公開分享連結（僅管理者可建立／撤銷）。
+ * 開發流程文件的公開分享連結。
  *
  * 連結本身為公開存取——供沒有平台帳號者檢視流程規範，
  * 故僅輸出最新版內容，且分享頁不提供下載。
+ *
+ * 誰能建立：所有登入者。流程規範本來就是雙方共同遵循、人人可讀的文件，
+ * 需求方要轉給自己單位的同事看是常態，不需要回頭找管理者代發。
+ * 惟「自訂有效期」限管理者，一般使用者一律 7 天（見 lib/share-expiry.ts）。
+ * 列表與撤銷：管理者看得到全部，其他人只看得到自己建立的。
  */
-
-const SHARE_DAYS = 7
 
 // GET: 列出尚未失效的分享連結
 export async function GET(request: NextRequest) {
   try {
-    const auth = verifyRole(request, ["admin"])
-    verifyAdminFull(auth)
+    const auth = verifyRole(request, ["admin", "delivery", "subsidiary", "viewer"])
+    if (auth.role === "admin") verifyAdminFull(auth)
 
     const shares = await prisma.processDocShare.findMany({
-      where: { revokedAt: null, expiresAt: { gt: new Date() } },
+      where: {
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        // 非管理者只看得到自己建立的連結
+        ...(auth.role === "admin" ? {} : { createdById: auth.userId }),
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -43,8 +52,8 @@ export async function GET(request: NextRequest) {
 // POST: 建立新的分享連結
 export async function POST(request: NextRequest) {
   try {
-    const auth = verifyRole(request, ["admin"])
-    verifyAdminFull(auth)
+    const auth = verifyRole(request, ["admin", "delivery", "subsidiary", "viewer"])
+    if (auth.role === "admin") verifyAdminFull(auth)
 
     // 沒有任何版本時不允許分享，避免對方打開看到空白
     const hasDoc = await prisma.processDoc.count()
@@ -52,8 +61,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "尚未上傳流程文件，無法建立分享連結" }, { status: 400 })
     }
 
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + SHARE_DAYS)
+    // 有效期：管理者可自訂，其餘角色一律 7 天
+    const body = await request.json().catch(() => ({}))
+    const expiresAt = resolveShareExpiry(auth.role, body)
 
     const share = await prisma.processDocShare.create({
       data: { token: nanoid(12), createdById: auth.userId, expiresAt },
@@ -83,14 +93,15 @@ export async function POST(request: NextRequest) {
 // DELETE: 撤銷分享連結（?token=xxx）
 export async function DELETE(request: NextRequest) {
   try {
-    const auth = verifyRole(request, ["admin"])
-    verifyAdminFull(auth)
+    const auth = verifyRole(request, ["admin", "delivery", "subsidiary", "viewer"])
+    if (auth.role === "admin") verifyAdminFull(auth)
 
     const token = request.nextUrl.searchParams.get("token")
     if (!token) return NextResponse.json({ error: "缺少 token" }, { status: 400 })
 
     const result = await prisma.processDocShare.updateMany({
-      where: { token, revokedAt: null },
+      // 非管理者只能撤銷自己建立的連結
+      where: { token, revokedAt: null, ...(auth.role === "admin" ? {} : { createdById: auth.userId }) },
       data: { revokedAt: new Date() },
     })
     if (result.count === 0) {

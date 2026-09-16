@@ -4,6 +4,7 @@ import { verifyRole, AuthError } from "@/lib/auth"
 import { canAdminWrite } from "@/lib/demand-access"
 import { nanoid } from "nanoid"
 import { logAudit } from "@/lib/audit"
+import { resolveShareExpiry } from "@/lib/share-expiry"
 
 const SHARE_ROLES = ["admin", "delivery", "subsidiary", "viewer"] as const
 
@@ -67,7 +68,9 @@ export async function POST(
     }
 
     const token = nanoid(12)
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // +7 days
+    // 有效期：管理者可自訂（天數或到期日），其餘角色一律 7 天
+    const body = await request.json().catch(() => ({}))
+    const expiresAt = resolveShareExpiry(auth.role, body)
 
     const share = await prisma.demandShare.create({
       data: {

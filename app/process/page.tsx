@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { diffLines, diffStats, toHunks, changedSections } from "@/lib/diff"
 import { preprocessMarkdown } from "@/lib/markdown"
+import { DEFAULT_SHARE_DAYS, MAX_SHARE_DAYS, SHARE_DAY_PRESETS } from "@/lib/share-expiry"
 import {
   FileText, GitCompare, Loader2, Upload, History, ShieldAlert, Trash2, Info, X, FileUp, ClipboardType, CheckCircle2, ChevronRight,
   Share2, Copy, Check, Link2,
@@ -93,6 +94,8 @@ export default function ProcessPage() {
   const [shareLoading, setShareLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  /** 管理者自訂的連結天數（一般使用者不會用到，固定 7 天） */
+  const [shareDays, setShareDays] = useState<number>(DEFAULT_SHARE_DAYS)
 
   const shareUrlOf = (t: string) =>
     typeof window === "undefined" ? `/process/share/${t}` : `${window.location.origin}/process/share/${t}`
@@ -114,7 +117,8 @@ export default function ProcessPage() {
     try {
       const res = await fetch("/api/process-docs/share", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(isAdmin ? { days: shareDays } : {}),
       })
       if (res.ok) {
         const data = await res.json()
@@ -277,14 +281,16 @@ export default function ProcessPage() {
               雙方共同遵循的開案與開發流程規範，作為流程認定的依據
             </p>
           </div>
-          {isAdmin && (
-            <div className="flex items-center gap-2">
-              {doc && (
-                <Button variant="outline" size="sm" className="h-9"
-                  onClick={() => { setShareOpen(true); loadShares() }}>
-                  <Share2 className="h-3.5 w-3.5 mr-1" />分享
-                </Button>
-              )}
+          <div className="flex items-center gap-2">
+            {/* 分享：所有登入者皆可建立（流程規範本就人人可讀），有效期自訂限管理者 */}
+            {doc && (
+              <Button variant="outline" size="sm" className="h-9"
+                onClick={() => { setShareOpen(true); loadShares() }}>
+                <Share2 className="h-3.5 w-3.5 mr-1" />分享
+              </Button>
+            )}
+            {isAdmin && (
+            <>
               <Button size="sm" className="h-9" onClick={() => setUploadOpen(true)}>
                 <Upload className="h-3.5 w-3.5 mr-1" />上傳新版本
               </Button>
@@ -293,8 +299,9 @@ export default function ProcessPage() {
                   <Trash2 className="h-3.5 w-3.5 mr-1" />刪除此版
                 </Button>
               )}
-            </div>
-          )}
+            </>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -427,9 +434,52 @@ export default function ProcessPage() {
           <DialogHeader>
             <DialogTitle>分享開發流程</DialogTitle>
             <DialogDescription>
-              產生公開連結，供沒有平台帳號者檢視。連結固定顯示<strong>最新版本</strong>，7 天後自動失效。
+              產生公開連結，供沒有平台帳號者檢視。連結固定顯示<strong>最新版本</strong>
+              {isAdmin ? "，到期後自動失效。" : "，7 天後自動失效。"}
             </DialogDescription>
           </DialogHeader>
+
+          {/* 有效期：僅管理者可調整；一般使用者維持預設 7 天 */}
+          {isAdmin && (
+            <div className="rounded-lg border bg-muted/30 p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs font-medium">連結有效期</Label>
+                <span className="text-[11px] text-muted-foreground">
+                  {new Date(Date.now() + shareDays * 86400000).toLocaleDateString("zh-TW")} 到期
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {SHARE_DAY_PRESETS.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setShareDays(d)}
+                    className={cn(
+                      "rounded-md border px-2 py-1 text-xs transition-colors",
+                      shareDays === d ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted",
+                    )}
+                  >
+                    {d} 天
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <span className="text-[11px] text-muted-foreground">指定到期日</span>
+                  <Input
+                    type="date"
+                    className="h-7 w-[9.5rem] text-xs"
+                    min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                    max={new Date(Date.now() + MAX_SHARE_DAYS * 86400000).toISOString().slice(0, 10)}
+                    value={new Date(Date.now() + shareDays * 86400000).toISOString().slice(0, 10)}
+                    onChange={(e) => {
+                      if (!e.target.value) return
+                      const diff = Math.ceil((new Date(e.target.value).getTime() - Date.now()) / 86400000)
+                      setShareDays(Math.min(MAX_SHARE_DAYS, Math.max(1, diff)))
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
 
           <div className="space-y-2 max-h-[45vh] overflow-y-auto">
