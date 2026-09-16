@@ -891,7 +891,6 @@ function MermaidBlock({ code }: { code: string }) {
     let cancelled = false
     import("mermaid").then((mod) => {
       const mermaid = mod.default
-      mermaid.initialize({ startOnLoad: false, theme: "neutral", fontFamily: "inherit" })
       const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
       mermaid.render(id, code).then(({ svg: result }) => {
         if (!cancelled) setSvg(result)

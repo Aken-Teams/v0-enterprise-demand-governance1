@@ -63,14 +63,8 @@ import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypeRaw from "rehype-raw"
 import mermaid from "mermaid"
+import "@/lib/mermaid-config"
 
-mermaid.initialize({
-  startOnLoad: false,
-  suppressErrorRendering: true,
-  securityLevel: "loose",
-  theme: "neutral",
-  themeVariables: { background: "transparent", primaryColor: "#dbeafe", primaryTextColor: "#1e3a5f", lineColor: "#94a3b8" },
-})
 
 function formatGherkinInMarkdown(input: string): string {
   // HackMD 容器語法（:::spoiler / :::info…）標準 Markdown 不認得，
@@ -1067,7 +1061,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                   <CardContent className="space-y-0 min-w-0">
                     <div>
                       <p className="text-xs font-semibold text-blue-600 mb-1.5">需求說明</p>
-                      <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none overflow-x-auto prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                      <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none overflow-x-auto prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5 prose-img:mx-auto prose-img:max-h-[55vh] prose-img:w-auto prose-img:rounded-lg prose-img:border [&_[data-mermaid-container]]:overflow-x-auto [&_[data-mermaid-container]_svg]:max-h-[50vh]">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mdComponents}>
                           {formatGherkinInMarkdown(demand.description)}
                         </ReactMarkdown>
@@ -1652,7 +1646,7 @@ export default function ShareDemandPage({ params }: { params: Promise<{ token: s
                               }
                               if (ext === "md") {
                                 return (
-                                  <div className="w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5">
+                                  <div className="w-full self-start max-h-[calc(100vh-13rem)] overflow-auto p-6 prose prose-sm prose-neutral dark:prose-invert max-w-none prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-muted/50 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5 prose-img:mx-auto prose-img:max-h-[55vh] prose-img:w-auto prose-img:rounded-lg prose-img:border [&_[data-mermaid-container]]:overflow-x-auto [&_[data-mermaid-container]_svg]:max-h-[50vh]">
                                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} remarkRehypeOptions={{ allowDangerousHtml: true }} components={mdComponents}>
                                       {formatGherkinInMarkdown(textContent)}
                                     </ReactMarkdown>

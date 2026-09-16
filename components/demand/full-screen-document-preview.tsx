@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { X, FileText, Loader2, Download, ExternalLink, FileAudio, ZoomIn, Highlighter, List, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { DOCUMENT_TYPE_LABELS } from "@/lib/constants/demand"
+import { MermaidBlock } from "@/components/mermaid-block"
 import { preprocessMarkdown } from "@/lib/markdown"
 import { buildToc, changedLineSet, headingId, rangeHasChange } from "@/lib/process-doc"
 import { cn } from "@/lib/utils"
@@ -14,7 +16,6 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypeRaw from "rehype-raw"
-import mermaid from "mermaid"
 import { ExcelPreview } from "@/components/excel-preview"
 
 // ── Gherkin formatting (shared logic) ──────────────────────────
@@ -81,46 +82,6 @@ function formatGherkinInMarkdown(input: string): string {
   return result.join('\n')
 }
 
-function MermaidBlock({ code }: { code: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading")
-  useEffect(() => {
-    if (!ref.current) return
-    setStatus("loading")
-    const id = `mermaid-fs-${Math.random().toString(36).slice(2, 9)}`
-    mermaid.render(id, code).then(({ svg }) => {
-      if (ref.current) {
-        ref.current.innerHTML = svg
-        ref.current.querySelectorAll("svg").forEach((s) => { s.style.background = "transparent"; s.style.maxWidth = "100%" })
-      }
-      setStatus("ok")
-    }).catch(() => {
-      if (!ref.current) return
-      const pre = document.createElement("pre")
-      pre.className = "mermaid"
-      pre.textContent = code
-      ref.current.innerHTML = ""
-      ref.current.appendChild(pre)
-      mermaid.run({ nodes: [pre], suppressErrors: true }).then(() => {
-        if (ref.current) {
-          ref.current.querySelectorAll("svg").forEach((s) => { s.style.background = "transparent"; s.style.maxWidth = "100%" })
-          setStatus(ref.current.querySelector("svg") ? "ok" : "error")
-        }
-      }).catch(() => setStatus("error"))
-    })
-    return () => { if (ref.current) ref.current.innerHTML = "" }
-  }, [code])
-
-  if (status === "error") {
-    return (
-      <div className="w-full rounded-lg border border-amber-200 bg-amber-50/50 p-4 not-prose">
-        <p className="text-xs font-medium text-amber-700 mb-2">此圖表格式無法解析</p>
-        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-white/60 rounded p-3">{code}</pre>
-      </div>
-    )
-  }
-  return <div ref={ref} data-mermaid-container className="flex justify-center not-prose [&_svg]:!bg-transparent" />
-}
 
 // ── Types ──────────────────────────────────────────────────────
 interface DocumentInfo {
@@ -440,6 +401,19 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
                   h1: heading(1), h2: heading(2), h3: heading(3),
                   h4: heading(4), h5: heading(5), h6: heading(6),
                   p({ node, children }) { return <p className={cn(hl(node) && HL)}>{children}</p> },
+                  // 內文圖片同樣限制高度，點擊以覆蓋層放大（與 Mermaid 一致的操作）
+                  img({ src, alt }) {
+                    const s = typeof src === "string" ? src : ""
+                    return (
+                      <img
+                        src={s}
+                        alt={alt ?? ""}
+                        className="mx-auto max-h-[60vh] w-auto cursor-zoom-in rounded-lg border"
+                        onClick={() => s && setZoomedImg(s)}
+                        title="點擊放大"
+                      />
+                    )
+                  },
                   li({ node, children }) { return <li className={cn(hl(node) && HL)}>{children}</li> },
                   tr({ node, children }) { return <tr className={cn(hl(node) && "bg-yellow-100/80")}>{children}</tr> },
                   blockquote({ node, children }) { return <blockquote className={cn(hl(node) && HL)}>{children}</blockquote> },
@@ -572,11 +546,33 @@ export function FullScreenDocumentPreview({ open, onOpenChange, doc, prevDoc, wa
       </Dialog>
 
       {/* Zoomed image overlay */}
-      {zoomedImg && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 cursor-zoom-out" onClick={() => setZoomedImg(null)}>
-          <img src={zoomedImg} className="max-w-[95vw] max-h-[95vh] object-contain" alt="Zoomed" />
+      {/*
+        以 Portal 掛到 body：Radix Dialog 的內容本身就是 portal 到 body 的，
+        若這層留在元件原處，它的 z-index 屬於外層的堆疊脈絡，會被 Dialog 蓋住——
+        點「關閉」實際上點到 Dialog 遮罩，整個預覽就被關掉了。
+      */}
+      {zoomedImg && typeof document !== "undefined" && createPortal((
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 p-6 cursor-zoom-out"
+          onClick={() => setZoomedImg(null)}
+        >
+          <img
+            src={zoomedImg}
+            className="max-h-[88vh] max-w-[90vw] object-contain"
+            alt="Zoomed"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {/* 點背景可關閉，但仍要有明確的關閉鈕——不是每個人都會想到點旁邊 */}
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-md bg-white/90 p-2 text-foreground shadow transition-colors hover:bg-white"
+            onClick={() => setZoomedImg(null)}
+            title="關閉"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-      )}
+      ), document.body)}
     </>
   )
 }
