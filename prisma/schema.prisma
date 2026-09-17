@@ -206,6 +206,7 @@ model User {
   createdShares      DemandShare[]
   quoteReviews       Demand[]        @relation("QuoteReviewer")
   devLinkConfirmed   Demand[]        @relation("DevLinkConfirmer")
+  todosEdited        DemandTodo[]    @relation("TodoEditor")
   auditLogs          AuditLog[]
   sentMailLogs       MailLog[]
   apiKeys            ApiKey[]
@@ -308,6 +309,7 @@ model Demand {
   acceptanceRecords AcceptanceRecord[]
   phasePlans        DemandPhasePlan[]
   subTasks          DemandSubTask[]
+  todo              DemandTodo?
   accessGrants      DemandAccess[]
   adminAccessGrants AdminAccess[]
   phaseSignoffs     PhaseSignoff[]
@@ -513,6 +515,27 @@ model DemandSubTask {
 
   @@index([demandId])
   @@map("demand_sub_tasks")
+}
+
+/// 專案內部待辦（團隊自我管理用的記事本）
+///
+/// 刻意與流程脫鉤：不是簽核、不是卡點、不指派給人，也**不對需求方與 Scrum Master 開放**。
+/// 一張需求一份 Markdown 筆記，支援 `- [ ]` 打勾語法，內容完全自由。
+/// 管理者看得到全部，交付團隊只看得到自己負責的案子。
+model DemandTodo {
+  id          String   @id @default(cuid())
+  demandId    String   @unique
+  demand      Demand   @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  /// Markdown 內容
+  content     String   @db.Text
+  /// 逾期說明（僅內部可見，不進流程也不對需求方開放）
+  overdueNote String?  @db.Text
+  updatedById String?
+  updatedBy   User?    @relation("TodoEditor", fields: [updatedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("demand_todos")
 }
 
 /// 需求可見權限 + 每專案審核角色 (管理員手動授權)

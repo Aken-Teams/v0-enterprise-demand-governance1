@@ -6,9 +6,9 @@ import Image from "next/image"
 import { usePathname } from "next/navigation"
 import {
   Building2,
+  ListChecks,
   LayoutDashboard,
   Inbox,
-  FolderKanban,
   BarChart3,
   FileLineChart,
   Bell,
@@ -80,6 +80,7 @@ const navSections: NavSection[] = [
     roles: ["admin"],
     items: [
       { title: "需求看板", href: "/governance/inbox", icon: Inbox, roles: ["admin"] },
+      { title: "專案待辦", href: "/todo", icon: ListChecks, roles: ["admin"] },
       { title: "報價單審核", href: "/governance/quote-review", icon: ReceiptText, roles: ["admin"] },
       { title: "報表分析", href: "/governance/analytics", icon: BarChart3, roles: ["admin"] },
     ],
@@ -100,8 +101,8 @@ const navSections: NavSection[] = [
     title: "交付團隊",
     roles: ["delivery"],
     items: [
-      { title: "我的專案", href: "/delivery", icon: FolderKanban, roles: ["delivery"] },
       { title: "需求列表", href: "/governance/inbox", icon: Inbox, roles: ["delivery"] },
+      { title: "專案待辦", href: "/todo", icon: ListChecks, roles: ["delivery"] },
     ],
   },
   {
@@ -257,7 +258,6 @@ export function AppLayout({ children, userRole = "subsidiary" }: AppLayoutProps)
     }
     // Fallback: detect from URL path before auth loads
     if (pathname.startsWith("/admin") || pathname.startsWith("/governance")) return "admin"
-    if (pathname.startsWith("/delivery")) return "delivery"
     if (pathname.startsWith("/subsidiary")) return "subsidiary"
     return userRole || "subsidiary"
   }, [pathname, userRole, user?.role])

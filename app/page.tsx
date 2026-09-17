@@ -42,7 +42,7 @@ const ADMIN_ROLE_LABELS: Record<string, string> = {
 
 const ROLE_ROUTES: Record<string, string> = {
   admin: "/governance/inbox",
-  delivery: "/delivery",
+  delivery: "/governance/inbox",
   subsidiary: "/subsidiary",
   viewer: "/governance/inbox",
 }
