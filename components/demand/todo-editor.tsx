@@ -3,7 +3,7 @@
 import {
   Children, Fragment, isValidElement,
   useCallback, useEffect, useMemo, useRef, useState,
-  type ReactNode,
+  type ReactElement, type ReactNode,
 } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -532,26 +532,57 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
                  */
                 li: ({ node, children, className }) => {
                   const line = node?.position?.start?.line
+                  const kids = Children.toArray(children)
+                  const box = kids.find(
+                    (c): c is ReactElement<{ type?: string; checked?: boolean }> =>
+                      isValidElement(c) && (c.props as { type?: string }).type === "checkbox"
+                  )
+
+                  // 一般清單項目：照原樣渲染
+                  if (!box) return <li className={className}>{decorate(children)}</li>
+
+                  // 待辦項目：整列可點，勾掉的用刪除線淡出
+                  const checked = !!box.props.checked
+                  const rest = kids.filter((c) => c !== box)
                   return (
-                    <li className={className}>
-                      {Children.map(children, (child) => {
-                        const props = isValidElement(child)
-                          ? (child.props as { type?: string; checked?: boolean })
-                          : null
-                        if (props?.type !== "checkbox") return decorate(child)
-                        return (
-                          <input
-                            type="checkbox"
-                            checked={!!props.checked}
-                            disabled={readOnly}
-                            onChange={() => toggleLine(line)}
-                            className={cn("mr-1.5 align-middle", !readOnly && "cursor-pointer")}
-                          />
-                        )
-                      })}
+                    <li className="list-none">
+                      <div
+                        onClick={() => toggleLine(line)}
+                        className={cn(
+                          "group -mx-1.5 flex items-start gap-2 rounded-md px-1.5 py-1 transition-colors",
+                          !readOnly && "cursor-pointer hover:bg-muted/50"
+                        )}
+                      >
+                        <span
+                          role="checkbox"
+                          aria-checked={checked}
+                          className={cn(
+                            "mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                            checked
+                              ? "border-emerald-500 bg-emerald-500 text-white"
+                              : "border-muted-foreground/40 bg-background group-hover:border-primary"
+                          )}
+                        >
+                          {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                        </span>
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 leading-snug",
+                            checked && "text-muted-foreground line-through decoration-muted-foreground/40"
+                          )}
+                        >
+                          {decorate(rest)}
+                        </span>
+                      </div>
                     </li>
                   )
                 },
+                // 待辦清單不要項目符號——方框本身就是符號，再加一個圓點只是雜訊
+                ul: ({ children, className }) => (
+                  <ul className={cn(className, className?.includes("contains-task-list") && "list-none pl-0")}>
+                    {children}
+                  </ul>
+                ),
                 h2: ({ children }) => <h2 className="text-sm font-semibold">{decorate(children)}</h2>,
                 h3: ({ children }) => <h3 className="text-xs font-semibold">{decorate(children)}</h3>,
               }}
