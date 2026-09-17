@@ -6,14 +6,18 @@ import { AppLayout } from "@/components/app-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { TodoEditor } from "@/components/demand/todo-editor"
+import { TodoSidebar, type UpcomingItem } from "@/components/demand/todo-sidebar"
 import { useAuth } from "@/hooks/use-auth"
 import { STATUS_MAP, demandStatusKey } from "@/lib/constants/demand"
 import type { DerivedTodoItem } from "@/lib/demand-todo"
 import { cn } from "@/lib/utils"
 import {
   Loader2, Inbox, Search, AlertTriangle, ExternalLink, CheckCircle2,
-  CalendarDays, Building2, NotebookPen,
+  CalendarDays, Building2, NotebookPen, X,
 } from "lucide-react"
 
 interface TodoRow {
@@ -21,6 +25,7 @@ interface TodoRow {
   demandNumber: string
   title: string
   status: string
+  isTerminated?: boolean
   vendor: string
   organization: string
   developer: { id: string; name: string } | null
@@ -34,6 +39,18 @@ interface TodoRow {
     actualStart: string | null
     actualEnd: string | null
   } | null
+  contactPerson: { id: string; name: string } | null
+  pm: { id: string; name: string } | null
+  subTasks: {
+    id: string
+    name: string
+    status: string
+    plannedStart: string | null
+    plannedEnd: string | null
+    actualStart: string | null
+    actualEnd: string | null
+    assignee: { id: string; name: string } | null
+  }[]
   todo: {
     content: string
     overdueNote: string | null
@@ -45,7 +62,26 @@ interface TodoRow {
 
 const fmt = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" }) : "—"
+/** 逐行解析 checklist 用 */
+const NEWLINE = String.fromCharCode(10)
+
 const toInput = (d: string | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : "")
+
+/**
+ * 已結束的狀態預設收起來——追蹤時看的幾乎都是還在跑的案子，
+ * 結案／取消／終止留在清單裡只會稀釋注意力，需要時再打開。
+ */
+const FINISHED = new Set(["CLOSED", "CANCELLED", "TERMINATED"])
+
+/** 清單排序：進行中的排前面，已結束的沉到最下方 */
+const PHASE_ORDER = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "ON_HOLD"]
+
+/**
+ * 篩選選單的分組——與需求列表一致。
+ * 已結案屬於流程的最後一個階段（走完全程），與「中途停掉」的終止、取消不同類。
+ */
+const PIPELINE_STATUSES = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED"]
+const INACTIVE_STATUSES = ["ON_HOLD", "TERMINATED", "CANCELLED"]
 
 /** 由 Markdown 內容算出打勾進度，與編輯器的統計同一套規則 */
 function countChecks(content: string) {
@@ -70,6 +106,9 @@ export default function TodoPage() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [onlyTodo, setOnlyTodo] = useState(false)
+  const [showFinished, setShowFinished] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [pickedDate, setPickedDate] = useState<Date | null>(null)
 
   const load = useCallback(async () => {
     if (!token) return
@@ -116,10 +155,38 @@ export default function TodoPage() {
     )
   }, [token])
 
+  /** 顯示用狀態鍵：已終止與已結案要分開（資料庫狀態都是 CLOSED） */
+  const keyOf = (r: TodoRow) => demandStatusKey(r.status, r.isTerminated)
+
+  /** 子任務的實際完成日：直接寫回甘特圖細項，與需求頁同一份資料 */
+  const saveSubTask = useCallback(async (demandId: string, taskId: string, actualEnd: string | null) => {
+    if (!token) return
+    const res = await fetch(`/api/demands/${demandId}/sub-tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ actualEnd }),
+    })
+    if (!res.ok) return
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === demandId
+          ? { ...r, subTasks: r.subTasks.map((t) => (t.id === taskId ? { ...t, actualEnd } : t)) }
+          : r
+      )
+    )
+  }, [token])
+
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase()
-    return rows.filter((r) => {
+    const list = rows.filter((r) => {
+      const key = keyOf(r)
+      if (statusFilter !== "all" && key !== statusFilter) return false
+      if (statusFilter === "all" && !showFinished && FINISHED.has(key)) return false
       if (onlyTodo && r.derived.length === 0 && !r.todo?.content?.trim()) return false
+      if (pickedDate) {
+        const due = r.currentPhasePlan?.plannedEnd
+        if (!due || new Date(due).toDateString() !== pickedDate.toDateString()) return false
+      }
       if (!kw) return true
       return (
         r.demandNumber.toLowerCase().includes(kw) ||
@@ -127,13 +194,63 @@ export default function TodoPage() {
         r.organization.toLowerCase().includes(kw)
       )
     })
-  }, [rows, search, onlyTodo])
+    // 進行中優先，已結束的沉底
+    return list.sort((a, b) => {
+      const ai = PHASE_ORDER.indexOf(a.status)
+      const bi = PHASE_ORDER.indexOf(b.status)
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
+    })
+  }, [rows, search, onlyTodo, showFinished, statusFilter, pickedDate])
+
+  /** 各狀態筆數，供篩選器顯示 */
+  const statusCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of rows) m.set(keyOf(r), (m.get(keyOf(r)) ?? 0) + 1)
+    return m
+  }, [rows])
 
   const active = useMemo(
     () => filtered.find((r) => r.id === activeId) ?? filtered[0] ?? null,
     [filtered, activeId]
   )
   const totalDerived = rows.reduce((s, r) => s + r.derived.length, 0)
+
+  // 月曆標記：各專案本階段的預計完成日
+  const markedDates = useMemo(
+    () =>
+      rows
+        .map((r) => r.currentPhasePlan?.plannedEnd)
+        .filter((d): d is string => !!d)
+        .map((d) => new Date(d)),
+    [rows]
+  )
+
+  /**
+   * 「接下來要做」：跨專案取尚未勾選的 checklist 項目，依預計完成日由近到遠。
+   * 純顯示用，不改動任何資料。
+   */
+  const upcoming = useMemo<UpcomingItem[]>(() => {
+    const items: UpcomingItem[] = []
+    for (const r of rows) {
+      const content = r.todo?.content ?? ""
+      if (!content.trim()) continue
+      for (const line of content.split(NEWLINE)) {
+        const m = line.match(/^\s*[-*]\s+\[\s\]\s*(.+)$/)
+        if (!m) continue
+        items.push({
+          demandId: r.id,
+          demandNumber: r.demandNumber,
+          text: m[1].replace(/[*_`~]/g, "").trim(),
+          due: r.currentPhasePlan?.plannedEnd ?? null,
+        })
+      }
+    }
+    return items.sort((a, b) => {
+      if (!a.due) return 1
+      if (!b.due) return -1
+      return new Date(a.due).getTime() - new Date(b.due).getTime()
+    })
+  }, [rows])
 
   return (
     <AppLayout userRole={isAdmin ? "admin" : "delivery"}>
@@ -176,14 +293,66 @@ export default function TodoPage() {
                       className="h-8 pl-8 text-xs"
                     />
                   </div>
-                  <Button
-                    variant={onlyTodo ? "default" : "ghost"}
-                    size="sm"
-                    className="h-7 w-full text-[11px]"
-                    onClick={() => setOnlyTodo((v) => !v)}
-                  >
-                    只看有待辦的
-                  </Button>
+                  {/* 開關做成 segmented：有邊框與底色，開／關一眼看得出 */}
+                  <div className="flex gap-1 rounded-md border p-0.5">
+                    <ToggleChip active={onlyTodo} onClick={() => setOnlyTodo((v) => !v)}>
+                      只看有待辦
+                    </ToggleChip>
+                    <ToggleChip
+                      active={showFinished}
+                      onClick={() => setShowFinished((v) => !v)}
+                      title="已結案、已取消、已終止預設隱藏"
+                    >
+                      含已結束
+                    </ToggleChip>
+                  </div>
+
+                  {/* 狀態篩選：與需求列表同一套分組樣式 */}
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-8 w-full text-xs">
+                      <SelectValue placeholder="全部狀態" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">全部狀態（{rows.length}）</SelectItem>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-600">
+                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />流程階段
+                        </SelectLabel>
+                        {PIPELINE_STATUSES.filter((k) => statusCounts.get(k)).map((k) => (
+                          <SelectItem key={k} value={k} className="text-xs">
+                            {(STATUS_MAP[k] ?? { label: k }).label}（{statusCounts.get(k)}）
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />已結束 / 非進行中
+                        </SelectLabel>
+                        {INACTIVE_STATUSES
+                          .filter((k) => statusCounts.get(k))
+                          .map((k) => (
+                            <SelectItem key={k} value={k} className="text-xs">
+                              {(STATUS_MAP[k] ?? { label: k }).label}（{statusCounts.get(k)}）
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+
+                  {pickedDate && (
+                    <button
+                      type="button"
+                      onClick={() => setPickedDate(null)}
+                      className="flex w-full items-center justify-between rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-800"
+                    >
+                      <span>
+                        只看 {pickedDate.toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })} 交件
+                      </span>
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="max-h-[calc(100vh-18rem)] overflow-y-auto p-1.5 lg:max-h-[calc(100vh-14rem)]">
@@ -191,7 +360,7 @@ export default function TodoPage() {
                     <p className="py-8 text-center text-xs text-muted-foreground">沒有符合條件的專案</p>
                   ) : (
                     filtered.map((r) => {
-                      const st = STATUS_MAP[demandStatusKey(r.status)] ?? { label: r.status, color: "" }
+                      const st = STATUS_MAP[keyOf(r)] ?? { label: r.status, color: "" }
                       const checks = countChecks(r.todo?.content ?? "")
                       const isActive = active?.id === r.id
                       return (
@@ -207,11 +376,20 @@ export default function TodoPage() {
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-[10px] text-muted-foreground">{r.demandNumber}</span>
                             <Badge className={cn("h-4 px-1 text-[9px] font-normal", st.color)}>{st.label}</Badge>
-                            {r.derived.length > 0 && (
-                              <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-100 px-1 text-[9px] font-medium text-amber-700">
-                                {r.derived.length}
-                              </span>
-                            )}
+                            <span className="ml-auto flex items-center gap-1">
+                              {/* 紅點：資料缺漏（已結案卻沒登記實際完成日），與一般待辦分開標示 */}
+                              {r.derived.some((d) => d.kind === "CLOSED_MISSING_ACTUAL") && (
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full bg-red-500"
+                                  title="已結案但甘特圖未登記實際完成日"
+                                />
+                              )}
+                              {r.derived.length > 0 && (
+                                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-100 px-1 text-[9px] font-medium text-amber-700">
+                                  {r.derived.length}
+                                </span>
+                              )}
+                            </span>
                           </div>
                           <p className={cn("mt-0.5 line-clamp-2 text-xs leading-snug", isActive ? "font-medium text-foreground" : "text-foreground/80")}>
                             {r.title}
@@ -237,51 +415,97 @@ export default function TodoPage() {
               </div>
             </aside>
 
-            {/* 右：單一專案的筆記頁 */}
-            {active && (
+            {/* 中：單一專案的筆記頁。篩選不到時仍保留版面，避免整塊消失 */}
+            {!active ? (
+              <section className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 rounded-xl border bg-card py-20 text-muted-foreground">
+                <Inbox className="h-10 w-10 text-muted-foreground/30" />
+                <p className="text-sm">沒有符合條件的專案</p>
+                <p className="text-xs text-muted-foreground/70">調整左側的搜尋或篩選條件</p>
+                {(pickedDate || statusFilter !== "all" || onlyTodo) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 h-7 text-xs"
+                    onClick={() => { setPickedDate(null); setStatusFilter("all"); setOnlyTodo(false) }}
+                  >
+                    清除所有篩選
+                  </Button>
+                )}
+              </section>
+            ) : (
               <section className="min-w-0 flex-1 rounded-xl border bg-card">
                 <div className="space-y-4 p-5 sm:p-7">
                   {/* 標題區 */}
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground">{active.demandNumber}</span>
-                      <Badge className={cn("text-[10px]", (STATUS_MAP[demandStatusKey(active.status)] ?? {}).color)}>
-                        {(STATUS_MAP[demandStatusKey(active.status)] ?? { label: active.status }).label}
+                      <Badge className={cn("text-[10px]", (STATUS_MAP[keyOf(active)] ?? {}).color)}>
+                        {(STATUS_MAP[keyOf(active)] ?? { label: active.status }).label}
                       </Badge>
-                      <Link
-                        href={`/governance/demands/${active.id}`}
-                        className="ml-auto flex items-center gap-1 text-xs text-primary hover:underline"
-                      >
-                        開啟需求<ExternalLink className="h-3 w-3" />
-                      </Link>
+                      <Button asChild variant="outline" size="sm" className="ml-auto h-7 shrink-0 text-xs">
+                        <Link href={`/governance/demands/${active.id}`}>
+                          <ExternalLink className="mr-1 h-3 w-3" />開啟需求
+                        </Link>
+                      </Button>
                     </div>
                     <h2 className="text-lg font-semibold leading-snug sm:text-2xl">{active.title}</h2>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground sm:text-xs">
+                    {/* 誰是誰寫清楚，以 | 分隔——只寫公司名稱會分不出需求方與開發方 */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground sm:text-xs">
                       <span className="flex items-center gap-1">
-                        <Building2 className="h-3.5 w-3.5" />{active.organization} · {active.vendor}
+                        <Building2 className="h-3.5 w-3.5" />
+                        需求公司 <span className="font-medium text-foreground">{active.organization}</span>
                       </span>
-                      {active.developer && <span>開發：{active.developer.name}</span>}
+                      <span className="text-border">|</span>
+                      <span>開發公司 <span className="font-medium text-foreground">{active.vendor}</span></span>
+                      <span className="text-border">|</span>
+                      <span>PM <span className="font-medium text-foreground">{active.pm?.name ?? "未指派"}</span></span>
+                      <span className="text-border">|</span>
+                      <span>開發者 <span className="font-medium text-foreground">{active.developer?.name ?? "未指派"}</span></span>
+                      <span className="text-border">|</span>
+                      <span>需求窗口 <span className="font-medium text-foreground">{active.contactPerson?.name ?? "未指派"}</span></span>
                     </div>
                   </div>
 
-                  {/* 時程：預計唯讀、實際可填 */}
-                  <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5">
-                    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground sm:text-xs">
-                      <CalendarDays className="h-3.5 w-3.5" />本階段預計完成
-                      <span className="font-medium text-foreground">{fmt(active.currentPhasePlan?.plannedEnd)}</span>
-                    </span>
-                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground sm:text-xs">
-                      實際完成
-                      <Input
-                        type="date"
-                        value={toInput(active.currentPhasePlan?.actualEnd)}
-                        onChange={(e) => patch(active.id, { actualEnd: e.target.value || null })}
-                        className="h-7 w-[8.5rem] text-xs"
-                      />
-                    </label>
-                    <span className="text-[11px] text-muted-foreground sm:text-xs">
-                      希望完成 <span className="font-medium text-foreground">{fmt(active.desiredDate)}</span>
-                    </span>
+                  {/* 甘特圖細項：預計日於需求頁排程（此處唯讀），實際完成日可就地補登 */}
+                  <div className="rounded-lg border">
+                    <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-2">
+                      <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[11px] font-medium sm:text-xs">開發任務</span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">
+                        希望完成 {fmt(active.desiredDate)}
+                      </span>
+                    </div>
+                    {active.subTasks.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                        尚未建立開發任務——請於需求頁的甘特圖新增
+                      </p>
+                    ) : (
+                      <div className="divide-y">
+                        {active.subTasks.map((t) => {
+                          const late = !!t.plannedEnd && !t.actualEnd && new Date(t.plannedEnd) < new Date()
+                          return (
+                            <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                              <span className={cn("min-w-0 flex-1 truncate text-xs", late && "text-red-700")}>
+                                {t.name}
+                                {t.assignee && (
+                                  <span className="ml-1.5 text-[10px] text-muted-foreground">{t.assignee.name}</span>
+                                )}
+                              </span>
+                              <span className="shrink-0 text-[11px] text-muted-foreground">
+                                預計 {fmt(t.plannedEnd)}
+                              </span>
+                              <Input
+                                type="date"
+                                value={toInput(t.actualEnd)}
+                                onChange={(e) => saveSubTask(active.id, t.id, e.target.value || null)}
+                                className={cn("h-7 w-[8.5rem] shrink-0 text-xs", late && "border-red-300")}
+                                title="實際完成日"
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* 逾期說明：逾期時才出現，避免平時多一個沒人填的欄位 */}
@@ -343,9 +567,46 @@ export default function TodoPage() {
                 </div>
               </section>
             )}
+
+            {/* 右：行事曆與近期待辦 */}
+            <TodoSidebar
+              markedDates={markedDates}
+              upcoming={upcoming}
+              onSelect={(id) => setActiveId(id)}
+              selectedDate={pickedDate}
+              onSelectDate={setPickedDate}
+            />
           </div>
         )}
       </div>
     </AppLayout>
+  )
+}
+
+/** 小型開關：有底色與邊框，開／關狀態一眼看得出來 */
+function ToggleChip({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  title?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={cn(
+        "flex-1 rounded px-2 py-1 text-[11px] transition-colors",
+        active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted",
+      )}
+    >
+      {children}
+    </button>
   )
 }

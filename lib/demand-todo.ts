@@ -19,6 +19,9 @@ export type TodoItemKind =
   | "DEV_LINK_UNCONFIRMED"
   | "CLOSING_SP_PENDING"
   | "OVERDUE"
+  | "NO_PLANNED_END"
+  | "NO_ACTUAL_END"
+  | "CLOSED_MISSING_ACTUAL"
 
 export interface DerivedTodoItem {
   kind: TodoItemKind
@@ -34,6 +37,13 @@ export interface DerivedTodoItem {
 
 interface DemandLike {
   status: string
+  phasePlans?: { phase: string; plannedEnd?: Date | string | null; actualEnd?: Date | string | null }[]
+  subTasks?: {
+    name: string
+    status: string
+    plannedEnd?: Date | string | null
+    actualEnd?: Date | string | null
+  }[]
   zhiheSpTaken?: number | null
   quoteReviewedAt?: Date | string | null
   devLinkConfirmedAt?: Date | string | null
@@ -148,7 +158,50 @@ export function deriveTodoItems(demand: DemandLike, isAdmin: boolean): DerivedTo
     })
   }
 
-  // 7) 逾期未完成
+  // 7) 甘特圖細項：缺預計日、或已過期未登記實際完成日
+  const activePhases = ["PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE"]
+  if (activePhases.includes(demand.status)) {
+    const tasks = demand.subTasks ?? []
+    const noPlan = tasks.filter((t) => !t.plannedEnd)
+    if (noPlan.length > 0) {
+      items.push({
+        kind: "NO_PLANNED_END",
+        label: `${noPlan.length} 個子任務未填預計完成日`,
+        detail: noPlan.slice(0, 3).map((t) => t.name).join("、") + (noPlan.length > 3 ? " 等" : ""),
+      })
+    }
+    // 已過預計日卻沒登記實際完成日——不填就分不出是做完沒登記，還是真的落後
+    const stale = tasks.filter(
+      (t) => t.plannedEnd && !t.actualEnd && new Date(t.plannedEnd).getTime() < Date.now()
+    )
+    if (stale.length > 0) {
+      const oldest = stale.reduce((a, b) =>
+        new Date(a.plannedEnd!) <= new Date(b.plannedEnd!) ? a : b
+      )
+      items.push({
+        kind: "NO_ACTUAL_END",
+        label: `${stale.length} 個子任務已過預計完成日`,
+        detail: `最久的是「${oldest.name}」，已過 ${dayDiff(oldest.plannedEnd!)} 天；完成請補登實際日期`,
+        waitingDays: dayDiff(oldest.plannedEnd!),
+      })
+    }
+  }
+
+  // 8) 已結案／已終止，但甘特圖細項沒登記實際完成日
+  //    案子都收了卻沒留下實際日期，交付週期、準時率這些統計就會失真，
+  //    而且事後沒人記得，故獨立標示出來提醒補登。
+  if (demand.status === "CLOSED") {
+    const unlogged = (demand.subTasks ?? []).filter((t) => !t.actualEnd)
+    if (unlogged.length > 0) {
+      items.push({
+        kind: "CLOSED_MISSING_ACTUAL",
+        label: `已結案但 ${unlogged.length} 個子任務未登記實際完成日`,
+        detail: unlogged.slice(0, 3).map((t) => t.name).join("、") + (unlogged.length > 3 ? " 等" : ""),
+      })
+    }
+  }
+
+  // 9) 逾期未完成
   if (
     demand.expectedDate &&
     !demand.completedDate &&
