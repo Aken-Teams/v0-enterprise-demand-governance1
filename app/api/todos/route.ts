@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         devLinkConfirmedAt: true,
         zhiheSpTaken: isAdmin,
         quoteReviewedAt: isAdmin,
+        organizationId: true,
         organization: { select: { name: true } },
         developer: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true } },
@@ -56,13 +57,13 @@ export async function GET(request: NextRequest) {
         documents: { select: { type: true, phase: true } },
         designChanges: { select: { status: true } },
         phaseSignoffs: {
-          where: { status: "PENDING" },
           select: {
             kind: true,
             status: true,
             phase: true,
+            targetRole: true,
             requestedAt: true,
-            targetUser: { select: { name: true } },
+            targetUser: { select: { id: true, name: true } },
           },
         },
         phasePlans: {
@@ -92,6 +93,27 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: "desc" },
     })
 
+    /**
+     * 供待辦裡 @ 標註用的人員——只給「這個專案真的相關」的人。
+     *
+     * Scrum Master 每廠不同人，取這案子實際找過的簽核對象；還沒送簽的案子
+     * 才退回該廠的 Scrum Master 名單。刻意不把整廠的人都列出來：
+     * 標註是為了快速指涉，選單一長反而找不到人。
+     */
+    const orgIds = [...new Set(demands.map((d) => d.organizationId).filter((x): x is string => !!x))]
+    const boardMembers = orgIds.length
+      ? await prisma.user.findMany({
+          where: {
+            isActive: true,
+            isOrgAccount: false,
+            isBoardMember: true,
+            organizationId: { in: orgIds },
+          },
+          select: { id: true, name: true, organizationId: true },
+          orderBy: { name: "asc" },
+        })
+      : []
+
     const rows = demands.map((d) => ({
       id: d.id,
       demandNumber: d.demandNumber,
@@ -117,6 +139,26 @@ export async function GET(request: NextRequest) {
       currentPhasePlan: d.phasePlans.find((p) => p.phase === d.status) ?? null,
       phasePlans: d.phasePlans.map((p) => ({ phase: p.phase, actualStart: p.actualStart })),
       subTasks: d.subTasks,
+      orgPeople: (() => {
+        const list: { role: string; name: string }[] = []
+        const add = (role: string, name?: string | null) => {
+          if (name && !list.some((x) => x.name === name)) list.push({ role, name })
+        }
+        for (const s of d.phaseSignoffs) {
+          if (s.targetRole === "BOARD" || s.targetRole === "BOARD_OVERRIDE") {
+            add("Scrum Master", s.targetUser?.name)
+          }
+        }
+        if (!list.some((x) => x.role === "Scrum Master")) {
+          for (const b of boardMembers.filter((b) => b.organizationId === d.organizationId)) {
+            add("Scrum Master", b.name)
+          }
+        }
+        // 各廠的 IT 沒有固定窗口，也不是系統使用者；給一個代稱就夠了——
+        // 寫這行的目的只是提醒自己「這件事要追 IT」。
+        add("IT", d.organization.name + " IT")
+        return list
+      })(),
       todo: d.todo ?? null,
       derived: deriveTodoItems(d as never, isAdmin),
     }))

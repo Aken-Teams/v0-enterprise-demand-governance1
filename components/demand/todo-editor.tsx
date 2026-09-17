@@ -1,23 +1,78 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  Children, Fragment, isValidElement,
+  useCallback, useEffect, useMemo, useRef, useState,
+  type ReactNode,
+} from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import rehypeRaw from "rehype-raw"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
-  Bold, List, ListChecks, Heading2, Link2, Pencil, Eye, Loader2, Check, AtSign, LayoutTemplate,
+  Bold, List, ListChecks, Heading2, Link2, Pencil, Eye, Loader2, Check, AtSign, LayoutTemplate, CalendarClock,
 } from "lucide-react"
 
 /** 換行字元；模板組字串時用，避免各處跳脫寫法不一致 */
 const NL = String.fromCharCode(10)
 
+/**
+ * 待辦的「壓時間」語法：行內寫 !2026-09-20。
+ *
+ * 用驚嘆號而不是 @：@ 已經給人名了，同一個符號兼兩種語意，
+ * 打起來和讀起來都會混淆。這個 token 由工具列的日期鍵插入，不必手打。
+ */
+export const DUE_RE = /!(\d{4}-\d{2}-\d{2})/
+
+/** n 天後的 YYYY-MM-DD（今天／明天／下週的快捷用） */
+export function isoIn(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate())
+}
+
+/** 距今天幾天（負數代表已過期）；只比日期不比時分 */
+export function dueDays(iso: string): number {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const [y, m, d] = iso.split("-").map(Number)
+  return Math.round((new Date(y, m - 1, d).getTime() - today) / 86400000)
+}
+
+/** 日期標籤文字：逾期／今天／明天，其餘顯示 9/20 */
+export function dueLabel(iso: string): string {
+  const diff = dueDays(iso)
+  const [, m, d] = iso.split("-").map(Number)
+  const md = m + "/" + d
+  if (diff < 0) return md + " 逾期"
+  if (diff === 0) return md + " 今天"
+  if (diff === 1) return md + " 明天"
+  return md
+}
+
 export interface TodoPerson {
-  /** 角色，例如 PM、開發者、需求窗口 */
+  /** 角色，例如 PM、開發者、需求窗口、Scrum Master */
   role: string
   name: string
 }
+
+/**
+ * 角色配色。
+ *
+ * 標註的重點是「這件事關係到哪一種人」，光看名字認不出角色——
+ * 尤其 Scrum Master 與需求方人員各廠都不同人。顏色讓一整頁筆記可以掃過去分辨。
+ */
+const ROLE_TONE: Record<string, string> = {
+  "PM": "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  "開發者": "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  "需求窗口": "bg-amber-50 text-amber-800 ring-amber-200",
+  "需求主管": "bg-rose-50 text-rose-700 ring-rose-200",
+  "Scrum Master": "bg-violet-50 text-violet-700 ring-violet-200",
+  "IT": "bg-cyan-50 text-cyan-700 ring-cyan-200",
+  "任務負責人": "bg-slate-100 text-slate-700 ring-slate-200",
+}
+const roleTone = (role: string) => ROLE_TONE[role] ?? "bg-muted text-muted-foreground ring-border"
 
 interface TodoEditorProps {
   value: string
@@ -40,7 +95,8 @@ interface TodoEditorProps {
  * 兩套互不相通的內容格式（其餘文件都是 Markdown）。
  *
  * 儲存採停止輸入後自動存檔，不做「儲存」按鈕：這是隨手記的筆記，
- * 多一個按鈕就多一個忘記按的機會。
+ * 多一個按鈕就多一個忘記按的機會。也刻意不顯示完成率——這是給自己看的備忘，
+ * 不是進度考核。
  */
 export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }: TodoEditorProps) {
   const [text, setText] = useState(value)
@@ -49,8 +105,11 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const dirty = useRef(false)
-  /** 工具列的兩個下拉：@ 標註、快速模板（同時只開一個） */
-  const [menu, setMenu] = useState<"mention" | "template" | null>(null)
+  /** 工具列下拉：快速模板、日期 */
+  const [menu, setMenu] = useState<"template" | "due" | null>(null)
+  /** 打 @ 時跟著游標出現的人名選單 */
+  const [at, setAt] = useState<{ start: number; query: string; top: number; left: number } | null>(null)
+  const [atIdx, setAtIdx] = useState(0)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // 點到別處就收起下拉，不然它會一直擋住下面的文字
@@ -63,7 +122,11 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
     return () => document.removeEventListener("mousedown", onDown)
   }, [menu])
 
-  useEffect(() => { setText(value); dirty.current = false }, [value])
+  // 外部資料更新時同步；但自己還沒存完就不要蓋掉正在打的字
+  useEffect(() => {
+    if (dirty.current) return
+    setText(value)
+  }, [value])
 
   // 停止輸入 1.2 秒後自動存檔
   useEffect(() => {
@@ -82,6 +145,38 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
   }, [text, onSave, readOnly])
 
   const update = (next: string) => { dirty.current = true; setText(next) }
+
+  /** 符合目前 @ 後面關鍵字的人 */
+  const atMatches = useMemo(() => {
+    if (!at) return []
+    const q = at.query.toLowerCase()
+    return people.filter((x) => !q || x.name.toLowerCase().includes(q) || x.role.toLowerCase().includes(q))
+  }, [at, people])
+
+  /**
+   * 每次輸入都檢查游標前是不是「@ + 還沒打完的名字」，是就把選單叫出來。
+   * 限制在 12 個字元內且不含空白，避免打信箱或程式碼時被誤觸。
+   */
+  const syncAt = useCallback((value: string, caret: number) => {
+    const ta = taRef.current
+    if (!ta || people.length === 0) return setAt(null)
+    const m = value.slice(0, caret).match(/@([^\s@]{0,12})$/)
+    if (!m) return setAt(null)
+    const pos = caretPoint(ta)
+    setAtIdx(0)
+    setAt({ start: caret - m[0].length, query: m[1], top: pos.top, left: pos.left })
+  }, [people])
+
+  /** 選定人名：把已打的 @關鍵字整段換成 @姓名 */
+  const pickPerson = useCallback((name: string) => {
+    const ta = taRef.current
+    if (!ta || !at) return
+    const next = text.slice(0, at.start) + "@" + name + " " + text.slice(ta.selectionStart)
+    update(next)
+    setAt(null)
+    const pos = at.start + name.length + 2
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos, pos) })
+  }, [at, text])
 
   /** 在游標處插入語法；有選取文字就包住它 */
   const wrap = useCallback((before: string, after = "", placeholderText = "") => {
@@ -117,50 +212,79 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
     const ta = taRef.current
     if (!ta) return
     const { selectionStart: s, selectionEnd: e } = ta
-    const start = text.lastIndexOf("\n", s - 1) + 1
-    const end = text.indexOf("\n", e) === -1 ? text.length : text.indexOf("\n", e)
+    const start = text.lastIndexOf(NL, s - 1) + 1
+    const end = text.indexOf(NL, e) === -1 ? text.length : text.indexOf(NL, e)
     const block = text.slice(start, end)
-    const lines = block.split("\n").map((l) => (l.startsWith(prefix) ? l.slice(prefix.length) : prefix + l))
-    const next = text.slice(0, start) + lines.join("\n") + text.slice(end)
+    const lines = block.split(NL).map((l) => (l.startsWith(prefix) ? l.slice(prefix.length) : prefix + l))
+    const next = text.slice(0, start) + lines.join(NL) + text.slice(end)
     update(next)
     requestAnimationFrame(() => ta.focus())
   }, [text])
 
-  /** 預覽模式下點擊核取方塊即切換勾選狀態，不必進編輯 */
-  const toggleCheckbox = useCallback((index: number) => {
-    if (readOnly) return
-    let seen = -1
-    const next = text
-      .split("\n")
-      .map((line) => {
-        const m = line.match(/^(\s*[-*]\s+)\[([ xX])\]/)
-        if (!m) return line
-        seen += 1
-        if (seen !== index) return line
-        const checked = m[2].toLowerCase() === "x"
-        return line.replace(/\[([ xX])\]/, checked ? "[ ]" : "[x]")
-      })
-      .join("\n")
-    update(next)
+  /**
+   * 預覽模式下點擊核取方塊即切換勾選狀態。
+   *
+   * 以 Markdown 的「原始行號」定位，而不是第幾個 checkbox：後者只要預覽與原文的
+   * 順序有一點出入就會勾錯行（也曾造成勾了取消不掉）。行號由 remark 的節點位置提供，
+   * 與 text 逐行對得起來。
+   */
+  const toggleLine = useCallback((line?: number) => {
+    if (readOnly || !line) return
+    const lines = text.split(NL)
+    const i = line - 1
+    const target = lines[i]
+    if (target == null) return
+    const m = target.match(/^(\s*[-*]\s+)\[([ xX])\]/)
+    if (!m) return
+    const checked = m[2].toLowerCase() === "x"
+    lines[i] = target.replace(/\[([ xX])\]/, checked ? "[ ]" : "[x]")
+    update(lines.join(NL))
   }, [text, readOnly])
+
+  /** 把日期壓在游標所在那一行的行尾（同一行已經有日期就換掉） */
+  const appendDue = useCallback((iso: string) => {
+    const ta = taRef.current
+    if (!ta) return
+    const caret = ta.selectionStart
+    const start = text.lastIndexOf(NL, caret - 1) + 1
+    const endIdx = text.indexOf(NL, caret)
+    const end = endIdx === -1 ? text.length : endIdx
+    const line = text.slice(start, end)
+    const token = "!" + iso
+    const replaced = DUE_RE.test(line)
+      ? line.replace(DUE_RE, token)
+      : line.replace(/\s*$/, "") + " " + token
+    update(text.slice(0, start) + replaced + text.slice(end))
+    const pos = start + replaced.length
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos, pos) })
+  }, [text])
 
   /**
    * 快速模板：把常見的「誰要做什麼」一次鋪好，人名直接帶入這個專案的實際人員，
    * 不必每次重打。查無該角色就留空白，不塞「未指派」占位字。
    */
   const templates = useMemo(() => {
-    const at = (role: string) => {
+    const mention = (role: string) => {
       const n = people.find((x) => x.role === role)?.name
       return n ? "@" + n + " " : ""
     }
     return [
       {
         label: "各角色待辦",
-        text: ["- [ ] " + at("PM"), "- [ ] " + at("開發者"), "- [ ] " + at("需求窗口"), ""].join(NL),
+        text: [
+          "- [ ] " + mention("PM"),
+          "- [ ] " + mention("開發者"),
+          "- [ ] " + mention("需求窗口"),
+          "",
+        ].join(NL),
       },
       {
         label: "追進度",
-        text: ["- [ ] 跟 " + at("需求窗口") + "確認回饋", "- [ ] 跟 " + at("PM") + "對齊時程", ""].join(NL),
+        text: [
+          "- [ ] 跟 " + mention("需求窗口") + "確認回饋",
+          "- [ ] 跟 " + mention("PM") + "對齊時程",
+          "",
+        ].join(NL),
       },
       {
         label: "本週重點",
@@ -169,30 +293,69 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
     ]
   }, [people])
 
-  const stats = useMemo(() => {
-    const boxes = text.match(/^\s*[-*]\s+\[([ xX])\]/gm) ?? []
-    const done = boxes.filter((b) => /\[[xX]\]/.test(b)).length
-    return { done, total: boxes.length }
-  }, [text])
-
   /**
-   * 預覽時把 @人名 轉成淡底標籤。
-   * 只比對這個專案實際的人名，而不是任意 @字串——否則信箱、程式碼都會被誤判。
+   * 把純文字裡的 @人名 與 !日期 換成標籤元素。
+   *
+   * 走 React 元素而不是塞 HTML 字串：筆記內容是使用者自己打的，
+   * 用 rehype-raw 解析原始 HTML 不只有風險，也會弄丟節點位置（打勾就定位不到行）。
    */
-  const rendered = useMemo(() => {
-    const names = people.map((x) => x.name).filter(Boolean).sort((a, b) => b.length - a.length)
-    if (names.length === 0) return text
-    const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    return text.replace(
-      new RegExp("@(" + escaped.join("|") + ")", "g"),
-      '<span class="rounded bg-primary/10 px-1 py-0.5 font-medium text-primary">@$1</span>'
-    )
-  }, [text, people])
+  const decorate = useCallback((node: ReactNode): ReactNode => {
+    if (Array.isArray(node)) {
+      return node.map((child, i) => <Fragment key={i}>{decorate(child)}</Fragment>)
+    }
+    if (typeof node !== "string") return node
 
-  let checkboxIndex = -1
+    const names = people.map((x) => x.name).filter(Boolean).sort((a, b) => b.length - a.length)
+    const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    const source = (escaped.length > 0 ? "@(" + escaped.join("|") + ")|" : "") + "!(\\d{4}-\\d{2}-\\d{2})"
+    const re = new RegExp(source, "g")
+
+    const out: ReactNode[] = []
+    let last = 0
+    let m: RegExpExecArray | null
+    while ((m = re.exec(node)) !== null) {
+      if (m.index > last) out.push(node.slice(last, m.index))
+      const [full, who, iso] = m
+      if (who) {
+        const role = people.find((x) => x.name === who)?.role ?? ""
+        out.push(
+          <span
+            key={m.index}
+            className={cn(
+              "mx-0.5 inline-flex items-baseline gap-1 rounded px-1.5 py-0.5 align-baseline text-[11px] font-medium ring-1 ring-inset",
+              roleTone(role)
+            )}
+          >
+            {role && <span className="opacity-70">{role}</span>}
+            {who}
+          </span>
+        )
+      } else if (iso) {
+        const diff = dueDays(iso)
+        out.push(
+          <span
+            key={m.index}
+            className={cn(
+              "mx-0.5 inline-block rounded px-1.5 py-0.5 align-baseline text-[11px] ring-1 ring-inset",
+              diff < 0
+                ? "bg-red-50 text-red-600 ring-red-200"
+                : diff <= 3
+                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                  : "bg-muted text-muted-foreground ring-border"
+            )}
+          >
+            {dueLabel(iso)}
+          </span>
+        )
+      }
+      last = m.index + full.length
+    }
+    if (last < node.length) out.push(node.slice(last))
+    return out.length > 0 ? out : node
+  }, [people])
 
   return (
-    <div className="rounded-lg border">
+    <div className="relative rounded-lg border">
       <div className="flex flex-wrap items-center gap-1 border-b bg-muted/30 px-2 py-1.5">
         {mode === "edit" && !readOnly && (
           <>
@@ -207,11 +370,20 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
                 {people.length > 0 && (
                   <ToolbarBtn
                     icon={AtSign}
-                    label="標註人員"
-                    active={menu === "mention"}
-                    onClick={() => setMenu((m) => (m === "mention" ? null : "mention"))}
+                    label="標註人員（或直接打 @）"
+                    onClick={() => {
+                      insert("@")
+                      const ta = taRef.current
+                      if (ta) requestAnimationFrame(() => syncAt(ta.value, ta.selectionStart))
+                    }}
                   />
                 )}
+                <ToolbarBtn
+                  icon={CalendarClock}
+                  label="壓日期"
+                  active={menu === "due"}
+                  onClick={() => setMenu((m) => (m === "due" ? null : "due"))}
+                />
                 <ToolbarBtn
                   icon={LayoutTemplate}
                   label="快速模板"
@@ -220,20 +392,30 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
                 />
               </span>
 
-              {menu === "mention" && (
-                <div className="absolute left-0 top-7 z-20 w-52 rounded-md border bg-popover p-1 shadow-md">
-                  <p className="px-2 py-1 text-[10px] text-muted-foreground">只是標記給自己看，不會通知對方</p>
-                  {people.map((per) => (
-                    <button
-                      key={per.role + per.name}
-                      type="button"
-                      onClick={() => { insert("@" + per.name + " "); setMenu(null) }}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                    >
-                      <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">{per.role}</span>
-                      <span className="truncate">{per.name}</span>
-                    </button>
-                  ))}
+              {menu === "due" && (
+                <div className="absolute left-0 top-7 z-20 w-52 rounded-md border bg-popover p-2 shadow-md">
+                  <p className="pb-1.5 text-[10px] text-muted-foreground">壓在游標所在的那一行</p>
+                  <input
+                    type="date"
+                    className="w-full rounded border bg-background px-2 py-1 text-xs"
+                    onChange={(e) => {
+                      if (!e.target.value) return
+                      appendDue(e.target.value)
+                      setMenu(null)
+                    }}
+                  />
+                  <div className="mt-1.5 flex gap-1">
+                    {[0, 1, 7].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => { appendDue(isoIn(d)); setMenu(null) }}
+                        className="flex-1 rounded border px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        {d === 0 ? "今天" : d === 1 ? "明天" : "下週"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -253,15 +435,7 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
                 </div>
               )}
             </div>
-
-            <span className="mx-1 h-4 w-px bg-border" />
           </>
-        )}
-
-        {stats.total > 0 && (
-          <span className="text-[11px] text-muted-foreground">
-            完成 {stats.done}/{stats.total}
-          </span>
         )}
 
         <span className="ml-auto flex items-center gap-2">
@@ -290,41 +464,99 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
       </div>
 
       {mode === "edit" && !readOnly ? (
-        <textarea
-          ref={taRef}
-          value={text}
-          onChange={(e) => update(e.target.value)}
-          placeholder={placeholder ?? "寫下這個專案要做的事…\n\n- [ ] 例如：等強茂 IT 開 API 權限\n- [ ] 例如：PPT 版面待優化"}
-          className="min-h-[180px] w-full resize-y bg-transparent p-3 font-mono text-xs leading-relaxed outline-none"
-        />
+        <>
+          <textarea
+            ref={taRef}
+            value={text}
+            onChange={(e) => { update(e.target.value); syncAt(e.target.value, e.target.selectionStart) }}
+            onClick={() => setAt(null)}
+            onBlur={() => setTimeout(() => setAt(null), 120)}
+            onKeyDown={(e) => {
+              if (!at || atMatches.length === 0) return
+              if (e.key === "ArrowDown") { e.preventDefault(); setAtIdx((i) => (i + 1) % atMatches.length) }
+              else if (e.key === "ArrowUp") { e.preventDefault(); setAtIdx((i) => (i - 1 + atMatches.length) % atMatches.length) }
+              else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickPerson(atMatches[atIdx].name) }
+              else if (e.key === "Escape") { e.preventDefault(); setAt(null) }
+            }}
+            placeholder={placeholder ?? "寫下這個專案要做的事…\n\n- [ ] 例如：等強茂 IT 開 API 權限（打 @ 可標註人員）\n- [ ] 例如：PPT 版面待優化"}
+            className="min-h-[180px] w-full resize-y bg-transparent p-3 font-mono text-xs leading-relaxed outline-none"
+          />
+
+          {at && atMatches.length > 0 && (
+            <div
+              className="absolute z-30 max-h-56 w-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-lg"
+              style={{ top: at.top, left: at.left }}
+            >
+              <p className="px-2 py-1 text-[10px] text-muted-foreground">只是標記給自己看，不會通知對方</p>
+              {atMatches.map((per, i) => (
+                <button
+                  key={per.role + per.name}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); pickPerson(per.name) }}
+                  onMouseEnter={() => setAtIdx(i)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs",
+                    i === atIdx && "bg-muted"
+                  )}
+                >
+                  <span className={cn("shrink-0 rounded px-1 text-[10px] ring-1 ring-inset", roleTone(per.role))}>
+                    {per.role}
+                  </span>
+                  <span className="truncate">{per.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <div
-          className="prose prose-sm prose-neutral max-w-none p-3 prose-p:my-1 prose-ul:my-1 prose-li:my-0.5"
+          className={cn(
+            "prose prose-sm prose-neutral max-w-none p-3",
+            // 區塊之間留出間距，讓預覽的段落分隔看起來跟編輯時打的空行一致
+            "prose-p:my-0 prose-ul:my-0 prose-headings:my-0 prose-li:my-0.5 [&>*+*]:mt-3"
+          )}
           onDoubleClick={() => !readOnly && setMode("edit")}
           title={readOnly ? undefined : "點兩下開始編輯"}
         >
           {text.trim() ? (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
               components={{
-                input({ checked, type }) {
-                  if (type !== "checkbox") return null
-                  checkboxIndex += 1
-                  const idx = checkboxIndex
+                p: ({ children }) => <p>{decorate(children)}</p>,
+                /**
+                 * 待辦項目的核取方塊在這裡整個換掉。
+                 *
+                 * remark-gfm 產生的 input 節點是合成的、沒有原始位置（行號只有 li 有），
+                 * 而且它在 children 裡是「元件」而不是 <input> 元素，用 type 判斷抓不到——
+                 * 所以直接認 props.type === "checkbox"，用自己的 input 取代並綁上行號。
+                 */
+                li: ({ node, children, className }) => {
+                  const line = node?.position?.start?.line
                   return (
-                    <input
-                      type="checkbox"
-                      checked={!!checked}
-                      disabled={readOnly}
-                      onChange={() => toggleCheckbox(idx)}
-                      className={cn("mr-1.5 align-middle", !readOnly && "cursor-pointer")}
-                    />
+                    <li className={className}>
+                      {Children.map(children, (child) => {
+                        const props = isValidElement(child)
+                          ? (child.props as { type?: string; checked?: boolean })
+                          : null
+                        if (props?.type !== "checkbox") return decorate(child)
+                        return (
+                          <input
+                            type="checkbox"
+                            checked={!!props.checked}
+                            disabled={readOnly}
+                            onChange={() => toggleLine(line)}
+                            className={cn("mr-1.5 align-middle", !readOnly && "cursor-pointer")}
+                          />
+                        )
+                      })}
+                    </li>
                   )
                 },
+                h2: ({ children }) => <h2 className="text-sm font-semibold">{decorate(children)}</h2>,
+                h3: ({ children }) => <h3 className="text-xs font-semibold">{decorate(children)}</h3>,
               }}
             >
-              {rendered}
+              {text}
             </ReactMarkdown>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -335,6 +567,39 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
       )}
     </div>
   )
+}
+
+/**
+ * 量出游標在 textarea 內的座標。
+ *
+ * 作法是複製 textarea 的字體與寬度到一個隱藏 div，把游標前的文字放進去、
+ * 在尾端插一個標記元素來量它的位置。看起來土，但這是唯一能同時處理
+ * 換行、折行與任意字體的方法（textarea 本身沒有提供游標座標 API）。
+ */
+function caretPoint(ta: HTMLTextAreaElement) {
+  const cs = getComputedStyle(ta)
+  const div = document.createElement("div")
+  const copy = [
+    "font-family", "font-size", "font-weight", "line-height", "letter-spacing",
+    "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "border-width", "box-sizing", "width",
+  ]
+  for (const k of copy) div.style.setProperty(k, cs.getPropertyValue(k))
+  div.style.position = "absolute"
+  div.style.visibility = "hidden"
+  div.style.whiteSpace = "pre-wrap"
+  div.style.wordWrap = "break-word"
+  div.style.top = "0"
+  div.style.left = "-9999px"
+  document.body.appendChild(div)
+  div.textContent = ta.value.slice(0, ta.selectionStart)
+  const marker = document.createElement("span")
+  marker.textContent = "."
+  div.appendChild(marker)
+  const point = { top: marker.offsetTop - ta.scrollTop, left: marker.offsetLeft }
+  document.body.removeChild(div)
+  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5
+  return { top: ta.offsetTop + point.top + lh, left: ta.offsetLeft + point.left }
 }
 
 function ToolbarBtn({

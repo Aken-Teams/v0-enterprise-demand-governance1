@@ -5,13 +5,40 @@ import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
 import { CalendarDays, ChevronDown, ListTodo, PanelRightClose, PanelRightOpen } from "lucide-react"
 
+/** 依專案分組，組內維持原本（依日期）的順序 */
+function groupByDemand(items: UpcomingItem[]) {
+  const groups: { id: string; number: string; title: string; items: UpcomingItem[] }[] = []
+  for (const it of items) {
+    const g = groups.find((x) => x.id === it.demandId)
+    if (g) g.items.push(it)
+    else groups.push({ id: it.demandId, number: it.demandNumber, title: it.demandTitle, items: [it] })
+  }
+  return groups
+}
+
+/** 日期標籤：逾期紅、三天內橘，其餘灰 */
+function dueChip(due: string, self?: boolean) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const d = new Date(due)
+  const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - today) / 86400000)
+  const text =
+    diff < 0 ? `逾期 ${-diff} 天` : diff === 0 ? "今天" : diff === 1 ? "明天" : `${d.getMonth() + 1}/${d.getDate()}`
+  const tone =
+    diff < 0 ? "bg-red-50 text-red-600" : diff <= 3 ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground"
+  return { text: self ? text : text + "（階段）", tone }
+}
+
 export interface UpcomingItem {
   demandId: string
   demandNumber: string
+  demandTitle: string
   /** checklist 裡尚未勾選的文字 */
   text: string
-  /** 該專案本階段預計完成日，供排序與顯示 */
+  /** 日期（自己壓的優先，否則用本階段預計完成日），供排序與顯示 */
   due: string | null
+  /** true 代表這個日期是自己在待辦上壓的，不是階段計畫的 */
+  selfDue?: boolean
 }
 
 interface TodoSidebarProps {
@@ -84,7 +111,7 @@ export function TodoSidebar({ markedDates, upcoming, onSelect, selectedDate, onS
           >
             <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-sm font-medium">行事曆</span>
-            <span className="shrink-0 text-[11px] text-muted-foreground">{marked.length} 個交件日</span>
+            <span className="shrink-0 text-[11px] text-muted-foreground">{marked.length} 個到期日</span>
             <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", !calOpen && "-rotate-90")} />
           </button>
           {/* 收合整欄：常駐的獨立按鈕，不做成 hover 才出現（找不到就等於沒有） */}
@@ -119,7 +146,7 @@ export function TodoSidebar({ markedDates, upcoming, onSelect, selectedDate, onS
             />
             <p className="px-3 pb-1 text-[10px] text-muted-foreground">
               <span className="mr-1 inline-block h-1 w-1 rounded-full bg-amber-500 align-middle" />
-              有專案預計於該日完成{selectedDate ? "．點同一天可取消篩選" : "．點日期可篩選左側清單"}
+              階段預計完成日或待辦壓的日期{selectedDate ? "．點同一天可取消篩選" : "．點日期可篩選左側清單"}
             </p>
           </div>
         )}
@@ -148,26 +175,39 @@ export function TodoSidebar({ markedDates, upcoming, onSelect, selectedDate, onS
                 <span className="text-muted-foreground/70">在「我的待辦」用工具列的待辦鍵建立可打勾項目，這裡就會帶出來</span>
               </p>
             ) : (
-              upcoming.slice(0, 5).map((item, i) => (
-                <button
-                  key={`${item.demandId}-${i}`}
-                  type="button"
-                  onClick={() => onSelect?.(item.demandId)}
-                  className="mb-0.5 flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
-                >
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs leading-snug">{item.text}</span>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                      <span className="font-mono">{item.demandNumber}</span>
-                      {item.due && (
-                        <span>
-                          · {new Date(item.due).toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })} 到期
+              /* 依專案分組：只列事情看不出是誰家的事，專案名稱才是定位點 */
+              groupByDemand(upcoming.slice(0, 8)).map((g) => (
+                <div key={g.id} className="mb-1 last:mb-0">
+                  <button
+                    type="button"
+                    onClick={() => onSelect?.(g.id)}
+                    className="flex w-full items-baseline gap-1.5 rounded px-2 py-1 text-left transition-colors hover:bg-muted/60"
+                  >
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{g.number}</span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{g.title}</span>
+                  </button>
+                  {g.items.map((item, i) => {
+                    const chip = item.due ? dueChip(item.due, item.selfDue) : null
+                    return (
+                      <button
+                        key={`${g.id}-${i}`}
+                        type="button"
+                        onClick={() => onSelect?.(item.demandId)}
+                        className="flex w-full items-start gap-2 rounded-lg py-1 pl-4 pr-2 text-left transition-colors hover:bg-muted/60"
+                      >
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" />
+                        <span className="min-w-0 flex-1 text-xs leading-snug">
+                          <span className="align-middle">{item.text}</span>
+                          {chip && (
+                            <span className={cn("ml-1.5 shrink-0 rounded px-1 py-0.5 align-middle text-[10px]", chip.tone)}>
+                              {chip.text}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  </span>
-                </button>
+                      </button>
+                    )
+                  })}
+                </div>
               ))
             )}
           </div>

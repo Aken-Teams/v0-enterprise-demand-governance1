@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { TodoEditor, type TodoPerson } from "@/components/demand/todo-editor"
+import { TodoEditor, DUE_RE, type TodoPerson } from "@/components/demand/todo-editor"
 import { TodoSidebar, type UpcomingItem } from "@/components/demand/todo-sidebar"
 import { useAuth } from "@/hooks/use-auth"
 import { STATUS_MAP, demandStatusKey } from "@/lib/constants/demand"
@@ -52,6 +52,8 @@ interface TodoRow {
     actualEnd: string | null
     assignee: { id: string; name: string } | null
   }[]
+  /** 該廠人員（Scrum Master／需求方），供 @ 標註挑人 */
+  orgPeople?: { role: string; name: string }[]
   todo: {
     content: string
     overdueNote: string | null
@@ -83,12 +85,6 @@ const PHASE_ORDER = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCE
  */
 const PIPELINE_STATUSES = ["SUBMITTED", "PRD_REVIEW", "SP_REVIEW", "DEVELOPING", "ACCEPTANCE", "CLOSED"]
 const INACTIVE_STATUSES = ["ON_HOLD", "TERMINATED", "CANCELLED"]
-
-/** 由 Markdown 內容算出打勾進度，與編輯器的統計同一套規則 */
-function countChecks(content: string) {
-  const boxes = content.match(/^\s*[-*]\s+\[([ xX])\]/gm) ?? []
-  return { done: boxes.filter((b) => /\[[xX]\]/.test(b)).length, total: boxes.length }
-}
 
 /**
  * 專案待辦（內部用）。
@@ -187,8 +183,19 @@ export default function TodoPage() {
       if (statusFilter === "all" && !showFinished && FINISHED.has(key)) return false
       if (onlyTodo && r.derived.length === 0 && !r.todo?.content?.trim()) return false
       if (pickedDate) {
-        const due = r.currentPhasePlan?.plannedEnd
-        if (!due || new Date(due).toDateString() !== pickedDate.toDateString()) return false
+        // 月曆上的點包含兩種來源：階段預計完成日、以及自己壓在待辦上的日期，
+        // 兩者都要能篩到，否則點下去會出現空清單。
+        const want = pickedDate.toDateString()
+        const phaseDue = r.currentPhasePlan?.plannedEnd
+        const hit =
+          (!!phaseDue && new Date(phaseDue).toDateString() === want) ||
+          (r.todo?.content ?? "")
+            .split(NEWLINE)
+            .some((line) => {
+              const m = line.match(DUE_RE)
+              return !!m && new Date(m[1]).toDateString() === want
+            })
+        if (!hit) return false
       }
       if (!kw) return true
       return (
@@ -232,14 +239,29 @@ export default function TodoPage() {
   const tasksDone = !!active && active.subTasks.length > 0 && active.subTasks.every((t) => !!t.actualEnd)
   const tasksOpen = active ? (taskOpen[active.id] ?? (tasksRelevant && !tasksDone)) : false
 
-  // 月曆標記：各專案本階段的預計完成日
+  /** 自己在待辦上壓的日期（!YYYY-MM-DD），也要標進月曆 */
+  const selfDueDates = useMemo(() => {
+    const out: Date[] = []
+    for (const r of rows) {
+      for (const line of (r.todo?.content ?? "").split(NEWLINE)) {
+        if (!/^\s*[-*]\s+\[\s\]/.test(line)) continue
+        const m = line.match(DUE_RE)
+        if (m) out.push(new Date(m[1]))
+      }
+    }
+    return out
+  }, [rows])
+
+  // 月曆標記：各專案本階段的預計完成日 + 自己壓在待辦上的日期
   const markedDates = useMemo(
-    () =>
-      rows
+    () => [
+      ...rows
         .map((r) => r.currentPhasePlan?.plannedEnd)
         .filter((d): d is string => !!d)
         .map((d) => new Date(d)),
-    [rows]
+      ...selfDueDates,
+    ],
+    [rows, selfDueDates]
   )
 
   /**
@@ -254,11 +276,15 @@ export default function TodoPage() {
       for (const line of content.split(NEWLINE)) {
         const m = line.match(/^\s*[-*]\s+\[\s\]\s*(.+)$/)
         if (!m) continue
+        // 自己壓的日期優先；沒壓才退回本階段預計完成日（後者只是參考，會標「階段」）
+        const dueToken = m[1].match(DUE_RE)
         items.push({
           demandId: r.id,
           demandNumber: r.demandNumber,
-          text: m[1].replace(/[*_`~]/g, "").trim(),
-          due: r.currentPhasePlan?.plannedEnd ?? null,
+          demandTitle: r.title,
+          text: m[1].replace(DUE_RE, "").replace(/[*_`~]/g, "").trim(),
+          due: dueToken ? dueToken[1] : (r.currentPhasePlan?.plannedEnd ?? null),
+          selfDue: !!dueToken,
         })
       }
     }
@@ -280,6 +306,8 @@ export default function TodoPage() {
     add("開發者", active.developer?.name)
     add("需求窗口", active.contactPerson?.name)
     for (const t of active.subTasks) add("任務負責人", t.assignee?.name)
+    // Scrum Master 每廠不同人，IT 之類的窗口也只能從該廠人員裡挑
+    for (const p of active.orgPeople ?? []) add(p.role, p.name)
     return list
   }, [active])
 
@@ -386,7 +414,7 @@ export default function TodoPage() {
                       className="flex w-full items-center justify-between rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-800"
                     >
                       <span>
-                        只看 {pickedDate.toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })} 交件
+                        只看 {pickedDate.toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" })} 到期
                       </span>
                       <X className="h-3 w-3" />
                     </button>
@@ -399,7 +427,6 @@ export default function TodoPage() {
                   ) : (
                     filtered.map((r) => {
                       const st = STATUS_MAP[keyOf(r)] ?? { label: r.status, color: "" }
-                      const checks = countChecks(r.todo?.content ?? "")
                       const isActive = active?.id === r.id
                       return (
                         <button
@@ -432,19 +459,6 @@ export default function TodoPage() {
                           <p className={cn("mt-0.5 line-clamp-2 text-xs leading-snug", isActive ? "font-medium text-foreground" : "text-foreground/80")}>
                             {r.title}
                           </p>
-                          {checks.total > 0 && (
-                            <div className="mt-1.5 flex items-center gap-1.5">
-                              <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                                <div
-                                  className="h-full rounded-full bg-emerald-500"
-                                  style={{ width: `${(checks.done / checks.total) * 100}%` }}
-                                />
-                              </div>
-                              <span className="text-[9px] tabular-nums text-muted-foreground">
-                                {checks.done}/{checks.total}
-                              </span>
-                            </div>
-                          )}
                         </button>
                       )
                     })
