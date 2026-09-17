@@ -142,7 +142,11 @@ export function TodoSidebar({ markedDates, upcoming, onSelect, selectedDate, onS
         {listOpen && (
           <div className="border-t p-1.5">
             {upcoming.length === 0 ? (
-              <p className="px-2 py-4 text-center text-xs text-muted-foreground">無 todo 待辦事項</p>
+              <p className="px-3 py-4 text-center text-[11px] leading-relaxed text-muted-foreground">
+                沒有未勾選的待辦
+                <br />
+                <span className="text-muted-foreground/70">在「我的待辦」用工具列的待辦鍵建立可打勾項目，這裡就會帶出來</span>
+              </p>
             ) : (
               upcoming.slice(0, 5).map((item, i) => (
                 <button

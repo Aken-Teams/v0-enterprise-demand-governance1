@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
       completedDate: d.completedDate,
       // 目前階段的規劃／實際結束日——開發者要填的「實際完成日」就是這個
       currentPhasePlan: d.phasePlans.find((p) => p.phase === d.status) ?? null,
+      phasePlans: d.phasePlans.map((p) => ({ phase: p.phase, actualStart: p.actualStart })),
       subTasks: d.subTasks,
       todo: d.todo ?? null,
       derived: deriveTodoItems(d as never, isAdmin),

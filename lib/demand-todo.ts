@@ -23,6 +23,18 @@ export type TodoItemKind =
   | "NO_ACTUAL_END"
   | "CLOSED_MISSING_ACTUAL"
 
+/**
+ * 「甘特圖資料沒填」這一類的項目。
+ *
+ * 與一般待辦分開標示（清單上用紅點）：其他項目是「還要做的事」，
+ * 這一類是「資料沒補齊」——不處理不會擋流程，但會讓時程統計失真。
+ */
+export const DATA_GAP_KINDS: TodoItemKind[] = [
+  "NO_PLANNED_END",
+  "NO_ACTUAL_END",
+  "CLOSED_MISSING_ACTUAL",
+]
+
 export interface DerivedTodoItem {
   kind: TodoItemKind
   /** 顯示文字 */
@@ -37,7 +49,12 @@ export interface DerivedTodoItem {
 
 interface DemandLike {
   status: string
-  phasePlans?: { phase: string; plannedEnd?: Date | string | null; actualEnd?: Date | string | null }[]
+  phasePlans?: {
+    phase: string
+    plannedEnd?: Date | string | null
+    actualStart?: Date | string | null
+    actualEnd?: Date | string | null
+  }[]
   subTasks?: {
     name: string
     status: string
@@ -190,7 +207,11 @@ export function deriveTodoItems(demand: DemandLike, isAdmin: boolean): DerivedTo
   // 8) 已結案／已終止，但甘特圖細項沒登記實際完成日
   //    案子都收了卻沒留下實際日期，交付週期、準時率這些統計就會失真，
   //    而且事後沒人記得，故獨立標示出來提醒補登。
-  if (demand.status === "CLOSED") {
+  // 以「開發階段是否真的開始過」判斷，而不是看狀態是不是 CLOSED——
+  // 有些案子在 PRD／開案確認階段就終止，從未進開發，本來就不會有子任務，
+  // 對它們喊「未登記實際完成日」只是製造雜訊。
+  const everDeveloped = !!(demand.phasePlans ?? []).find((p) => p.phase === "DEVELOPING")?.actualStart
+  if (demand.status === "CLOSED" && everDeveloped) {
     const unlogged = (demand.subTasks ?? []).filter((t) => !t.actualEnd)
     if (unlogged.length > 0) {
       items.push({

@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input"
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { TodoEditor } from "@/components/demand/todo-editor"
+import { TodoEditor, type TodoPerson } from "@/components/demand/todo-editor"
 import { TodoSidebar, type UpcomingItem } from "@/components/demand/todo-sidebar"
 import { useAuth } from "@/hooks/use-auth"
 import { STATUS_MAP, demandStatusKey } from "@/lib/constants/demand"
-import type { DerivedTodoItem } from "@/lib/demand-todo"
+import { DATA_GAP_KINDS, type DerivedTodoItem } from "@/lib/demand-todo"
 import { cn } from "@/lib/utils"
 import {
   Loader2, Inbox, Search, AlertTriangle, ExternalLink, CheckCircle2,
@@ -39,6 +39,7 @@ interface TodoRow {
     actualStart: string | null
     actualEnd: string | null
   } | null
+  phasePlans?: { phase: string; actualStart: string | null }[]
   contactPerson: { id: string; name: string } | null
   pm: { id: string; name: string } | null
   subTasks: {
@@ -109,6 +110,8 @@ export default function TodoPage() {
   const [showFinished, setShowFinished] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [pickedDate, setPickedDate] = useState<Date | null>(null)
+  /** 開發任務區塊的展開覆寫；未設定時依「是否填完」決定預設 */
+  const [taskOpen, setTaskOpen] = useState<Record<string, boolean>>({})
 
   const load = useCallback(async () => {
     if (!token) return
@@ -215,6 +218,20 @@ export default function TodoPage() {
   )
   const totalDerived = rows.reduce((s, r) => s + r.derived.length, 0)
 
+  /**
+   * 開發任務的展開規則。
+   *
+   * 子任務是開案後才會建立的，開案前（需求確認／PRD／開案確認）談「還沒填」沒有意義，
+   * 故一律預設收起、也不標紅點；開案之後（開發中／驗收中／已結案）才視填寫狀況提醒。
+   */
+  const tasksRelevant =
+    !!active &&
+    (["DEVELOPING", "ACCEPTANCE"].includes(active.status) ||
+      // 已結案／已終止者，只有真的進過開發階段才該有子任務
+      !!active.phasePlans?.find((p) => p.phase === "DEVELOPING")?.actualStart)
+  const tasksDone = !!active && active.subTasks.length > 0 && active.subTasks.every((t) => !!t.actualEnd)
+  const tasksOpen = active ? (taskOpen[active.id] ?? (tasksRelevant && !tasksDone)) : false
+
   // 月曆標記：各專案本階段的預計完成日
   const markedDates = useMemo(
     () =>
@@ -251,6 +268,20 @@ export default function TodoPage() {
       return new Date(a.due).getTime() - new Date(b.due).getTime()
     })
   }, [rows])
+
+  /** 供 @ 標註的人員：本案實際的角色 + 甲特圖細項的負責人（去重） */
+  const people = useMemo<TodoPerson[]>(() => {
+    if (!active) return []
+    const list: TodoPerson[] = []
+    const add = (role: string, name?: string | null) => {
+      if (name && !list.some((x) => x.name === name)) list.push({ role, name })
+    }
+    add("PM", active.pm?.name)
+    add("開發者", active.developer?.name)
+    add("需求窗口", active.contactPerson?.name)
+    for (const t of active.subTasks) add("任務負責人", t.assignee?.name)
+    return list
+  }, [active])
 
   return (
     <AppLayout userRole={isAdmin ? "admin" : "delivery"}>
@@ -319,9 +350,14 @@ export default function TodoPage() {
                         <SelectLabel className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-600">
                           <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />流程階段
                         </SelectLabel>
-                        {PIPELINE_STATUSES.filter((k) => statusCounts.get(k)).map((k) => (
-                          <SelectItem key={k} value={k} className="text-xs">
-                            {(STATUS_MAP[k] ?? { label: k }).label}（{statusCounts.get(k)}）
+                        {/* 所有狀態都列出（含 0 筆），才看得出「這個階段目前沒有案子」 */}
+                        {PIPELINE_STATUSES.map((k) => (
+                          <SelectItem
+                            key={k}
+                            value={k}
+                            className={cn("text-xs", !statusCounts.get(k) && "text-muted-foreground/60")}
+                          >
+                            {(STATUS_MAP[k] ?? { label: k }).label}（{statusCounts.get(k) ?? 0}）
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -330,11 +366,13 @@ export default function TodoPage() {
                         <SelectLabel className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
                           <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />已結束 / 非進行中
                         </SelectLabel>
-                        {INACTIVE_STATUSES
-                          .filter((k) => statusCounts.get(k))
-                          .map((k) => (
-                            <SelectItem key={k} value={k} className="text-xs">
-                              {(STATUS_MAP[k] ?? { label: k }).label}（{statusCounts.get(k)}）
+                        {INACTIVE_STATUSES.map((k) => (
+                            <SelectItem
+                              key={k}
+                              value={k}
+                              className={cn("text-xs", !statusCounts.get(k) && "text-muted-foreground/60")}
+                            >
+                              {(STATUS_MAP[k] ?? { label: k }).label}（{statusCounts.get(k) ?? 0}）
                             </SelectItem>
                           ))}
                       </SelectGroup>
@@ -377,11 +415,11 @@ export default function TodoPage() {
                             <span className="font-mono text-[10px] text-muted-foreground">{r.demandNumber}</span>
                             <Badge className={cn("h-4 px-1 text-[9px] font-normal", st.color)}>{st.label}</Badge>
                             <span className="ml-auto flex items-center gap-1">
-                              {/* 紅點：資料缺漏（已結案卻沒登記實際完成日），與一般待辦分開標示 */}
-                              {r.derived.some((d) => d.kind === "CLOSED_MISSING_ACTUAL") && (
+                              {/* 紅點：甘特圖該填未填（缺預計日、過期未登記、結案未補登） */}
+                              {r.derived.some((d) => DATA_GAP_KINDS.includes(d.kind)) && (
                                 <span
                                   className="h-2 w-2 shrink-0 rounded-full bg-red-500"
-                                  title="已結案但甘特圖未登記實際完成日"
+                                  title="甘特圖的預計／實際完成日尚未填齊"
                                 />
                               )}
                               {r.derived.length > 0 && (
@@ -442,7 +480,22 @@ export default function TodoPage() {
                       <Badge className={cn("text-[10px]", (STATUS_MAP[keyOf(active)] ?? {}).color)}>
                         {(STATUS_MAP[keyOf(active)] ?? { label: active.status }).label}
                       </Badge>
-                      <Button asChild variant="outline" size="sm" className="ml-auto h-7 shrink-0 text-xs">
+                      {/* 開發任務改成收合式：填完就收起來，沒填才預設展開並標紅點 */}
+                      <button
+                        type="button"
+                        onClick={() => setTaskOpen((prev) => ({ ...prev, [active.id]: !tasksOpen }))}
+                        title={tasksOpen ? "收合開發任務" : "展開開發任務"}
+                        className={cn(
+                          "relative ml-auto shrink-0 rounded-md border p-1.5 transition-colors",
+                          tasksOpen ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        {active.derived.some((d) => DATA_GAP_KINDS.includes(d.kind)) && (
+                          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500" />
+                        )}
+                      </button>
+                      <Button asChild variant="outline" size="sm" className="h-7 shrink-0 text-xs">
                         <Link href={`/governance/demands/${active.id}`}>
                           <ExternalLink className="mr-1 h-3 w-3" />開啟需求
                         </Link>
@@ -464,48 +517,6 @@ export default function TodoPage() {
                       <span className="text-border">|</span>
                       <span>需求窗口 <span className="font-medium text-foreground">{active.contactPerson?.name ?? "未指派"}</span></span>
                     </div>
-                  </div>
-
-                  {/* 甘特圖細項：預計日於需求頁排程（此處唯讀），實際完成日可就地補登 */}
-                  <div className="rounded-lg border">
-                    <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-2">
-                      <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[11px] font-medium sm:text-xs">開發任務</span>
-                      <span className="ml-auto text-[11px] text-muted-foreground">
-                        希望完成 {fmt(active.desiredDate)}
-                      </span>
-                    </div>
-                    {active.subTasks.length === 0 ? (
-                      <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-                        尚未建立開發任務——請於需求頁的甘特圖新增
-                      </p>
-                    ) : (
-                      <div className="divide-y">
-                        {active.subTasks.map((t) => {
-                          const late = !!t.plannedEnd && !t.actualEnd && new Date(t.plannedEnd) < new Date()
-                          return (
-                            <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-                              <span className={cn("min-w-0 flex-1 truncate text-xs", late && "text-red-700")}>
-                                {t.name}
-                                {t.assignee && (
-                                  <span className="ml-1.5 text-[10px] text-muted-foreground">{t.assignee.name}</span>
-                                )}
-                              </span>
-                              <span className="shrink-0 text-[11px] text-muted-foreground">
-                                預計 {fmt(t.plannedEnd)}
-                              </span>
-                              <Input
-                                type="date"
-                                value={toInput(t.actualEnd)}
-                                onChange={(e) => saveSubTask(active.id, t.id, e.target.value || null)}
-                                className={cn("h-7 w-[8.5rem] shrink-0 text-xs", late && "border-red-300")}
-                                title="實際完成日"
-                              />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
                   </div>
 
                   {/* 逾期說明：逾期時才出現，避免平時多一個沒人填的欄位 */}
@@ -548,6 +559,50 @@ export default function TodoPage() {
                     </p>
                   )}
 
+                  {/* 甘特圖細項：預計日於需求頁排程（此處唯讀），實際完成日可就地補登 */}
+                  {tasksOpen && (
+                  <div className="rounded-lg border">
+                    <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-2">
+                      <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[11px] font-medium sm:text-xs">開發任務</span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">
+                        希望完成 {fmt(active.desiredDate)}
+                      </span>
+                    </div>
+                    {active.subTasks.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                        尚未建立開發任務——請於需求頁的甘特圖新增
+                      </p>
+                    ) : (
+                      <div className="divide-y">
+                        {active.subTasks.map((t) => {
+                          const late = !!t.plannedEnd && !t.actualEnd && new Date(t.plannedEnd) < new Date()
+                          return (
+                            <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                              <span className={cn("min-w-0 flex-1 truncate text-xs", late && "text-red-700")}>
+                                {t.name}
+                                {t.assignee && (
+                                  <span className="ml-1.5 text-[10px] text-muted-foreground">{t.assignee.name}</span>
+                                )}
+                              </span>
+                              <span className="shrink-0 text-[11px] text-muted-foreground">
+                                預計 {fmt(t.plannedEnd)}
+                              </span>
+                              <Input
+                                type="date"
+                                value={toInput(t.actualEnd)}
+                                onChange={(e) => saveSubTask(active.id, t.id, e.target.value || null)}
+                                className={cn("h-7 w-[8.5rem] shrink-0 text-xs", late && "border-red-300")}
+                                title="實際完成日"
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  )}
+
                   {/* 自己寫的筆記 */}
                   <div className="space-y-1.5">
                     <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground sm:text-xs">
@@ -556,6 +611,7 @@ export default function TodoPage() {
                     <TodoEditor
                       key={active.id}
                       value={active.todo?.content ?? ""}
+                      people={people}
                       onSave={(content) => patch(active.id, { content })}
                     />
                     {active.todo?.updatedBy && (
