@@ -122,29 +122,50 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
     return () => document.removeEventListener("mousedown", onDown)
   }, [menu])
 
-  // 外部資料更新時同步；但自己還沒存完就不要蓋掉正在打的字
+  /** 目前畫面上的內容與最後一次送出的內容，供存檔的競態判斷用 */
+  const textRef = useRef(text)
+  const savedRef = useRef(value)
+  /** onSave 多半是父層的 inline 箭頭函式，每次 render 都換一個；用 ref 固定住 */
+  const saveRef = useRef(onSave)
+  useEffect(() => { saveRef.current = onSave }, [onSave])
+
+  /**
+   * 外部資料更新時同步。
+   *
+   * 自己還沒存完就不要蓋掉正在打的字——否則存檔往返期間打的字會被伺服器回來的
+   * 舊內容洗掉，游標也會被拉回上一行（實際踩過）。
+   */
   useEffect(() => {
-    if (dirty.current) return
+    if (dirty.current || value === savedRef.current) return
+    savedRef.current = value
+    textRef.current = value
     setText(value)
   }, [value])
 
   // 停止輸入 1.2 秒後自動存檔
   useEffect(() => {
     if (!dirty.current || readOnly) return
+    const snapshot = text
     const t = setTimeout(async () => {
       setSaving(true)
       try {
-        await onSave(text)
-        dirty.current = false
+        await saveRef.current(snapshot)
+        savedRef.current = snapshot
+        // 送出期間又打了字就維持「未存檔」，不然下一輪外部資料會把新內容蓋掉
+        if (textRef.current === snapshot) dirty.current = false
         setSavedAt(Date.now())
       } finally {
         setSaving(false)
       }
     }, 1200)
     return () => clearTimeout(t)
-  }, [text, onSave, readOnly])
+  }, [text, readOnly])
 
-  const update = (next: string) => { dirty.current = true; setText(next) }
+  const update = (next: string) => {
+    dirty.current = true
+    textRef.current = next
+    setText(next)
+  }
 
   /** 符合目前 @ 後面關鍵字的人 */
   const atMatches = useMemo(() => {
