@@ -64,6 +64,7 @@ export interface TodoPerson {
  * 尤其 Scrum Master 與需求方人員各廠都不同人。顏色讓一整頁筆記可以掃過去分辨。
  */
 const ROLE_TONE: Record<string, string> = {
+  "我": "bg-primary/10 text-primary ring-primary/20",
   "PM": "bg-indigo-50 text-indigo-700 ring-indigo-200",
   "開發者": "bg-emerald-50 text-emerald-700 ring-emerald-200",
   "需求窗口": "bg-amber-50 text-amber-800 ring-amber-200",
@@ -226,6 +227,43 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
       const pos = st + snippet.length
       ta.setSelectionRange(pos, pos)
     })
+  }, [text])
+
+  /**
+   * Enter 時自動延續上一行的清單樣式。
+   *
+   * 連續寫待辦時最煩的就是每行都要重打「- [ ] 」。空項目按 Enter 則清掉前綴，
+   * 這是清單編輯器的通則——代表「這串寫完了」，不會留下一行空殼。
+   * 回傳 true 表示已接手，呼叫端要擋掉瀏覽器預設的換行。
+   */
+  const continueList = useCallback(() => {
+    const ta = taRef.current
+    if (!ta || ta.selectionStart !== ta.selectionEnd) return false
+    const caret = ta.selectionStart
+    const start = text.lastIndexOf(NL, caret - 1) + 1
+    const line = text.slice(start, caret)
+    const m = line.match(/^(\s*)(?:([-*])\s+\[[ xX]\]\s+|([-*])\s+|(\d+)\.\s+)(.*)$/)
+    if (!m) return false
+
+    const [, indent, checkMark, bullet, num, rest] = m
+    // 只有前綴、沒有內容 → 視為結束這串清單，把前綴清掉
+    if (!rest.trim()) {
+      update(text.slice(0, start) + indent + text.slice(caret))
+      const pos = start + indent.length
+      requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos, pos) })
+      return true
+    }
+
+    const prefix = checkMark
+      ? checkMark + " [ ] "
+      : bullet
+        ? bullet + " "
+        : String(Number(num) + 1) + ". "
+    const insertText = NL + indent + prefix
+    update(text.slice(0, caret) + insertText + text.slice(caret))
+    const pos = caret + insertText.length
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos, pos) })
+    return true
   }, [text])
 
   /** 對游標所在的每一行加上前綴（清單、打勾、標題） */
@@ -493,11 +531,17 @@ export function TodoEditor({ value, onSave, people = [], readOnly, placeholder }
             onClick={() => setAt(null)}
             onBlur={() => setTimeout(() => setAt(null), 120)}
             onKeyDown={(e) => {
-              if (!at || atMatches.length === 0) return
-              if (e.key === "ArrowDown") { e.preventDefault(); setAtIdx((i) => (i + 1) % atMatches.length) }
-              else if (e.key === "ArrowUp") { e.preventDefault(); setAtIdx((i) => (i - 1 + atMatches.length) % atMatches.length) }
-              else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickPerson(atMatches[atIdx].name) }
-              else if (e.key === "Escape") { e.preventDefault(); setAt(null) }
+              // @ 選單開著時，方向鍵與 Enter 先給選單用
+              if (at && atMatches.length > 0) {
+                if (e.key === "ArrowDown") { e.preventDefault(); setAtIdx((i) => (i + 1) % atMatches.length); return }
+                if (e.key === "ArrowUp") { e.preventDefault(); setAtIdx((i) => (i - 1 + atMatches.length) % atMatches.length); return }
+                if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickPerson(atMatches[atIdx].name); return }
+                if (e.key === "Escape") { e.preventDefault(); setAt(null); return }
+              }
+              // Shift+Enter 保留原本的純換行
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && continueList()) {
+                e.preventDefault()
+              }
             }}
             placeholder={placeholder ?? "寫下這個專案要做的事…\n\n- [ ] 例如：等強茂 IT 開 API 權限（打 @ 可標註人員）\n- [ ] 例如：PPT 版面待優化"}
             className="min-h-[180px] w-full resize-y bg-transparent p-3 font-mono text-xs leading-relaxed outline-none"

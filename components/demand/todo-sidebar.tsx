@@ -5,6 +5,9 @@ import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
 import { CalendarDays, ChevronDown, ListTodo, PanelRightClose, PanelRightOpen } from "lucide-react"
 
+/** 月曆標點的共用樣式（顏色與偏移另外接） */
+const DOT = "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:rounded-full"
+
 /** 依專案分組，組內維持原本（依日期）的順序 */
 function groupByDemand(items: UpcomingItem[]) {
   const groups: { id: string; number: string; title: string; items: UpcomingItem[] }[] = []
@@ -42,8 +45,10 @@ export interface UpcomingItem {
 }
 
 interface TodoSidebarProps {
-  /** 有預計完成日的日期，會在月曆上標點 */
+  /** 階段預計完成日，會在月曆上標琥珀點 */
   markedDates: Date[]
+  /** 自己在待辦上壓的日期，標天藍點（同一天兩種都有就並排兩點） */
+  todoDates?: Date[]
   upcoming: UpcomingItem[]
   onSelect?: (demandId: string) => void
   /** 點選月曆日期時回傳；再點一次同一天即取消（回傳 null） */
@@ -71,16 +76,33 @@ function useSticky(key: string, initial: boolean) {
  * 下方列出跨專案、尚未勾選的待辦前五筆，當作「接下來要做什麼」的提醒。
  * 兩塊都可收合，狀態記在 localStorage。
  */
-export function TodoSidebar({ markedDates, upcoming, onSelect, selectedDate, onSelectDate }: TodoSidebarProps) {
+export function TodoSidebar({ markedDates, todoDates = [], upcoming, onSelect, selectedDate, onSelectDate }: TodoSidebarProps) {
   const [panelOpen, togglePanel] = useSticky("todo-side-open", true)
   const [calOpen, toggleCal] = useSticky("todo-cal-open", true)
   const [listOpen, toggleList] = useSticky("todo-upcoming-open", true)
   const [month, setMonth] = useState<Date>(new Date())
 
-  const marked = useMemo(
-    () => markedDates.map((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())),
-    [markedDates]
-  )
+  /**
+   * 月曆標點分三種：只有階段日、只有待辦日、兩者都有。
+   * 分開算是因為同一天兩種都有時要並排兩顆點——共用同一個 after 偽元素會互相蓋掉。
+   */
+  const { phaseOnly, todoOnly, both, marked } = useMemo(() => {
+    const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    const key = (d: Date) => d.getTime()
+    const phaseSet = new Set(markedDates.map((d) => key(day(d))))
+    const todoSet = new Set(todoDates.map((d) => key(day(d))))
+    const all = new Set([...phaseSet, ...todoSet])
+    const phaseOnly: Date[] = []
+    const todoOnly: Date[] = []
+    const both: Date[] = []
+    for (const t of all) {
+      const d = new Date(t)
+      if (phaseSet.has(t) && todoSet.has(t)) both.push(d)
+      else if (phaseSet.has(t)) phaseOnly.push(d)
+      else todoOnly.push(d)
+    }
+    return { phaseOnly, todoOnly, both, marked: [...all].map((t) => new Date(t)) }
+  }, [markedDates, todoDates])
 
   // 收合狀態：整欄往右縮成一條窄軌，寬度以 transition 動畫過渡
   if (!panelOpen) {
@@ -138,15 +160,29 @@ export function TodoSidebar({ markedDates, upcoming, onSelect, selectedDate, onS
                 const same = selectedDate && d.toDateString() === selectedDate.toDateString()
                 onSelectDate?.(same ? null : d)
               }}
-              modifiers={{ due: marked }}
+              modifiers={{ phase: phaseOnly, todo: todoOnly, both }}
               modifiersClassNames={{
-                due: "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-amber-500",
+                phase: DOT + " after:-translate-x-1/2 after:bg-amber-500",
+                todo: DOT + " after:-translate-x-1/2 after:bg-sky-500",
+                both:
+                  DOT +
+                  " after:-translate-x-[3.5px] after:bg-amber-500" +
+                  " before:absolute before:bottom-1 before:left-1/2 before:h-1 before:w-1 before:translate-x-[0.5px] before:rounded-full before:bg-sky-500",
               }}
               className="w-full"
             />
-            <p className="px-3 pb-1 text-[10px] text-muted-foreground">
-              <span className="mr-1 inline-block h-1 w-1 rounded-full bg-amber-500 align-middle" />
-              階段預計完成日或待辦壓的日期{selectedDate ? "．點同一天可取消篩選" : "．點日期可篩選左側清單"}
+            <p className="space-y-0.5 px-3 pb-1 text-[10px] text-muted-foreground">
+              <span className="mr-2 whitespace-nowrap">
+                <span className="mr-1 inline-block h-1 w-1 rounded-full bg-amber-500 align-middle" />
+                階段預計完成日
+              </span>
+              <span className="whitespace-nowrap">
+                <span className="mr-1 inline-block h-1 w-1 rounded-full bg-sky-500 align-middle" />
+                待辦壓的日期
+              </span>
+              <span className="block">
+                {selectedDate ? "點同一天可取消篩選" : "點日期可篩選左側清單"}
+              </span>
             </p>
           </div>
         )}

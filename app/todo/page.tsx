@@ -192,8 +192,10 @@ export default function TodoPage() {
           (r.todo?.content ?? "")
             .split(NEWLINE)
             .some((line) => {
-              const m = line.match(DUE_RE)
-              return !!m && new Date(m[1]).toDateString() === want
+              if (/^\s*[-*]\s+\[[xX]\]/.test(line)) return false
+              return [...line.matchAll(new RegExp(DUE_RE.source, "g"))].some(
+                (m) => new Date(m[1]).toDateString() === want
+              )
             })
         if (!hit) return false
       }
@@ -239,29 +241,31 @@ export default function TodoPage() {
   const tasksDone = !!active && active.subTasks.length > 0 && active.subTasks.every((t) => !!t.actualEnd)
   const tasksOpen = active ? (taskOpen[active.id] ?? (tasksRelevant && !tasksDone)) : false
 
-  /** 自己在待辦上壓的日期（!YYYY-MM-DD），也要標進月曆 */
+  /**
+   * 自己在待辦上壓的日期（!YYYY-MM-DD）。
+   * 不限定要寫在打勾項目上——隨手記一行「9/25 要給客戶」也該進月曆；
+   * 只有已勾掉的項目會略過（那件事做完了）。
+   */
   const selfDueDates = useMemo(() => {
     const out: Date[] = []
+    const all = new RegExp(DUE_RE.source, "g")
     for (const r of rows) {
       for (const line of (r.todo?.content ?? "").split(NEWLINE)) {
-        if (!/^\s*[-*]\s+\[\s\]/.test(line)) continue
-        const m = line.match(DUE_RE)
-        if (m) out.push(new Date(m[1]))
+        if (/^\s*[-*]\s+\[[xX]\]/.test(line)) continue
+        for (const m of line.matchAll(all)) out.push(new Date(m[1]))
       }
     }
     return out
   }, [rows])
 
-  // 月曆標記：各專案本階段的預計完成日 + 自己壓在待辦上的日期
+  // 月曆標記：各專案本階段的預計完成日（待辦自壓的日期分開標色）
   const markedDates = useMemo(
-    () => [
-      ...rows
+    () =>
+      rows
         .map((r) => r.currentPhasePlan?.plannedEnd)
         .filter((d): d is string => !!d)
         .map((d) => new Date(d)),
-      ...selfDueDates,
-    ],
-    [rows, selfDueDates]
+    [rows]
   )
 
   /**
@@ -302,6 +306,8 @@ export default function TodoPage() {
     const add = (role: string, name?: string | null) => {
       if (name && !list.some((x) => x.name === name)) list.push({ role, name })
     }
+    // 自己排第一個：這本來就是自己的記事本，「這件事我要做」是最常寫的一種
+    add("我", user?.name)
     add("PM", active.pm?.name)
     add("開發者", active.developer?.name)
     add("需求窗口", active.contactPerson?.name)
@@ -309,7 +315,7 @@ export default function TodoPage() {
     // Scrum Master 每廠不同人，IT 之類的窗口也只能從該廠人員裡挑
     for (const p of active.orgPeople ?? []) add(p.role, p.name)
     return list
-  }, [active])
+  }, [active, user])
 
   return (
     <AppLayout userRole={isAdmin ? "admin" : "delivery"}>
@@ -641,6 +647,7 @@ export default function TodoPage() {
             {/* 右：行事曆與近期待辦 */}
             <TodoSidebar
               markedDates={markedDates}
+              todoDates={selfDueDates}
               upcoming={upcoming}
               onSelect={(id) => setActiveId(id)}
               selectedDate={pickedDate}
